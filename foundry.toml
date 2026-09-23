@@ -11,14 +11,32 @@ optimizer = true
 optimizer_runs = 200
 via_ir = false
 
-# The N = 10000 measurements deliberately exceed the Monad block gas limit of
-# 150,000,000. The harness needs headroom to measure them anyway, so that the
-# report can state how far past the limit they land rather than just failing.
+# The N = 10000 measurements in the retired streaming benchmark deliberately
+# exceed the Monad block gas limit of 150,000,000. The harness needs headroom
+# to measure them anyway, so that the report can state how far past the limit
+# they land rather than just failing.
 gas_limit = "18446744073709551615"
 block_gas_limit = "18446744073709551615"
 
 # Needed so the gas sweep can emit bench/gas.json for the cost model script.
 fs_permissions = [{ access = "read-write", path = "./bench" }]
+
+[fuzz]
+runs = 512
+max_test_rejects = 200000
+
+[invariant]
+runs = 256
+depth = 64
+fail_on_revert = false
+call_override = false
+shrink_run_limit = 5000
+
+[rpc_endpoints]
+monad_testnet = "${MONAD_TESTNET_RPC_URL}"
+
+[etherscan]
+monad_testnet = { key = "${MONADSCAN_API_KEY}", chain = 10143, url = "https://sourcify-api-monad.blockvision.org/" }
 
 [fmt]
 line_length = 120
