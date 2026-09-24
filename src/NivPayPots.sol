@@ -523,6 +523,11 @@ contract NivPayPots is ReentrancyGuard {
     function _executePayout(uint256 proposalId, Proposal storage p, Pot storage pot) private {
         uint256 potId = p.potId;
         if (_isClosed(pot)) revert PotClosed();
+        // Defence in depth, and the one branch the tests cannot reach: both
+        // proposePayout and approve already refuse while a pot is frozen, so
+        // execution never arrives here with the freeze on. It stays because a
+        // future caller of this function must not be able to skip the check by
+        // forgetting it.
         if (pot.frozen) revert PotFrozen();
 
         Destination storage d = _destinations[potId][p.destIndex];
