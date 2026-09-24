@@ -33,7 +33,10 @@ call_override = false
 shrink_run_limit = 5000
 
 [rpc_endpoints]
+# Public Monad testnet RPC from docs.monad.xyz. Override with the env var to
+# point the fork tests at your own endpoint.
 monad_testnet = "${MONAD_TESTNET_RPC_URL}"
+monad_testnet_public = "https://testnet-rpc.monad.xyz"
 
 [etherscan]
 monad_testnet = { key = "${MONADSCAN_API_KEY}", chain = 10143, url = "https://sourcify-api-monad.blockvision.org/" }
