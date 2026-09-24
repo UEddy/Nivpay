@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {NivPayPots} from "../src/NivPayPots.sol";
 import {MockAUSD} from "./mocks/MockAUSD.sol";
@@ -23,7 +23,7 @@ contract PotsInvariantTest is Test {
 
         targetContract(address(handler));
 
-        bytes4[] memory selectors = new bytes4[](13);
+        bytes4[] memory selectors = new bytes4[](14);
         selectors[0] = PotsHandler.fund.selector;
         selectors[1] = PotsHandler.exitSome.selector;
         selectors[2] = PotsHandler.claimAll.selector;
@@ -37,6 +37,7 @@ contract PotsInvariantTest is Test {
         selectors[10] = PotsHandler.collectFees.selector;
         selectors[11] = PotsHandler.warp.selector;
         selectors[12] = PotsHandler.executePayoutCycle.selector;
+        selectors[13] = PotsHandler.attackSweep.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
 
@@ -127,8 +128,8 @@ contract PotsInvariantTest is Test {
         uint256 snap = vm.snapshotState();
         for (uint256 i = 0; i < handler.potCount(); ++i) {
             uint256 potId = handler.potIds(i);
-            for (uint256 a = 0; a < handler.actorCount(); ++a) {
-                address who = handler.actors(a);
+            for (uint256 a = 0; a < handler.holderCount(); ++a) {
+                address who = handler.holderAt(a);
                 uint256 shares = pots.sharesOf(potId, who);
                 if (shares == 0) continue;
 
@@ -150,8 +151,8 @@ contract PotsInvariantTest is Test {
         for (uint256 i = 0; i < handler.potCount(); ++i) {
             uint256 potId = handler.potIds(i);
             if (!pots.getPot(potId).frozen) continue;
-            for (uint256 a = 0; a < handler.actorCount(); ++a) {
-                address who = handler.actors(a);
+            for (uint256 a = 0; a < handler.holderCount(); ++a) {
+                address who = handler.holderAt(a);
                 uint256 shares = pots.sharesOf(potId, who);
                 if (shares == 0) continue;
                 vm.prank(who);
@@ -166,8 +167,8 @@ contract PotsInvariantTest is Test {
         for (uint256 i = 0; i < handler.potCount(); ++i) {
             uint256 potId = handler.potIds(i);
             uint256 sum;
-            for (uint256 a = 0; a < handler.actorCount(); ++a) {
-                sum += pots.sharesOf(potId, handler.actors(a));
+            for (uint256 a = 0; a < handler.holderCount(); ++a) {
+                sum += pots.sharesOf(potId, handler.holderAt(a));
             }
             assertEq(sum, pots.getPot(potId).totalShares, "the share supply is exactly what the funders hold");
         }
@@ -179,12 +180,91 @@ contract PotsInvariantTest is Test {
         for (uint256 i = 0; i < handler.potCount(); ++i) {
             uint256 potId = handler.potIds(i);
             uint256 owed;
-            for (uint256 a = 0; a < handler.actorCount(); ++a) {
-                (, uint256 value) = pots.funderInfo(potId, handler.actors(a));
+            for (uint256 a = 0; a < handler.holderCount(); ++a) {
+                (, uint256 value) = pots.funderInfo(potId, handler.holderAt(a));
                 owed += value;
             }
             assertLe(owed, pots.getPot(potId).totalAssets, "the pot covers every claim on it");
         }
+    }
+
+
+    // ---------------------------------------------------------------------
+    // Adversarial invariants
+    // ---------------------------------------------------------------------
+
+    /// @notice Nothing the attacker tried ever worked. `breached` counts
+    /// attempts that were neither refused nor harmless, so it must stay at
+    /// zero in every category.
+    function invariant_noAttackEverSucceeded() public view {
+        string[10] memory names = [
+            "non approver proposing",
+            "payout to an unlisted destination",
+            "payout over a destination cap",
+            "the same approver approving twice",
+            "approving a cancelled or expired proposal",
+            "unfreezing alone below the threshold",
+            "closing alone below the threshold",
+            "exiting more shares than held",
+            "funding a closed or frozen pot",
+            "spending one pot's shares against another"
+        ];
+        for (uint8 i = 0; i < handler.ATTACK_CATEGORIES(); ++i) {
+            assertEq(handler.breached(i), 0, names[i]);
+        }
+    }
+
+    /// @notice Runs the whole attack set against whatever state this run
+    /// happened to reach, then proves the run was not vacuous. Every category
+    /// must have been attempted at least once, and every attempt must have
+    /// been either refused outright or left the protected state untouched.
+    ///
+    /// This runs once per invariant run, after the random call sequence, so no
+    /// category can sit at zero merely because the fuzzer never picked its
+    /// selector.
+    function afterInvariant() public {
+        handler.attackSweep(uint256(keccak256(abi.encodePacked(block.timestamp, block.number))));
+
+        string[10] memory names = [
+            "non approver proposing",
+            "payout to an unlisted destination",
+            "payout over a destination cap",
+            "the same approver approving twice",
+            "approving a cancelled or expired proposal",
+            "unfreezing alone below the threshold",
+            "closing alone below the threshold",
+            "exiting more shares than held",
+            "funding a closed or frozen pot",
+            "spending one pot's shares against another"
+        ];
+
+        uint256 totalTried;
+        uint256 totalBlocked;
+        uint256 totalNoEffect;
+
+        for (uint8 i = 0; i < handler.ATTACK_CATEGORIES(); ++i) {
+            uint256 tried = handler.attempted(i);
+            uint256 refused = handler.blocked(i);
+            uint256 harmless = handler.hadNoEffect(i);
+
+            console.log(names[i]);
+            console.log("    attempted", tried);
+            console.log("    refused  ", refused);
+            console.log("    harmless ", harmless);
+
+            assertGt(tried, 0, string.concat("never attempted, so it proves nothing: ", names[i]));
+            assertEq(handler.breached(i), 0, string.concat("an attack succeeded: ", names[i]));
+            assertEq(refused + harmless, tried, string.concat("unaccounted attempt: ", names[i]));
+
+            totalTried += tried;
+            totalBlocked += refused;
+            totalNoEffect += harmless;
+        }
+
+        console.log("attacks attempted", totalTried);
+        console.log("  refused        ", totalBlocked);
+        console.log("  harmless       ", totalNoEffect);
+        console.log("  succeeded      ", handler.totalBreached());
     }
 
     /// @notice Creation parameters are immutable. Nothing in any sequence of

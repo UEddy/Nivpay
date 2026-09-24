@@ -47,6 +47,47 @@ contract PotsHandler is Test {
 
     uint256 private constant MAX_FUND = 1_000_000_000000;
 
+    // ---------------------------------------------------------------------
+    // Adversarial state
+    // ---------------------------------------------------------------------
+
+    /// @notice Pots 0 to 2 are driven by the ordinary actions. Pot 3 is
+    /// sacrificial: the attacker closes it and then keeps trying to fund it,
+    /// so the "funding after close" rule always has a live target.
+    uint256 public constant LIVE_POTS = 3;
+    uint256 public constant SACRIFICIAL_POT = 3;
+
+    /// @notice Reserved for the adversarial actions. The ordinary actions
+    /// never select it and no attack ever closes it, so a run that happens
+    /// to close every live pot still puts every rule to the test.
+    uint256 public constant ARENA_POT = 4;
+
+    /// @notice Not an approver of any pot, not a destination of any pot.
+    address public attacker;
+
+    uint8 public constant A_NON_APPROVER_PROPOSE = 0;
+    uint8 public constant A_BAD_DESTINATION = 1;
+    uint8 public constant A_OVER_CAP = 2;
+    uint8 public constant A_DOUBLE_APPROVE = 3;
+    uint8 public constant A_DEAD_PROPOSAL = 4;
+    uint8 public constant A_SOLO_UNFREEZE = 5;
+    uint8 public constant A_SOLO_CLOSE = 6;
+    uint8 public constant A_OVER_EXIT = 7;
+    uint8 public constant A_FUND_WHEN_SHUT = 8;
+    uint8 public constant A_CROSS_POT_SHARES = 9;
+    uint8 public constant ATTACK_CATEGORIES = 10;
+
+    /// @notice How many times each rule was actually put to the test. A
+    /// category sitting at zero means the suite proves nothing about that rule.
+    mapping(uint8 => uint256) public attempted;
+    /// @notice Attempts that reverted.
+    mapping(uint8 => uint256) public blocked;
+    /// @notice Attempts that were allowed to run but changed nothing they were
+    /// not entitled to change.
+    mapping(uint8 => uint256) public hadNoEffect;
+    /// @notice Attempts that got away with it. Must stay at zero.
+    mapping(uint8 => uint256) public breached;
+
     constructor(NivPayPots pots_, MockAUSD token_) {
         pots = pots_;
         token = token_;
@@ -63,7 +104,12 @@ contract PotsHandler is Test {
             approvers.push(address(uint160(uint256(keccak256(abi.encodePacked("approver", i))))));
         }
 
-        for (uint256 p = 0; p < 3; ++p) {
+        attacker = address(uint160(uint256(keccak256("attacker"))));
+        token.mint(attacker, type(uint128).max);
+        vm.prank(attacker);
+        token.approve(address(pots), type(uint256).max);
+
+        for (uint256 p = 0; p < 5; ++p) {
             address[] memory ds = new address[](2);
             bytes32[] memory labels = new bytes32[](2);
             uint256[] memory caps = new uint256[](2);
@@ -82,6 +128,17 @@ contract PotsHandler is Test {
 
     function actorCount() external view returns (uint256) {
         return actors.length;
+    }
+
+    /// @notice Everyone who can hold shares: the ordinary actors plus the
+    /// attacker, which funds pots legitimately in order to try spending
+    /// those shares somewhere it should not be able to.
+    function holderCount() public view returns (uint256) {
+        return actors.length + 1;
+    }
+
+    function holderAt(uint256 i) public view returns (address) {
+        return i < actors.length ? actors[i] : attacker;
     }
 
     function potCount() external view returns (uint256) {
@@ -105,28 +162,29 @@ contract PotsHandler is Test {
     }
 
     function _pot(uint256 seed) internal view returns (uint256) {
-        return potIds[seed % potIds.length];
+        return potIds[seed % LIVE_POTS];
     }
 
     /// @dev Snapshot every funder's redeemable value in every pot, so an action
     /// can be checked for collateral damage to people who took no part in it.
-    function _snapshotValues() internal view returns (uint256[12] memory out) {
+    function _snapshotValues() internal view returns (uint256[] memory out) {
+        out = new uint256[](potIds.length * holderCount());
         uint256 n = 0;
         for (uint256 p = 0; p < potIds.length; ++p) {
-            for (uint256 a = 0; a < actors.length; ++a) {
-                (, uint256 value) = pots.funderInfo(potIds[p], actors[a]);
+            for (uint256 a = 0; a < holderCount(); ++a) {
+                (, uint256 value) = pots.funderInfo(potIds[p], holderAt(a));
                 out[n++] = value;
             }
         }
     }
 
-    function _recordCollateralDamage(uint256[12] memory before, address mover, uint256 movedPot) internal {
+    function _recordCollateralDamage(uint256[] memory before, address mover, uint256 movedPot) internal {
         uint256 n = 0;
         for (uint256 p = 0; p < potIds.length; ++p) {
-            for (uint256 a = 0; a < actors.length; ++a) {
-                (, uint256 nowValue) = pots.funderInfo(potIds[p], actors[a]);
+            for (uint256 a = 0; a < holderCount(); ++a) {
+                (, uint256 nowValue) = pots.funderInfo(potIds[p], holderAt(a));
                 uint256 wasValue = before[n++];
-                bool isTheMover = (actors[a] == mover && potIds[p] == movedPot);
+                bool isTheMover = (holderAt(a) == mover && potIds[p] == movedPot);
                 if (!isTheMover && nowValue < wasValue) {
                     uint256 loss = wasValue - nowValue;
                     if (loss > worstCollateralLoss) worstCollateralLoss = loss;
@@ -147,7 +205,7 @@ contract PotsHandler is Test {
         NivPayPots.PotView memory p = pots.getPot(potId);
         if (p.closed || p.frozen) return;
 
-        uint256[12] memory before = _snapshotValues();
+        uint256[] memory before = _snapshotValues();
         vm.prank(who);
         pots.fund(potId, amount);
         gFunded[potId] += amount;
@@ -164,7 +222,7 @@ contract PotsHandler is Test {
         if (burn == 0) burn = 1;
 
         bool closed = pots.getPot(potId).closed;
-        uint256[12] memory before = _snapshotValues();
+        uint256[] memory before = _snapshotValues();
         vm.prank(who);
         uint256 got = pots.exit(potId, burn);
         if (closed) {
@@ -377,5 +435,469 @@ contract PotsHandler is Test {
         gPaidOut[v.potId] += v.amount;
         gFees[v.potId] += v.fee;
         gDestReceived[v.destination] += v.amount;
+    }
+
+    // =====================================================================
+    // Adversarial actions
+    //
+    // Every one of these attempts something the contract is supposed to
+    // refuse. Each records that it tried, then checks what happened: either
+    // the call reverted, or it was allowed to run and changed nothing it was
+    // not entitled to change. Anything else is a breach and fails the run.
+    //
+    // They set up their own preconditions with legal calls, so a category is
+    // never skipped for want of the right state, and they put everything back
+    // afterwards so the ordinary actions keep having somewhere to work.
+    // =====================================================================
+
+    function _record(uint8 cat, bool reverted, bool stateHeld) private {
+        attempted[cat]++;
+        if (reverted) {
+            blocked[cat]++;
+        } else if (stateHeld) {
+            hadNoEffect[cat]++;
+        } else {
+            breached[cat]++;
+        }
+    }
+
+    /// @dev An open, unfrozen pot: one of the live ones where possible, so
+    /// attacks land on realistic state, and the reserved arena otherwise.
+    function _openPot(uint256 seed) private view returns (bool, uint256) {
+        for (uint256 i = 0; i < LIVE_POTS; ++i) {
+            uint256 potId = potIds[(seed + i) % LIVE_POTS];
+            NivPayPots.PotView memory p = pots.getPot(potId);
+            if (!p.closed && !p.frozen) return (true, potId);
+        }
+        NivPayPots.PotView memory arena = pots.getPot(potIds[ARENA_POT]);
+        if (!arena.closed && !arena.frozen) return (true, potIds[ARENA_POT]);
+        return (false, 0);
+    }
+
+    /// @dev Put enough in a pot that a payout attempt fails on the rule being
+    /// tested rather than on the pot simply being empty.
+    function _ensureFunded(uint256 potId, uint256 amount) private {
+        if (pots.getPot(potId).totalAssets >= amount) return;
+        vm.prank(actors[0]);
+        pots.fund(potId, amount);
+        gFunded[potId] += amount;
+    }
+
+    /// @notice Somebody who is not an approver tries to propose.
+    function attackNonApproverProposes(uint256 seed) public {
+        (bool ok, uint256 potId) = _openPot(seed);
+        if (!ok) return;
+        uint256 before = pots.proposalCount();
+
+        bool reverted;
+        vm.prank(attacker);
+        try pots.proposePayout(potId, 0, 1_000000) {} catch { reverted = true; }
+        _record(A_NON_APPROVER_PROPOSE, reverted, pots.proposalCount() == before);
+
+        before = pots.proposalCount();
+        reverted = false;
+        vm.prank(attacker);
+        try pots.proposeClose(potId) {} catch { reverted = true; }
+        _record(A_NON_APPROVER_PROPOSE, reverted, pots.proposalCount() == before);
+
+        // An actor who funds a pot still does not get to propose.
+        before = pots.proposalCount();
+        reverted = false;
+        vm.prank(actors[0]);
+        try pots.proposePayout(potId, 0, 1_000000) {} catch { reverted = true; }
+        _record(A_NON_APPROVER_PROPOSE, reverted, pots.proposalCount() == before);
+    }
+
+    /// @notice An approver aims a payout at something that is not on the list.
+    function attackPayoutToUnlistedDestination(uint256 seed) public {
+        (bool ok, uint256 potId) = _openPot(seed);
+        if (!ok) return;
+        uint8 destCount = pots.getPot(potId).destinationCount;
+        uint256 before = pots.proposalCount();
+        uint256 attackerBalance = token.balanceOf(attacker);
+
+        // One past the end of the list.
+        bool reverted;
+        vm.prank(approvers[0]);
+        try pots.proposePayout(potId, destCount, 1_000000) {} catch { reverted = true; }
+        _record(
+            A_BAD_DESTINATION,
+            reverted,
+            pots.proposalCount() == before && token.balanceOf(attacker) == attackerBalance
+        );
+
+        // Far past the end of the list.
+        before = pots.proposalCount();
+        reverted = false;
+        vm.prank(approvers[0]);
+        try pots.proposePayout(potId, type(uint16).max, 1_000000) {} catch { reverted = true; }
+        _record(A_BAD_DESTINATION, reverted, pots.proposalCount() == before);
+
+        // The attacker is not reachable through any index that does exist.
+        NivPayPots.Destination[] memory ds = pots.getDestinations(potId);
+        bool attackerListed;
+        for (uint256 i = 0; i < ds.length; ++i) {
+            if (ds[i].to == attacker) attackerListed = true;
+        }
+        _record(A_BAD_DESTINATION, false, !attackerListed);
+    }
+
+    /// @notice A payout for more than a destination has left under its cap.
+    /// Split across three functions purely to stay under the stack limit.
+    function attackPayoutOverCap(uint256 seed) public {
+        (bool ok, uint256 potId) = _openPot(seed);
+        if (!ok) return;
+        _overCapPropose(potId, uint16(seed % pots.getPot(potId).destinationCount));
+    }
+
+    function _overCapPropose(uint256 potId, uint16 destIndex) private {
+        (address to,, uint256 cap, uint256 spent,) = pots.getDestination(potId, destIndex);
+        uint256 over = cap - spent + 1;
+        _ensureFunded(potId, over + pots.feeOn(over) + 1_000000);
+
+        vm.prank(approvers[0]);
+        uint256 id = pots.proposePayout(potId, destIndex, over);
+        proposalIds.push(id);
+        _overCapApprove(potId, destIndex, id, to, spent);
+    }
+
+    function _overCapApprove(uint256 potId, uint16 destIndex, uint256 id, address to, uint256 spentBefore)
+        private
+    {
+        uint256 destBalance = token.balanceOf(to);
+        uint256 assetsBefore = pots.getPot(potId).totalAssets;
+
+        bool reverted;
+        vm.prank(approvers[1]);
+        try pots.approve(id) {} catch { reverted = true; }
+
+        (,,, uint256 spentAfter,) = pots.getDestination(potId, destIndex);
+        _record(
+            A_OVER_CAP,
+            reverted,
+            spentAfter == spentBefore && token.balanceOf(to) == destBalance
+                && pots.getPot(potId).totalAssets == assetsBefore
+        );
+
+        vm.prank(approvers[0]);
+        pots.cancelProposal(id);
+    }
+
+    /// @notice The same approver approving twice, trying to reach a threshold
+    /// on their own.
+    function attackDoubleApprove(uint256 seed) public {
+        (bool ok, uint256 potId) = _openPot(seed);
+        if (!ok) return;
+        _ensureFunded(potId, 10_000000);
+
+        vm.prank(approvers[0]);
+        uint256 id = pots.proposePayout(potId, 0, 1_000000);
+        proposalIds.push(id);
+
+        uint8 approvalsBefore = pots.proposalInfo(id).approvals;
+
+        bool reverted;
+        vm.prank(approvers[0]);
+        try pots.approve(id) {} catch { reverted = true; }
+        _record(A_DOUBLE_APPROVE, reverted, pots.proposalInfo(id).approvals == approvalsBefore);
+
+        // Revoking and approving again must not stack either.
+        vm.prank(approvers[0]);
+        pots.revokeApproval(id);
+        vm.prank(approvers[0]);
+        pots.approve(id);
+        _record(A_DOUBLE_APPROVE, false, pots.proposalInfo(id).approvals == approvalsBefore);
+
+        vm.prank(approvers[0]);
+        pots.cancelProposal(id);
+    }
+
+    /// @notice Approving a proposal that is cancelled, and one that has run
+    /// past its seven day window.
+    function attackApproveDeadProposal(uint256 seed) public {
+        (bool ok, uint256 potId) = _openPot(seed);
+        if (!ok) return;
+        _ensureFunded(potId, 10_000000);
+
+        // Cancelled.
+        vm.prank(approvers[0]);
+        uint256 cancelled = pots.proposePayout(potId, 0, 1_000000);
+        proposalIds.push(cancelled);
+        vm.prank(approvers[0]);
+        pots.cancelProposal(cancelled);
+
+        uint256 destBalance = token.balanceOf(allDestinations[potId * 2]);
+        bool reverted;
+        vm.prank(approvers[1]);
+        try pots.approve(cancelled) {} catch { reverted = true; }
+        _record(
+            A_DEAD_PROPOSAL,
+            reverted,
+            pots.proposalInfo(cancelled).status == NivPayPots.ProposalStatus.Cancelled
+                && token.balanceOf(allDestinations[potId * 2]) == destBalance
+        );
+
+        // Expired.
+        vm.prank(approvers[0]);
+        uint256 stale = pots.proposePayout(potId, 0, 1_000000);
+        proposalIds.push(stale);
+        vm.warp(block.timestamp + 7 days + 1);
+
+        destBalance = token.balanceOf(allDestinations[potId * 2]);
+        reverted = false;
+        vm.prank(approvers[1]);
+        try pots.approve(stale) {} catch { reverted = true; }
+        _record(
+            A_DEAD_PROPOSAL,
+            reverted,
+            pots.proposalInfo(stale).status == NivPayPots.ProposalStatus.Expired
+                && token.balanceOf(allDestinations[potId * 2]) == destBalance
+        );
+    }
+
+    /// @notice One approver trying to lift a freeze alone, when it takes two.
+    function attackSoloUnfreeze(uint256 seed) public {
+        (bool ok, uint256 potId) = _openPot(seed);
+        if (!ok) return;
+
+        vm.prank(approvers[2]);
+        pots.freeze(potId);
+
+        // Proposing an unfreeze is legal. Achieving one alone is not.
+        vm.prank(approvers[0]);
+        uint256 id = pots.proposeUnfreeze(potId);
+        proposalIds.push(id);
+        _record(A_SOLO_UNFREEZE, false, pots.getPot(potId).frozen);
+
+        // Nor can the attacker help.
+        bool reverted;
+        vm.prank(attacker);
+        try pots.approve(id) {} catch { reverted = true; }
+        _record(A_SOLO_UNFREEZE, reverted, pots.getPot(potId).frozen);
+
+        // While frozen, exits must still work for anyone holding shares.
+        for (uint256 i = 0; i < holderCount(); ++i) {
+            uint256 held = pots.sharesOf(potId, holderAt(i));
+            if (held == 0) continue;
+            vm.prank(holderAt(i));
+            uint256 got = pots.exit(potId, held);
+            gExited[potId] += got;
+            break;
+        }
+
+        // Put it back with a real threshold, so the run continues.
+        vm.prank(approvers[1]);
+        pots.approve(id);
+        require(!pots.getPot(potId).frozen, "threshold unfreeze should have worked");
+    }
+
+    /// @notice One approver trying to close early alone, when it takes two.
+    function attackSoloClose(uint256 seed) public {
+        (bool ok, uint256 potId) = _openPot(seed);
+        if (!ok) return;
+
+        vm.prank(approvers[0]);
+        uint256 id = pots.proposeClose(potId);
+        proposalIds.push(id);
+        _record(A_SOLO_CLOSE, false, !pots.getPot(potId).closed);
+
+        bool reverted;
+        vm.prank(attacker);
+        try pots.approve(id) {} catch { reverted = true; }
+        _record(A_SOLO_CLOSE, reverted, !pots.getPot(potId).closed);
+
+        // Nobody can force the end time forward either.
+        reverted = false;
+        vm.prank(attacker);
+        try pots.closePot(potId) {} catch { reverted = true; }
+        _record(A_SOLO_CLOSE, reverted, !pots.getPot(potId).closed);
+
+        vm.prank(approvers[0]);
+        pots.cancelProposal(id);
+    }
+
+    /// @notice Redeeming more than the caller holds. Nothing here may move a
+    /// single unit: every attempt asks for more than the caller owns, or asks
+    /// as somebody who owns nothing at all.
+    function attackOverExit(uint256 seed) public {
+        uint256 potId = _pot(seed);
+
+        for (uint256 i = 0; i < holderCount(); ++i) {
+            address who = holderAt(i);
+            uint256 held = pots.sharesOf(potId, who);
+            uint256 assetsBefore = pots.getPot(potId).totalAssets;
+            bool reverted;
+
+            if (held == 0) {
+                // Owns nothing, so even one share must be refused.
+                vm.prank(who);
+                try pots.exit(potId, 1) {} catch { reverted = true; }
+            } else {
+                // Owns something, so one more than that must be refused.
+                vm.prank(who);
+                try pots.exit(potId, held + 1) {} catch { reverted = true; }
+            }
+
+            _record(
+                A_OVER_EXIT,
+                reverted,
+                pots.sharesOf(potId, who) == held && pots.getPot(potId).totalAssets == assetsBefore
+            );
+        }
+
+        // Claiming as somebody with no shares, which is refused whether the pot
+        // is open or closed.
+        for (uint256 i = 0; i < holderCount(); ++i) {
+            address who = holderAt(i);
+            if (pots.sharesOf(potId, who) != 0) continue;
+            uint256 assetsBefore = pots.getPot(potId).totalAssets;
+            bool reverted;
+            vm.prank(who);
+            try pots.claim(potId) {} catch { reverted = true; }
+            _record(
+                A_OVER_EXIT,
+                reverted,
+                pots.sharesOf(potId, who) == 0 && pots.getPot(potId).totalAssets == assetsBefore
+            );
+            break;
+        }
+    }
+
+    /// @notice Funding a pot that is closed, and one that is frozen.
+    function attackFundWhenShut(uint256 seed) public {
+        // Closed: the sacrificial pot, closed once and then left that way.
+        uint256 shut = potIds[SACRIFICIAL_POT];
+        if (!pots.getPot(shut).closed) {
+            vm.prank(approvers[0]);
+            uint256 closeId = pots.proposeClose(shut);
+            vm.prank(approvers[1]);
+            pots.approve(closeId);
+        }
+        uint256 assetsBefore = pots.getPot(shut).totalAssets;
+        bool reverted;
+        vm.prank(attacker);
+        try pots.fund(shut, 1_000000) {} catch { reverted = true; }
+        _record(A_FUND_WHEN_SHUT, reverted, pots.getPot(shut).totalAssets == assetsBefore);
+
+        // Frozen.
+        (bool ok, uint256 potId) = _openPot(seed);
+        if (!ok) return;
+        vm.prank(approvers[2]);
+        pots.freeze(potId);
+
+        assetsBefore = pots.getPot(potId).totalAssets;
+        reverted = false;
+        vm.prank(attacker);
+        try pots.fund(potId, 1_000000) {} catch { reverted = true; }
+        _record(A_FUND_WHEN_SHUT, reverted, pots.getPot(potId).totalAssets == assetsBefore);
+
+        // A payout must not slip through a freeze either.
+        reverted = false;
+        vm.prank(approvers[0]);
+        try pots.proposePayout(potId, 0, 1_000000) {} catch { reverted = true; }
+        _record(A_FUND_WHEN_SHUT, reverted, pots.getPot(potId).totalAssets == assetsBefore);
+
+        vm.prank(approvers[0]);
+        uint256 unfreezeId = pots.proposeUnfreeze(potId);
+        vm.prank(approvers[1]);
+        pots.approve(unfreezeId);
+    }
+
+    /// @notice Spending one pot's shares against another pot.
+    ///
+    /// Picks a pot the attacker already holds a position in, or funds one it
+    /// can, rather than taking whatever the seed lands on. The seed used to
+    /// pick blindly and skip whenever that pot happened to be closed or
+    /// frozen, which left this rule untested.
+    function attackCrossPotShares(uint256 seed) public {
+        uint256 from = type(uint256).max;
+
+        // A pot the attacker already holds shares in.
+        for (uint256 i = 0; i < LIVE_POTS; ++i) {
+            uint256 cand = potIds[(seed + i) % LIVE_POTS];
+            if (pots.sharesOf(cand, attacker) > 0) {
+                from = cand;
+                break;
+            }
+        }
+
+        if (from == type(uint256).max && pots.sharesOf(potIds[ARENA_POT], attacker) > 0) {
+            from = potIds[ARENA_POT];
+        }
+
+        // Otherwise take a position in one that will accept funding.
+        if (from == type(uint256).max) {
+            (bool ok, uint256 openPot) = _openPot(seed);
+            if (!ok) return;
+            vm.prank(attacker);
+            pots.fund(openPot, 100_000000);
+            gFunded[openPot] += 100_000000;
+            from = openPot;
+        }
+
+        uint256 held = pots.sharesOf(from, attacker);
+        if (held == 0) return;
+
+        // Any other pot will do as the target, closed ones included: an exit
+        // is allowed in every pot state, so the only thing that may stop this
+        // is the shares belonging to a different pot.
+        uint256 to = type(uint256).max;
+        for (uint256 i = 0; i < potIds.length; ++i) {
+            uint256 cand = potIds[(seed + i) % potIds.length];
+            if (cand != from) {
+                to = cand;
+                break;
+            }
+        }
+        if (to == type(uint256).max) return;
+
+        uint256 sharesInTarget = pots.sharesOf(to, attacker);
+        uint256 targetAssets = pots.getPot(to).totalAssets;
+        uint256 sharesInSource = pots.sharesOf(from, attacker);
+
+        // Ask the target pot for everything the attacker owns there plus the
+        // whole position it holds in the other pot. If a share in one pot were
+        // spendable in another, exactly this would go through. Asking for just
+        // the other position would not test anything once the attacker has
+        // funded both pots, because that can be a perfectly legal exit of
+        // shares it really does own here.
+        bool reverted;
+        vm.prank(attacker);
+        try pots.exit(to, sharesInTarget + held) {} catch { reverted = true; }
+
+        _record(
+            A_CROSS_POT_SHARES,
+            reverted,
+            pots.sharesOf(to, attacker) == sharesInTarget && pots.sharesOf(from, attacker) == sharesInSource
+                && pots.getPot(to).totalAssets == targetAssets
+        );
+    }
+
+    /// @notice Every category in one call. Running the whole set together is
+    /// what makes the counts meaningful: a category can never sit at zero just
+    /// because the fuzzer happened not to pick its selector.
+    function attackSweep(uint256 seed) public {
+        attackNonApproverProposes(seed);
+        attackPayoutToUnlistedDestination(seed);
+        attackPayoutOverCap(seed);
+        attackDoubleApprove(seed);
+        attackApproveDeadProposal(seed);
+        attackSoloUnfreeze(seed);
+        attackSoloClose(seed);
+        attackOverExit(seed);
+        attackFundWhenShut(seed);
+        attackCrossPotShares(seed);
+    }
+
+    function totalAttempted() external view returns (uint256 total) {
+        for (uint8 i = 0; i < ATTACK_CATEGORIES; ++i) {
+            total += attempted[i];
+        }
+    }
+
+    function totalBreached() external view returns (uint256 total) {
+        for (uint8 i = 0; i < ATTACK_CATEGORIES; ++i) {
+            total += breached[i];
+        }
     }
 }
