@@ -50,6 +50,15 @@ their share whenever they like. Claims are pulled, never pushed in a loop.
 funding and nothing else. Unfreezing needs a threshold approved proposal. A
 freeze never touches exits or claims.
 
+This is implemented exactly as specified and nothing about it was dropped.
+`freeze()` requires only that the caller is an approver, with no threshold
+and no proposal. `pot.frozen = false` appears **once** in the contract,
+inside the `Unfreeze` branch of `_execute`, which is reachable only at the
+threshold; there is no direct unfreeze function. The freeze is checked in
+four places, all of them funding or payout: `_fund`, `proposePayout`,
+`approve` for payout proposals, and `_executePayout`. `exit`, `claim` and
+`_redeem` contain no freeze check at all.
+
 **There is no withdraw to self path of any kind.** Money leaves a pot only as a
 payout to a listed destination, or as a funder redeeming their own shares.
 
@@ -164,7 +173,7 @@ One immutable token, set in the constructor: **AUSD**.
 forge test
 ```
 
-164 tests. The one skip is the faucet test, which skips only when Agora's public
+149 test cases. The one skip is the faucet test, which skips only when Agora's public
 faucet is out of stock (see below). The fork tests need network access; the rest
 do not.
 
@@ -175,12 +184,12 @@ do not.
 | `test/PotsGovernance.t.sol` | proposals, payouts, caps, freeze, close, fees |
 | `test/PotsSecurity.t.sol` | asset freezing, reentrancy, donations, pot isolation, lost keys |
 | `test/PotsFuzz.t.sol` | funding amounts, join and exit order, payout sizes, fee settings |
-| `test/PotsInvariant.t.sol` | 12 invariants over a stateful handler |
+| `test/PotsInvariant.t.sol` | invariants and ten adversarial attack categories |
 | `test/PotsFork.t.sol` | the whole lifecycle against real AUSD on Monad testnet |
 
 ### Invariants
 
-Over 24,576 calls per invariant, with zero reverts:
+Over 24,576 calls per run, across 256 runs:
 
 * the contract's token balance always covers every pot's assets plus uncollected fees, exactly
 * per pot, `funded == paid out + fees + exited + claimed + remaining`
@@ -190,6 +199,57 @@ Over 24,576 calls per invariant, with zero reverts:
 * one funder's fund or exit never costs another funder more than one unit of rounding
 * exits always succeed for holders, in every pot state, freeze included
 * creation parameters never change
+
+### Adversarial invariants
+
+An earlier version of the invariant suite reported **zero reverts** across every
+call. That is not the reassurance it looks like. It meant the handler had only
+ever attempted things the contract permits, so every security invariant held
+trivially: the suite proved that legal behaviour is legal.
+
+There is now an **attacker** actor, which is an approver of nothing and a
+destination of nothing. It attempts ten categories of thing the contract is
+supposed to refuse. Each attempt is recorded and then checked: either the call
+reverted, or it was allowed to run and changed nothing it was not entitled to
+change. Anything else is a breach and fails the run.
+
+| # | What is attempted | Attempts per run | Refused | Harmless |
+| --- | --- | --- | --- | --- |
+| 0 | proposing as a non approver | 18 | 18 | 0 |
+| 1 | a payout aimed outside the destination list | 18 | 12 | 6 |
+| 2 | a payout above a destination's remaining cap | 6 | 6 | 0 |
+| 3 | the same approver approving twice | 12 | 6 | 6 |
+| 4 | approving a cancelled or expired proposal | 12 | 12 | 0 |
+| 5 | unfreezing alone when the threshold is two | 12 | 6 | 6 |
+| 6 | closing early alone when the threshold is two | 18 | 12 | 6 |
+| 7 | exiting more shares than the caller holds | 36 | 36 | 0 |
+| 8 | funding a pot that is closed or frozen | 18 | 18 | 0 |
+| 9 | spending one pot's shares against another pot | 6 | 6 | 0 |
+| | **total** | **156** | **132** | **24** |
+
+**Succeeded: 0.** The "harmless" column is not a weaker result. Some of these
+attempts are legal calls that simply must not achieve the thing being attempted:
+proposing an unfreeze alone is allowed, and it must leave the pot frozen;
+revoking and approving again is allowed, and it must not stack into a second
+approval.
+
+Two things make the counts trustworthy rather than decorative:
+
+* The attacks run as **one sweep** that performs all ten categories together, so
+  no category can sit at zero merely because the fuzzer never picked its
+  selector. The sweep is both a fuzzable action, so it lands on random states,
+  and is run once more at the end of every run.
+* `afterInvariant` **asserts that every category was attempted at least once**.
+  A category dropping to zero fails the suite rather than passing quietly. This
+  assertion has already caught two cases where a rule was silently untested: a
+  run that closed every live pot starved the attacks that need an open one, and
+  the cross pot attack was skipping whenever its chosen pot happened to be
+  frozen. A pot reserved for the attacker fixed the first, and seeking out a pot
+  the attacker actually holds shares in fixed the second.
+
+Foundry's own revert counter stays low because the attacks catch their own
+reverts in order to count them, so the `blocked` ghost variables are the real
+measure, not `reverts:` in the run summary.
 
 ### Coverage
 
