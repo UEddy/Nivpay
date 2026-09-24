@@ -21,6 +21,22 @@ block_gas_limit = "18446744073709551615"
 # Needed so the gas sweep can emit bench/gas.json for the cost model script.
 fs_permissions = [{ access = "read-write", path = "./bench" }]
 
+# Deployment profile. The default profile carries the retired benchmark's
+# enormous gas_limit, which must never reach a real broadcast, so deployment
+# runs under its own profile with ordinary settings.
+#
+# Monad charges the gas limit a transaction declares, not the gas it actually
+# used. Forge's default estimate multiplier of 130 percent would therefore be
+# paid in full on every transaction rather than refunded. 105 percent keeps a
+# little headroom for estimation drift without paying for headroom that is
+# never used.
+[profile.deploy]
+gas_limit = 30000000
+block_gas_limit = 150000000
+gas_estimate_multiplier = 105
+optimizer = true
+optimizer_runs = 200
+
 [fuzz]
 runs = 512
 max_test_rejects = 200000
