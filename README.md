@@ -244,20 +244,40 @@ Medium.** Every one is listed here; none is suppressed and no
 **Nothing here has been broadcast.** The steps below are prepared and the dry
 run has been verified against the live chain. Run them yourself.
 
-### Before you start: Foundry version
+### Toolchain
 
-The Monad docs say: *"Confirm that `forge --version` reports v1.8.0 or later."*
-That is for the `network = "monad"` setting in `foundry.toml`, which makes Forge
-use Monad's execution rules for local compilation, testing, scripts and
-simulation.
+Built and tested on **Foundry 1.8.3** with `network = "monad"`, so the gas
+model, opcode pricing, transaction rules, precompiles and contract size limits
+are Monad's, not Ethereum's. Monad's docs require v1.8.0 or later for this.
 
-**This machine is on forge 1.7.1, so that setting is not available and this
-repository does not use it.** No Monad specific Foundry build or fork is
-required; the docs point at the standard `foundryup` installer. Everything in
-this repository builds, tests and dry runs correctly on 1.7.1, and the
-deployment dry run was verified against the live Monad testnet RPC on it.
-**I have not upgraded anything.** If you want `network = "monad"`, run
-`foundryup` yourself first.
+No Monad specific Foundry build exists or is needed: `foundryup`'s `--network`
+flag is now documented as *"Deprecated and ignored; installs the regular
+Foundry release"*.
+
+```powershell
+foundryup --install latest
+forge --version          # must report 1.8.0 or later
+```
+
+### Profiles
+
+| Profile | Rules | Runs | Why |
+| --- | --- | --- | --- |
+| `default` | Monad | the product suite | what actually ships |
+| `bench` | Ethereum | the retired streaming benchmark only | see below |
+| `deploy` | Monad | the deployment script | keeps test settings away from a broadcast |
+
+```powershell
+forge test                                    # product, Monad rules
+$env:FOUNDRY_PROFILE = "bench"; forge test    # retired benchmark, Ethereum rules
+```
+
+The retired benchmark is isolated rather than accommodated. Its N = 10000
+measurements deliberately exceed Monad's 150,000,000 block gas limit, which was
+part of its point, so under Monad rules its gas sweep fails with
+`MemoryLimitOOG`. It keeps the Ethereum rules and the enormous gas ceiling it
+was always measured under, in its own profile. **Nothing in the product profile
+was weakened to let it run.**
 
 ### Network
 
@@ -279,14 +299,14 @@ share of the block gas limit while paying almost nothing for it, which is a
 denial of service vector.
 
 Forge's default gas estimate multiplier is **130 percent**. On Ethereum the
-unused 30 percent is refunded. **On Monad it is simply paid.** The `deploy`
-profile in `foundry.toml` therefore sets `gas_estimate_multiplier = 105`, which
-keeps a little headroom for estimation drift without buying headroom that is
-never used.
+unused 30 percent is refunded. **On Monad it is simply paid.**
 
-That profile also exists because the default profile still carries the retired
-benchmark's enormous `gas_limit`, which must never reach a real broadcast.
-**Always deploy with `FOUNDRY_PROFILE=deploy`.**
+There is **no `foundry.toml` key for this**. An earlier revision of this
+repository set `gas_estimate_multiplier` in the deploy profile, and forge
+reported `Found unknown gas_estimate_multiplier config`, meaning it was
+silently doing nothing. It is a command line flag only, so every deployment
+command below passes `-g 105`, which keeps a little headroom for estimation
+drift without buying headroom that is never used.
 
 ### 1. Create the encrypted keystore
 
@@ -330,11 +350,12 @@ live chain, and deploys nothing.
 
 ```powershell
 $env:FOUNDRY_PROFILE = "deploy"
-forge script script/Deploy.s.sol:Deploy --rpc-url https://testnet-rpc.monad.xyz
+forge script script/Deploy.s.sol:Deploy --rpc-url https://testnet-rpc.monad.xyz -g 105
 ```
 
-The verified dry run reports roughly **3,676,666 gas**, about **0.75 MON** at
-203 gwei.
+The verified dry run reports **2,969,615 gas**, about **0.603 MON** at a
+203 gwei max fee. Under Ethereum rules on the old toolchain the same script
+estimated 3,676,666 gas and 0.746 MON.
 
 ### 4. Broadcast
 
@@ -346,6 +367,7 @@ $env:FOUNDRY_PROFILE = "deploy"
 forge script script/Deploy.s.sol:Deploy `
     --rpc-url https://testnet-rpc.monad.xyz `
     --account monad-deployer `
+    -g 105 `
     --broadcast
 ```
 

@@ -1,39 +1,63 @@
+# The product profile. Everything about NivPayPots builds, tests and deploys
+# under Monad's own execution rules.
+#
+# network = "monad" makes Forge use Monad's gas model, opcode pricing,
+# transaction rules, precompiles and contract size limits for compilation,
+# testing, scripts and transaction simulation. It needs Foundry v1.8.0 or
+# later. Without it the whole suite runs under Ethereum rules, which is not
+# the chain this is going to.
 [profile.default]
 src = "src"
 out = "out"
 libs = ["lib"]
+network = "monad"
 
-# Pinned so the benchmark is reproducible. Gas numbers are meaningless without
-# a fixed compiler, optimizer setting and EVM target.
 solc = "0.8.28"
-evm_version = "cancun"
 optimizer = true
 optimizer_runs = 200
 via_ir = false
 
-# The N = 10000 measurements in the retired streaming benchmark deliberately
-# exceed the Monad block gas limit of 150,000,000. The harness needs headroom
-# to measure them anyway, so that the report can state how far past the limit
-# they land rather than just failing.
+# Monad's block gas limit. The retired streaming benchmark deliberately
+# exceeds it, so it is excluded here and runs under its own profile instead.
+# See [profile.bench] below.
+gas_limit = 150000000
+block_gas_limit = 150000000
+no_match_path = "test/StreamBench.t.sol"
+
+# Needed so the retired benchmark's gas sweep can emit bench/gas.json.
+fs_permissions = [{ access = "read-write", path = "./bench" }]
+
+# The retired streaming benchmark, kept as evidence of process and kept
+# passing. Its N = 10000 measurements deliberately exceed Monad's block gas
+# limit, which is part of what it set out to show, so under Monad rules the
+# sweep fails with MemoryLimitOOG. It therefore keeps the Ethereum rules and
+# the enormous gas ceiling it was always measured under. Nothing about the
+# product is weakened to accommodate it: it is simply a different profile.
+#
+#     $env:FOUNDRY_PROFILE = "bench"; forge test
+#
+# The no_match_path here only exists to cancel the exclusion inherited from
+# the default profile. It names a file that does not exist, so nothing is
+# excluded and match_path alone decides what runs.
+[profile.bench]
+network = "ethereum"
+no_match_path = "test/_nothing_is_excluded_here_.sol"
+match_path = "test/StreamBench.t.sol"
 gas_limit = "18446744073709551615"
 block_gas_limit = "18446744073709551615"
 
-# Needed so the gas sweep can emit bench/gas.json for the cost model script.
-fs_permissions = [{ access = "read-write", path = "./bench" }]
-
-# Deployment profile. The default profile carries the retired benchmark's
-# enormous gas_limit, which must never reach a real broadcast, so deployment
-# runs under its own profile with ordinary settings.
+# Deployment. Separate from the default profile so a real broadcast can never
+# inherit a test setting by accident.
 #
-# Monad charges the gas limit a transaction declares, not the gas it actually
-# used. Forge's default estimate multiplier of 130 percent would therefore be
-# paid in full on every transaction rather than refunded. 105 percent keeps a
-# little headroom for estimation drift without paying for headroom that is
-# never used.
+# Monad charges the gas limit a transaction declares, not the gas it used, so
+# Forge's default 130 percent estimate multiplier would be paid in full rather
+# than refunded. There is no foundry.toml key for it: pass
+# -g 105 (--gas-estimate-multiplier) on the forge script command line. The
+# README's deployment commands do exactly that.
 [profile.deploy]
+network = "monad"
 gas_limit = 30000000
 block_gas_limit = 150000000
-gas_estimate_multiplier = 105
 optimizer = true
 optimizer_runs = 200
 
@@ -60,3 +84,4 @@ monad_testnet = { key = "${MONADSCAN_API_KEY}", chain = 10143, url = "https://so
 [fmt]
 line_length = 120
 tab_width = 4
+
