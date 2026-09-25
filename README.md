@@ -370,14 +370,42 @@ forge --version          # must report 1.8.0 or later
 
 | Profile | Rules | Runs | Why |
 | --- | --- | --- | --- |
-| `default` | Monad | the product suite | what actually ships |
+| `default` | Monad | the product suite, 256 invariant runs | **the one to run before a deploy** |
+| `quick` | Monad | the same suite, 24 invariant runs | everyday work |
 | `bench` | Ethereum | the retired streaming benchmark only | see below |
 | `deploy` | Monad | the deployment script | keeps test settings away from a broadcast |
 
+### Which to run when
+
 ```powershell
-forge test                                    # product, Monad rules
-$env:FOUNDRY_PROFILE = "bench"; forge test    # retired benchmark, Ethereum rules
+# Everyday, while changing things. Same tests, same Monad rules, seconds.
+$env:FOUNDRY_PROFILE = "quick"; forge test
+
+# Before a deploy, and before trusting anything. Several minutes.
+Remove-Item Env:\FOUNDRY_PROFILE -ErrorAction SilentlyContinue
+forge test
+
+# The retired benchmark, under the Ethereum rules it was measured on.
+$env:FOUNDRY_PROFILE = "bench"; forge test
 ```
+
+`quick` runs **every test the default profile runs**, all 7 suites and the same
+152 cases, under the same Monad execution rules and the same invariant depth.
+The only difference is 24 invariant runs instead of 256, which takes the suite
+from around ten minutes to around twelve seconds.
+
+That is a narrower search, not a weaker one, and it is **not sufficient before a
+deploy**: the invariant campaign is where the accounting bugs surface, and 2,304
+calls explore far less than 24,576. The thorough setting is deliberately the
+**default**, so under-testing has to be asked for rather than happening because
+somebody forgot to pass a flag.
+
+> If `forge test` ever reports fewer suites than you expect, run
+> `forge build --force` first. Switching between profiles can leave the
+> incremental build cache in a state where a suite compiles but its tests are
+> not discovered, and it fails silently rather than erroring. This bit during
+> development: a whole fuzz suite quietly stopped running under both profiles,
+> and a forced rebuild restored it.
 
 The retired benchmark is isolated rather than accommodated. Its N = 10000
 measurements deliberately exceed Monad's 150,000,000 block gas limit, which was

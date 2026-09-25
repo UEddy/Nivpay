@@ -65,12 +65,27 @@ optimizer_runs = 200
 runs = 512
 max_test_rejects = 200000
 
+# The thorough setting, and deliberately the default: a plain `forge test` is
+# the one to run before a deploy. 256 runs at depth 96 is about 24,576 calls per
+# invariant and takes several minutes.
 [invariant]
 runs = 256
 depth = 96
 fail_on_revert = false
 call_override = false
 shrink_run_limit = 5000
+
+# Everyday work. Same contract, same Monad rules, same invariants and the same
+# depth per run, just fewer runs, which turns the invariant suite from minutes
+# into well under one.
+#
+#     $env:FOUNDRY_PROFILE = "quick"; forge test
+#
+# It is a narrower search, not a weaker one, and it is NOT sufficient before a
+# deploy. The thorough setting stays on the default profile on purpose, so
+# under-testing has to be asked for rather than happening by forgetting.
+[profile.quick.invariant]
+runs = 24
 
 [rpc_endpoints]
 # Public Monad testnet RPC from docs.monad.xyz. Override with the env var to
