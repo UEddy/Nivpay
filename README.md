@@ -445,28 +445,50 @@ drift without buying headroom that is never used.
 
 ### 1. Create the encrypted keystore
 
-Run these yourself, in your own terminal. `cast wallet import` prompts for the
-private key and a password, and writes only an encrypted keystore file. **I have
-never asked for your private key and nothing in this repository writes one to
-any file.**
+The deployer keystore is named **`nivpay-deployer`**, and every command below
+refers to it by that name. Run these yourself, in your own terminal.
+
+`cast wallet import` prompts for the private key and then for a password, echoes
+neither, and writes only an encrypted keystore file under
+`~/.foundry/keystores/nivpay-deployer`. **Nothing in this repository writes a
+private key to any file, and none of these commands takes one as an argument,
+so no key ends up in your PowerShell history.**
 
 ```powershell
-# Paste the private key at the prompt. It is not echoed and not stored in plain text.
-cast wallet import monad-deployer --interactive
+# Paste the private key at the prompt, then choose a password.
+# Neither is echoed, and neither is written anywhere in plain text.
+cast wallet import nivpay-deployer --interactive
 
-# Confirm the address, and that it is the one you expect.
-cast wallet address --account monad-deployer
+# Confirm the keystore exists and holds the address you expect.
+cast wallet address --account nivpay-deployer
 
-# Check it has MON for gas.
-cast balance (cast wallet address --account monad-deployer) --rpc-url https://testnet-rpc.monad.xyz
+# Check that address has MON for gas. The dry run needs about 0.61 MON.
+$addr = cast wallet address --account nivpay-deployer
+cast balance $addr --rpc-url https://testnet-rpc.monad.xyz
 ```
 
-If you would rather generate a fresh key on this machine:
+To generate a fresh key on this machine instead of importing one:
 
 ```powershell
+# Write the mnemonic down offline. It is printed once and not saved.
 cast wallet new-mnemonic
-# then import the derived private key with the interactive command above
+
+# Then import the private key it derives, with the interactive command above.
+cast wallet import nivpay-deployer --interactive
 ```
+
+To check what keystores already exist, or to start over:
+
+```powershell
+Get-ChildItem ~/.foundry/keystores
+
+# Only if you want to replace it. This is irreversible: make sure the key is
+# backed up elsewhere first.
+Remove-Item ~/.foundry/keystores/nivpay-deployer
+```
+
+Verification needs no wallet, so the `forge verify-contract` commands further
+down take no `--account`. Only the broadcast does.
 
 ### 2. Set the fee configuration
 
@@ -501,7 +523,7 @@ upgraded or withdrawn from.**
 $env:FOUNDRY_PROFILE = "deploy"
 forge script script/Deploy.s.sol:Deploy `
     --rpc-url https://testnet-rpc.monad.xyz `
-    --account monad-deployer `
+    --account nivpay-deployer `
     -g 105 `
     --broadcast
 ```
@@ -582,7 +604,7 @@ the tokens.** You do not need to be that address.
 cast send 0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C `
     "requestFunds(address)" `
     <recipient_address> `
-    --account monad-deployer `
+    --account nivpay-deployer `
     --rpc-url https://testnet-rpc.monad.xyz
 ```
 
