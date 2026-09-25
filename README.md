@@ -533,6 +533,40 @@ forge verify-contract `
     --constructor-args (cast abi-encode "constructor(address,uint256,uint256,address)" 0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC 50 50000000 $env:FEE_RECIPIENT)
 ```
 
+### Broadcast receipts are committed on purpose
+
+`broadcast/Deploy.s.sol/10143/` is **deliberately not gitignored**. The receipt
+from a real deploy gets committed, as provenance.
+
+The reasoning: this contract has no owner, no admin and no upgrade path. Once it
+is deployed there is no registry to update and no migration to point at, so the
+deployment transaction is the only record of which bytecode is live at which
+address with which immutable fee settings. Keeping that receipt in the
+repository means the address, the exact constructor arguments and the
+transaction hash are versioned next to the source they came from, rather than
+living in somebody's terminal scrollback.
+
+What the receipt contains, and does not:
+
+* it **does** contain the deployer address, the full constructor calldata, the
+  deployed address, gas figures and the transaction hash,
+* it contains **no private key**, no mnemonic and no keystore material. Foundry
+  writes nothing of that kind into a broadcast receipt, and the keystore stays
+  in `~/.foundry/keystores`, outside this repository.
+
+Still ignored, because they are noise rather than provenance:
+
+* `/broadcast/*/31337/`, local Anvil runs,
+* `/broadcast/**/dry-run/`, simulations that were never sent,
+* `cache/`, which is where Foundry writes the file it labels "Sensitive values".
+  On the dry runs so far that file has held nothing but the public RPC URL,
+  since no wallet was involved, but it stays ignored regardless.
+
+A scan of the full object store, reachable and unreachable, found no private
+key, mnemonic or keystore material anywhere in this repository's history. The
+longest hex literal in the entire history is 40 characters: the three public
+contract addresses above.
+
 ## Getting test AUSD
 
 Agora's faucet at `0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C` is a UUPS proxy.

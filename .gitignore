@@ -6,7 +6,16 @@ out/
 .logs/
 .ignore/
 
-# Ignores development broadcast logs
+# Broadcast receipts.
+#
+# Chain 10143 (Monad testnet) is DELIBERATELY NOT IGNORED. The receipt from a
+# real deploy is committed on purpose, as provenance: it records the address,
+# the exact constructor arguments and the transaction hash for a contract that
+# has no owner and cannot be upgraded, so the deployment is the only thing there
+# is to point at. Please do not "fix" this by ignoring it. See the README
+# section "Broadcast receipts are committed on purpose".
+#
+# Local runs and simulations are ignored, because they are noise.
 !/broadcast
 /broadcast/*/31337/
 /broadcast/**/dry-run/
