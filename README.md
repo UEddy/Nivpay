@@ -183,7 +183,7 @@ do not.
 | `test/PotsCore.t.sol` | creation, funding, permit funding, exits, claims, views |
 | `test/PotsGovernance.t.sol` | proposals, payouts, caps, freeze, close, fees |
 | `test/PotsSecurity.t.sol` | asset freezing, reentrancy, donations, pot isolation, lost keys |
-| `test/PotsFuzz.t.sol` | funding amounts, join and exit order, payout sizes, fee settings |
+| `test/PotsFuzz.t.sol` | funding amounts, join and exit order, payout sizes, fee settings, rounding direction |
 | `test/PotsInvariant.t.sol` | invariants and ten adversarial attack categories |
 | `test/PotsFork.t.sol` | the whole lifecycle against real AUSD on Monad testnet |
 
@@ -250,6 +250,53 @@ Two things make the counts trustworthy rather than decorative:
 Foundry's own revert counter stays low because the attacks catch their own
 reverts in order to count them, so the `blocked` ghost variables are the real
 measure, not `reverts:` in the run summary.
+
+### Mutation testing
+
+A passing suite proves nothing about a suite's ability to fail. Six deliberate
+bugs were introduced one at a time on a scratch branch, each run against the
+full product suite, then reverted. No mutant was ever committed and the branch
+was deleted.
+
+| Mutant | Result | Caught by |
+| --- | --- | --- |
+| 1. execute payouts at threshold minus one | killed, **52** tests failed | the whole governance and Mama's 60th suite, plus two fuzz tests |
+| 2. skip the destination cap check | killed, 4 tests failed | `test_payout_revertsAboveTheDestinationCap`, `test_payout_capIsLifetimeNotPerPayout`, `testFuzz_capIsNeverExceeded`, and the invariant run |
+| 3. count a repeat approval from the same approver | killed, 2 tests failed | `test_approve_revertsWhenAlreadyApproved` and the invariant run |
+| 4. remove the freeze check from funding | killed, 2 tests failed | `test_fund_revertsWhileFrozen`, and by name: `an attack succeeded: funding a closed or frozen pot` |
+| 5. round redemption in the caller's favour | killed, 8 tests failed | both Mama's 60th tests, the fork test, `invariant_contractCoversAllPotAssetsPlusFees`, `invariant_exitsAlwaysSucceedForHolders`, `invariant_freezeNeverTrapsFunds`, two fuzz tests |
+| 6. read pot value from the token balance | killed, **31** tests failed | both donation tests, every exit and claim test, five invariants, four fuzz tests |
+
+Mutant 4 is the clearest evidence that the adversarial work was worth doing: it
+was caught by the attack category added for exactly that rule, by name.
+
+#### The one that nearly got away
+
+"Round one share conversion in the caller's favour" has two call sites, and only
+one of them was tested properly. Mutant 5 above is the redemption side, killed
+by eight tests. The **minting** side, `_fund` rounding up instead of down, was
+caught by **exactly one** assertion in one unit test, and the invariant suite
+passed it clean across all 24,576 calls. One hand written assertion was the only
+thing standing between that bug and production.
+
+Worse, the first fix did not work. A fuzz test was added asserting that
+`previewFund` rounds down, and it **passed against the mutant**: `previewFund`
+and `_fund` are separate call sites into the same conversion, so a preview based
+assertion cannot see a rounding change on the real path at all. That is a
+general trap, and it is now written into the test file so nobody repeats it.
+
+What kills it:
+
+* `testFuzz_mintingRoundsToThePot` and `testFuzz_redeemingRoundsToThePot`, which
+  assert on what `fund` and `exit` **actually return**, against share counts
+  recomputed independently from the pot's reported totals.
+* `invariant_conversionsAlwaysRoundToThePot`, backed by the handler checking the
+  value returned by every fund and exit it was already making. Recording a
+  violation in a ghost variable rather than asserting inside the handler matters:
+  `fail_on_revert` is off, so an assertion failure inside a handler action would
+  have been swallowed.
+
+Both mutants now die by both routes.
 
 ### Coverage
 
