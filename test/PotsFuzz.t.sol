@@ -321,6 +321,85 @@ contract PotsFuzzTest is PotsTestBase {
     }
 
     // ---------------------------------------------------------------------
+    // Rounding direction
+    // ---------------------------------------------------------------------
+
+    /// @notice Both share conversions round down, in the pot's favour, never
+    /// the caller's.
+    ///
+    /// These assert on what `fund` and `exit` actually return, not on what
+    /// `previewFund` and `previewExit` predict. The two are separate call
+    /// sites into the same conversion, so a preview based assertion cannot see
+    /// a rounding change on the real path at all: an earlier version of this
+    /// test checked the previews and passed happily against a mutant that
+    /// minted shares in the caller's favour.
+    ///
+    /// The expected values are recomputed from the pot's own reported totals,
+    /// so the assertion is against the arithmetic the design calls for rather
+    /// than against whatever the contract happens to do.
+    function testFuzz_mintingRoundsToThePot(uint256 a, uint256 spend, uint256 amount) public {
+        uint256 potId = _pricedPot(a, spend);
+
+        NivPayPots.PotView memory p = pots.getPot(potId);
+        amount = bound(amount, MIN_FUND, MAX_FUND);
+        uint256 expected = (amount * (p.totalShares + _virtualShares())) / (p.totalAssets + 1);
+
+        vm.prank(carol);
+        uint256 minted = pots.fund(potId, amount);
+
+        assertEq(minted, expected, "minting rounds down, in the pot's favour");
+        assertEq(pots.sharesOf(potId, carol), minted, "and credits exactly that");
+    }
+
+    function testFuzz_redeemingRoundsToThePot(uint256 a, uint256 spend, uint256 part) public {
+        uint256 potId = _pricedPot(a, spend);
+
+        uint256 held = pots.sharesOf(potId, alice);
+        uint256 burn = bound(part, 1, held);
+
+        NivPayPots.PotView memory p = pots.getPot(potId);
+        uint256 expected = (burn * (p.totalAssets + 1)) / (p.totalShares + _virtualShares());
+
+        uint256 balanceBefore = token.balanceOf(alice);
+        vm.prank(alice);
+        uint256 got = pots.exit(potId, burn);
+
+        assertEq(got, expected, "redeeming rounds down, in the pot's favour");
+        assertEq(token.balanceOf(alice) - balanceBefore, got, "and pays exactly that");
+    }
+
+    /// @notice Funding and immediately leaving never hands back more than went
+    /// in, whatever state the pot was in when the funder arrived.
+    function testFuzz_fundingAndLeavingIsNeverProfitable(uint256 a, uint256 spend, uint256 amount) public {
+        uint256 potId = _pricedPot(a, spend);
+
+        amount = bound(amount, MIN_FUND, MAX_FUND);
+        vm.prank(carol);
+        uint256 minted = pots.fund(potId, amount);
+        vm.prank(carol);
+        uint256 back = pots.exit(potId, minted);
+
+        assertLe(back, amount, "a funder can never take out more than they put in");
+    }
+
+    /// @dev A pot sitting at some price per share other than the one a fresh
+    /// pot starts at, so the conversions are exercised away from parity.
+    function _pricedPot(uint256 a, uint256 spend) private returns (uint256 potId) {
+        a = bound(a, MIN_FUND, MAX_FUND);
+        potId = _newPot();
+        vm.prank(alice);
+        pots.fund(potId, a);
+
+        uint256 total = pots.getPot(potId).totalAssets;
+        spend = bound(spend, 0, (total * 90) / 100);
+        if (spend > 0 && spend + pots.feeOn(spend) <= total) _pay(potId, spend);
+    }
+
+    function _virtualShares() private view returns (uint256) {
+        return 10 ** pots.DECIMALS_OFFSET();
+    }
+
+    // ---------------------------------------------------------------------
     // Solvency across the lot
     // ---------------------------------------------------------------------
 

@@ -42,6 +42,13 @@ contract PotsHandler is Test {
     /// to fall because somebody else funded or exited. Should never exceed one.
     uint256 public worstCollateralLoss;
 
+    /// @notice Times a real fund or exit returned something other than the
+    /// conversion rounded down. Checked on the calls the handler already
+    /// makes, so it costs nothing, and recorded rather than asserted here
+    /// because fail_on_revert is off and a revert inside a handler action
+    /// would be swallowed.
+    uint256 public roundingViolations;
+
 
     uint64 public immutable endTime;
 
@@ -206,8 +213,10 @@ contract PotsHandler is Test {
         if (p.closed || p.frozen) return;
 
         uint256[] memory before = _snapshotValues();
+        uint256 expectedShares = _expectedShares(potId, amount);
         vm.prank(who);
-        pots.fund(potId, amount);
+        uint256 minted = pots.fund(potId, amount);
+        if (minted != expectedShares) roundingViolations++;
         gFunded[potId] += amount;
         _recordCollateralDamage(before, who, potId);
     }
@@ -223,8 +232,10 @@ contract PotsHandler is Test {
 
         bool closed = pots.getPot(potId).closed;
         uint256[] memory before = _snapshotValues();
+        uint256 expectedAssets = _expectedAssets(potId, burn);
         vm.prank(who);
         uint256 got = pots.exit(potId, burn);
+        if (got != expectedAssets) roundingViolations++;
         if (closed) {
             gClaimed[potId] += got;
         } else {
@@ -459,6 +470,19 @@ contract PotsHandler is Test {
         } else {
             breached[cat]++;
         }
+    }
+
+    /// @dev The share count a funding of `assets` should mint, and the assets a
+    /// burn of `shares` should return, both rounded down, computed here from the
+    /// pot's reported totals rather than read back off the contract.
+    function _expectedShares(uint256 potId, uint256 assets) private view returns (uint256) {
+        NivPayPots.PotView memory p = pots.getPot(potId);
+        return (assets * (p.totalShares + 10 ** pots.DECIMALS_OFFSET())) / (p.totalAssets + 1);
+    }
+
+    function _expectedAssets(uint256 potId, uint256 shares) private view returns (uint256) {
+        NivPayPots.PotView memory p = pots.getPot(potId);
+        return (shares * (p.totalAssets + 1)) / (p.totalShares + 10 ** pots.DECIMALS_OFFSET());
     }
 
     /// @dev An open, unfrozen pot: one of the live ones where possible, so

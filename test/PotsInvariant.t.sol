@@ -267,6 +267,25 @@ contract PotsInvariantTest is Test {
         console.log("  succeeded      ", handler.totalBreached());
     }
 
+    /// @notice Every real fund and exit the run performed returned the
+    /// conversion rounded down, in the pot's favour.
+    ///
+    /// The stateful suite used to be blind to this. Flipping share minting to
+    /// round in the caller's favour survived all 24,576 calls and was caught by
+    /// exactly one hand written unit test. Checking the previews does not help
+    /// either, because they are a different call site into the same
+    /// conversion: a version of this that asked previewFund passed happily
+    /// against that mutant.
+    ///
+    /// So the handler now checks the value returned by the funds and exits it
+    /// was going to make anyway. Doing it that way rather than performing extra
+    /// calls inside the invariant keeps the suite fast: a snapshot, a fund and
+    /// an exit on every one of 24,576 calls took longer than every other test
+    /// put together.
+    function invariant_conversionsAlwaysRoundToThePot() public view {
+        assertEq(handler.roundingViolations(), 0, "a conversion rounded in the caller's favour");
+    }
+
     /// @notice Creation parameters are immutable. Nothing in any sequence of
     /// calls can change an approver set, a threshold, a destination or an end
     /// time.
