@@ -31,6 +31,12 @@ build the permit domain from `eip712Domain()`, not from `name()`. TESTUSD's
 domain name is `"NivPay Test Dollar"`, which matches its `name()`; reading
 `eip712Domain()` works for both.
 
+**Decided:** for every token, AUSD and TESTUSD alike, the app reads the permit
+domain from `eip712Domain()` (EIP-5267) and never hardcodes a name or a
+version. Before signing, it recomputes the domain separator from what it read
+and refuses to sign unless it equals the token's `DOMAIN_SEPARATOR()`. A test
+checks the same thing against both live tokens.
+
 ## 2. The answers asked for
 
 **How deciders and funders are set.** Deciders (approvers) are fixed in
@@ -214,24 +220,46 @@ and locked, here is the link to share", not a first invitation. The done copy
 "Invites went to Ubong and Aniekan" needs rewording, since nothing is sent.
 
 **G2. The request note ("Deposit for jollof, small chops and drinks").** Not
-stored anywhere. Handling: the asker signs `{proposalId, note}` and the app
-puts it in the request's share link fragment. An approver who opens that link
-sees the note after checking the signer is `Proposed.proposer`. Anyone who
-opens the pot without the link sees the request without a note.
+stored anywhere. **Decided:** the note travels only in the share link the
+requester sends to the other deciders, in the `#` fragment, signed by the
+requester's account as EIP-712 typed data over the pots contract, the chain
+id, the `proposalId` and the note. The app shows the note only if the
+signature recovers to `Proposed.proposer` for that `proposalId` on that
+contract. No valid signature, no note. Unsigned text is never shown, not even
+greyed out. Opening the request without the link shows it without a note.
 
-**G3. "Not yet".** There is no "no" vote. Handling: "Not yet" does nothing on
-chain if you have not approved, and calls `revokeApproval` if you have. A
-request dies by expiry after 7 days or by the asker cancelling. Copy should
-not imply a vote against.
+**G3. "Not yet".** There is no "no" vote on chain. **Decided:** "Not yet" only
+closes the screen; it sends nothing. Under the buttons, one line, filled from
+the contract: "Requests need 2 yeses within 7 days, or they expire." (2 is
+`getPot.threshold`, 7 days is `PROPOSAL_TTL`.) A decider who already said yes
+can still take it back with `revokeApproval`, from the request's detail, as a
+separate action with its own label.
 
-**G4. "Pause all pours" is broader than its label.** `freeze` also stops new
-chip ins, and one decider alone can do it while undoing it takes the
-threshold. Handling: say so on the confirm step, and add an "Ask to unpause"
-flow (`proposeUnfreeze`).
+**G4. Pause.** **Decided:** the label says what it really does, and a short
+confirm sheet says exactly what stops and what does not, read from the code
+(`frozen` is checked in `_fund`, `proposePayout`, `approve` for payouts and
+`_executePayout`, and nowhere else):
 
-**G5. "Party in 21 days".** The party date is not stored; the only date is
-`endTime`, the closing date. Handling: show "Closes in N days" from `endTime`,
-or carry an optional event date in the signed labels.
+| While paused | |
+| --- | --- |
+| Pour-ins (`fund`, `fundWithPermit`) | **stopped** |
+| New payment requests (`proposePayout`) | **stopped** |
+| Saying yes to a payment, so no payment can go out | **stopped** |
+| Taking your own share out (`exit`) | still works, for everyone |
+| Leftovers after close (`claim`) | still work |
+| Closing the pot early (`proposeClose` and its yeses) | still works |
+| Taking back a yes, cancelling your own request | still works |
+| Requests already waiting | not cancelled, and their 7 days keep running |
+
+Pausing takes one decider. Unpausing takes the pot's usual number of yeses,
+through an "Ask to unpause" request (`proposeUnfreeze`). Proposed label:
+"Pause payments and pour-ins". The sheet must not say or imply that pausing
+protects anyone's money: money in the pot is already safe from everyone but
+the listed destinations, and every person can still take their own share out
+while paused.
+
+**G5. Party date.** **Decided:** an optional date in the creator's signed
+labels. When it is absent, nothing about a party date is shown.
 
 **G6. Per-person layers and amounts.** The contract has no funder list.
 Handling: the known people (deciders plus anyone in the labels) are queried
@@ -248,9 +276,16 @@ fails. Handling: the app blocks asking and approving when `spent + amount >
 cap` or `amount + fee > totalAssets`, and simulates with `eth_call` before
 every send.
 
-**G9. Expiry and time based close have no events.** Handling: derive both from
-the finalized block timestamp. Optionally the app calls `closePot` once after
-`endTime` (43,293 gas) so the story has a real `Closed` row.
+**G9. Expiry and time based close have no events.** **Decided for expiry:**
+a request's start is the timestamp of the block that holds its `Proposed`
+log (equal to `proposalInfo.createdAt`), and it is expired when the finalized
+block's timestamp is greater than start plus `PROPOSAL_TTL` read from the
+contract, the same `>` the contract uses in `approve`. The app shows
+"expired" from that alone, with no event needed. The time based close is
+derived the same way from `endTime` (closed when the finalized timestamp is
+at or past `endTime`, as `_isClosed` does). Optionally the app calls
+`closePot` once after `endTime` (43,293 gas) so the story has a real `Closed`
+row.
 
 **G10. Notifications.** "Idara and Aniekan can see it now" and "invites went
 to" imply delivery. Nothing is pushed. People see changes when they open the
@@ -356,7 +391,7 @@ Notes:
 | `node -v` | v24.15.0 (20 or newer required: OK) |
 | `npm -v` | 9.6.2 (old for Node 24, which ships npm 11; works, but worth updating) |
 | `forge --version` | 1.8.3 |
-| Shell | Git Bash (MINGW64) and PowerShell on Windows 11, **not WSL2**. `docs/BUILD-APP.md` assumes WSL2 Ubuntu under `/mnt/c`. The WSL notes (polling, slow installs on `/mnt/c`, no browser launch) may not apply here. |
+| Shell | Git Bash (MINGW64) and PowerShell, natively on Windows 11. `docs/BUILD-APP.md` now says so. |
 
 ## 8. Bounty requirements (`docs/BOUNTIES.md`)
 
@@ -377,3 +412,83 @@ One more point on "send to another person": the pot can only pay destinations
 listed at creation. A plain AUSD transfer between two accounts (the token's
 own `transfer`) would be a simple "send to anyone" without touching the
 contracts, if you want one in the demo. I have not planned it in.
+
+## 9. Decisions on writes, invites and accounts
+
+### Retries
+
+* **Reads** retry with exponential backoff and full jitter, with a timeout on
+  every call and a cap on attempts. Reads are idempotent, so this is safe.
+* **Writes are signed once.** The signed transaction's raw bytes and hash are
+  kept (in IndexedDB, keyed by account, so a reload resumes tracking; a
+  signed transaction is not a secret). A retry re-broadcasts the same bytes
+  and tracks the same hash. A second copy of the same signed transaction can
+  never be a second payment.
+* **A new transaction is built only after the old nonce is confirmed unused
+  at finalized**: the account's nonce at the finalized block still equals the
+  old transaction's nonce and the old hash is still unknown. The new one
+  **reuses that same nonce**, so even if the old one surfaces late, at most
+  one of the two can ever be included.
+* **One write in flight per account.** Buttons that send are disabled while a
+  write for that account is pending, across tabs (the IndexedDB record is the
+  lock), so a double tap cannot make two transactions.
+* Why the nonce rule matters most for pour-ins: if a retry signed a fresh
+  `fundWithPermit` with a new account nonce and a fresh permit, both could be
+  included and the person would pour in twice. Same bytes, or same nonce,
+  closes that.
+
+### Invites, case B
+
+* The creator's draft has a random 128-bit draft id and lives on the
+  creator's phone.
+* **Join links carry proof.** When someone joins, their app signs EIP-712
+  typed data over `{draftId, role, name, address}` with their account, where
+  role is decider or destination. The link back to the creator carries that
+  in its `#` fragment. The creator's app accepts it only if the signature
+  recovers to the address in it and the draft id is one of its own drafts.
+* **Pasted vendor addresses.** For a vendor not on NivPay, the creator can
+  paste a plain address. It must be a valid address; if it is written in
+  mixed case, its EIP-55 checksum must be right. Because destinations are
+  fixed forever, the creator then types the address's last 4 characters to
+  confirm it. This applies to every pasted address, not only suspicious ones.
+* **The confirm screen before "Make the pot"** lists every decider and every
+  destination with its short address, whether it joined by link or was
+  pasted, and says that none of it can ever change.
+* **Switch account.** One phone can hold more than one account for testing.
+  The app stores a list of addresses, one per passkey, and "Switch account"
+  asks for that account's passkey. Keys are still never stored; only
+  addresses are.
+
+## 10. History, planned for after Phase 3 (not built yet)
+
+The 100 block `eth_getLogs` limit makes backfilling an old pot on a phone
+impractical (section 6). The plan:
+
+* **A free GitHub Actions job every 5 minutes** (the repo is public, so the
+  minutes are free). It reads a cursor, pages `eth_getLogs` in 101 block
+  windows from the cursor to the `finalized` block for both NivPayPots
+  addresses, and appends the new logs to JSON snapshots: one file per pot
+  (`history/<contract>/<potId>.json`) plus an index holding the last block
+  covered. It commits them to a separate data branch, never to `master`.
+  Five minutes of chain is about 970 blocks, so about 10 requests per run.
+  The first run backfills from the deploy blocks (about 1,000 requests once).
+* **Only finalized blocks** go into the snapshot, so nothing in it can be
+  reverted and the job needs no reorg handling.
+* **The app loads the pot's snapshot first**, from its own origin through a
+  Vercel rewrite to the data branch, so `connect-src` stays `'self'` plus the
+  RPC. It then follows from the snapshot's last block to finalized over RPC,
+  in 101 block pages, exactly as live polling does. If the snapshot is
+  missing or unreachable, it falls back to scanning from the pot's creation
+  block.
+* **The snapshot is for history only.** Money numbers (balances, shares,
+  limits used, what is left) still come only from view calls at the
+  finalized block, never from the snapshot.
+* **Untrusted input.** Each snapshot row keeps its block hash and log index.
+  For the pot on screen, the app re-reads the logs of each referenced block
+  by block hash (one call per block, bounded by the pot's size) before
+  showing a row as confirmed.
+* **Known limits:** GitHub runs scheduled jobs late or skips them under load,
+  so the snapshot can be minutes behind (the live follow covers that). A
+  scheduled workflow is paused after 60 days without repository activity.
+  The job uses the public RPC and needs no secret, only permission to push to
+  its data branch.
