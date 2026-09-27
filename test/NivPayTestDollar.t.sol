@@ -29,6 +29,54 @@ contract NivPayTestDollarTest is Test {
         assertEq(token.totalSupply(), 123_456789);
     }
 
+    function test_mint_capIs100kTestusd() public view {
+        assertEq(token.MAX_MINT(), 100_000 * 10 ** 6);
+    }
+
+    function test_mint_acceptsExactlyTheCap() public {
+        address to = makeAddr("to");
+        token.mint(to, 100_000_000000);
+        assertEq(token.balanceOf(to), 100_000_000000);
+    }
+
+    function test_mint_revertsOneUnitAboveTheCap() public {
+        address to = makeAddr("to");
+        vm.expectRevert(abi.encodeWithSelector(NivPayTestDollar.MintAboveCap.selector, 100_000_000001, 100_000_000000));
+        token.mint(to, 100_000_000001);
+        assertEq(token.balanceOf(to), 0);
+        assertEq(token.totalSupply(), 0);
+    }
+
+    function testFuzz_mint_revertsForEveryAmountAboveTheCap(uint256 amount) public {
+        amount = bound(amount, 100_000_000001, type(uint256).max);
+        vm.expectRevert(abi.encodeWithSelector(NivPayTestDollar.MintAboveCap.selector, amount, 100_000_000000));
+        token.mint(makeAddr("to"), amount);
+        assertEq(token.totalSupply(), 0);
+    }
+
+    function test_mint_repeatedMintsAtTheCapAllSucceed() public {
+        address to = makeAddr("to");
+        address stranger = makeAddr("stranger");
+        for (uint256 i = 1; i <= 5; i++) {
+            vm.prank(i % 2 == 0 ? stranger : to);
+            token.mint(to, 100_000_000000);
+            assertEq(token.balanceOf(to), i * 100_000_000000);
+        }
+        assertEq(token.totalSupply(), 500_000_000000);
+    }
+
+    function testFuzz_mint_repeatedMintsWithinTheCapAccumulate(uint256[8] memory amounts) public {
+        address to = makeAddr("to");
+        uint256 expected;
+        for (uint256 i = 0; i < amounts.length; i++) {
+            uint256 amount = bound(amounts[i], 0, 100_000_000000);
+            token.mint(to, amount);
+            expected += amount;
+        }
+        assertEq(token.balanceOf(to), expected);
+        assertEq(token.totalSupply(), expected);
+    }
+
     function test_permit_setsAllowanceFromASignature() public {
         (address owner, uint256 key) = makeAddrAndKey("owner");
         address spender = makeAddr("spender");
