@@ -1,0 +1,127 @@
+/* Design tokens from docs/design/README.md. */
+:root {
+  --bg: #faf1e4;
+  --ink: #3a2317;
+  --muted: #6e5243;
+  --primary: #a5451f;
+  --primary-pressed: #7f3316;
+  --primary-text: #8c3a1a;
+  --card: #fffbf5;
+  --card-border: #ead6bd;
+  --chip: #f6e6d2;
+  --divider: #efe0cc;
+  --map-paper: #f4e3cb;
+  --map-grid: #ebd4b5;
+  --route-empty: #c9ad8c;
+  --pot-clay: #e7c29c;
+  --pot-lid: #c8744a;
+  --person-1: #a5451f;
+  --person-2: #245c5a;
+  --person-3: #d99a2b;
+
+  --font-display: "Besley", Georgia, serif;
+  --font-body: "Work Sans", system-ui, sans-serif;
+
+  /* Motion tokens from docs/MOTION.md. */
+  --ease-swap: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-press: 120ms;
+  --dur-swap: 240ms;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  min-height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: max(20px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.lede {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--divider);
+  font-size: 14px;
+}
+
+.row:first-of-type {
+  border-top: 0;
+}
+
+.row .label {
+  color: var(--muted);
+}
+
+.row .value {
+  font-weight: 500;
+  text-align: right;
+  word-break: break-all;
+}
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.banner {
+  background: var(--chip);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
+.pot-mark {
+  width: 64px;
+  height: 64px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition-duration: 150ms !important;
+  }
+}
