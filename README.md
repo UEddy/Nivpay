@@ -175,7 +175,7 @@ instance bound to a worthless test token is described under
 forge test
 ```
 
-159 test cases. The one skip is the faucet test, which skips only when Agora's public
+166 test cases. The one skip is the faucet test, which skips only when Agora's public
 faucet is out of stock (see below). The fork tests need network access; the rest
 do not.
 
@@ -188,7 +188,7 @@ do not.
 | `test/PotsFuzz.t.sol` | funding amounts, join and exit order, payout sizes, fee settings, rounding direction |
 | `test/PotsInvariant.t.sol` | invariants and ten adversarial attack categories |
 | `test/PotsFork.t.sol` | the whole lifecycle against real AUSD on Monad testnet |
-| `test/NivPayTestDollar.t.sol` | the TESTUSD test token: metadata, open mint, permit, refusal of every non test chain |
+| `test/NivPayTestDollar.t.sol` | the TESTUSD test token: metadata, open mint, the per call mint cap, permit, refusal of every non test chain |
 
 ### Invariants
 
@@ -370,9 +370,10 @@ is the AUSD instance and is unchanged. The TESTUSD instance follows in
 [The TESTUSD instance](#the-testusd-instance).
 
 > **TESTUSD must never be deployed to a mainnet, Monad or any other.** It is
-> not a stablecoin. Anyone can mint any amount of it, so it is worth nothing, and
-> a pot holding it holds nothing. It is named *NivPay Test Dollar* with symbol
-> `TESTUSD` precisely so it cannot be mistaken for AUSD or any real dollar.
+> not a stablecoin. Anyone can mint it, up to 100,000 TESTUSD per call and as
+> many calls as they like, so it is worth nothing, and a pot holding it holds
+> nothing. It is named *NivPay Test Dollar* with symbol `TESTUSD` precisely so
+> it cannot be mistaken for AUSD or any real dollar.
 > This is enforced in the contract, not only by convention: the
 > `NivPayTestDollar` constructor reverts with `NotATestChain` on every chain id
 > except `10143` (Monad testnet) and `31337` (local Anvil and Forge tests), and
@@ -418,7 +419,7 @@ $env:FOUNDRY_PROFILE = "bench"; forge test
 ```
 
 `quick` runs **every test the default profile runs**, all 8 suites and the same
-159 cases, under the same Monad execution rules and the same invariant depth.
+166 cases, under the same Monad execution rules and the same invariant depth.
 The only difference is 24 invariant runs instead of 256, which takes the suite
 from around ten minutes to around twelve seconds.
 
@@ -477,44 +478,54 @@ drift without buying headroom that is never used.
 The deployer keystore is named **`nivpay-deployer`**, and every command below
 refers to it by that name. Run these yourself, in your own terminal.
 
-`cast wallet import` prompts for the private key and then for a password, echoes
-neither, and writes only an encrypted keystore file under
-`~/.foundry/keystores/nivpay-deployer`. **Nothing in this repository writes a
-private key to any file, and none of these commands takes one as an argument,
-so no key ends up in your PowerShell history.**
+Create the key with `cast wallet new`, giving it the keystore directory and the
+name. It generates the key, prompts for a password without echoing it, and
+writes only an encrypted keystore file. It prints the file's path and the
+address, and **never displays the private key**, so the key never appears on
+screen, in your PowerShell history or in any file in this repository.
 
 ```powershell
-# Paste the private key at the prompt, then choose a password.
-# Neither is echoed, and neither is written anywhere in plain text.
-cast wallet import nivpay-deployer --interactive
+# cast wallet new refuses a directory that does not exist yet.
+New-Item -ItemType Directory -Force "$HOME\.foundry\keystores" | Out-Null
+
+# Choose a password at the prompt. It is not echoed.
+cast wallet new "$HOME\.foundry\keystores" nivpay-deployer
 
 # Confirm the keystore exists and holds the address you expect.
 cast wallet address --account nivpay-deployer
 
-# Check that address has MON for gas. The dry run needs about 0.61 MON.
+# Fund that address with MON for gas. The dry run needs about 0.61 MON.
 $addr = cast wallet address --account nivpay-deployer
 cast balance $addr --rpc-url https://testnet-rpc.monad.xyz
 ```
 
-To generate a fresh key on this machine instead of importing one:
+Write the path as `$HOME\.foundry\keystores`, not `~/.foundry/keystores`:
+PowerShell does not expand `~` in arguments to native programs such as `cast`.
+Never run a bare `cast wallet new` with no arguments: that form prints a fresh
+private key to the terminal instead of writing a keystore.
+
+Because the key is never shown, **the keystore file and its password are the
+only copy of it.** There is no mnemonic to write down. Back up
+`$HOME\.foundry\keystores\nivpay-deployer` somewhere safe and keep
+the password separately. For a deployer that only pays gas, losing it is a
+small loss, since `NivPayPots` has no owner and the deployer has no powers over
+it afterwards, but any MON left on the address goes with it.
+
+If a keystore named `nivpay-deployer` already exists, `cast wallet new` refuses
+and lists it rather than overwriting it. To check what exists, or to start
+over:
 
 ```powershell
-# Write the mnemonic down offline. It is printed once and not saved.
-cast wallet new-mnemonic
+Get-ChildItem "$HOME\.foundry\keystores"
 
-# Then import the private key it derives, with the interactive command above.
-cast wallet import nivpay-deployer --interactive
+# Only if you want to replace it. This is irreversible: the keystore is the
+# only copy of the key, so back it up first if it holds anything.
+Remove-Item "$HOME\.foundry\keystores\nivpay-deployer"
 ```
 
-To check what keystores already exist, or to start over:
-
-```powershell
-Get-ChildItem ~/.foundry/keystores
-
-# Only if you want to replace it. This is irreversible: make sure the key is
-# backed up elsewhere first.
-Remove-Item ~/.foundry/keystores/nivpay-deployer
-```
+To use a key you already have instead, `cast wallet import nivpay-deployer
+--interactive` prompts for the private key and a password, echoes neither, and
+writes the same kind of encrypted keystore.
 
 Verification needs no wallet, so the `forge verify-contract` commands further
 down take no `--account`. Only the broadcast does.
@@ -643,7 +654,10 @@ non token address.
 
 #### T3. Mint and verify
 
-TESTUSD mints to anyone, from anyone, with no faucet and no limit:
+TESTUSD mints to anyone, from anyone, with no faucet. Each call is capped at
+100,000 TESTUSD (`MAX_MINT`, 100000000000 base units) and reverts with
+`MintAboveCap` above that. Calls can be repeated, so the cap limits each mint,
+not the total supply:
 
 ```powershell
 cast send <TESTUSD address> "mint(address,uint256)" <recipient_address> 10000000000 `
