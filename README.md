@@ -149,7 +149,9 @@ block its own collection. Tested in
 
 ## Token and security
 
-One immutable token, set in the constructor: **AUSD**.
+One immutable token, set in the constructor: **AUSD**. A second, test only
+instance bound to a worthless test token is described under
+[Two instances](#two-instances); the contract is the same bytecode either way.
 
 * **Asset freezing is survivable.** A failed transfer to one address never
   blocks anyone else. A frozen destination makes only its own payout revert and
@@ -173,7 +175,7 @@ One immutable token, set in the constructor: **AUSD**.
 forge test
 ```
 
-149 test cases. The one skip is the faucet test, which skips only when Agora's public
+159 test cases. The one skip is the faucet test, which skips only when Agora's public
 faucet is out of stock (see below). The fork tests need network access; the rest
 do not.
 
@@ -186,6 +188,7 @@ do not.
 | `test/PotsFuzz.t.sol` | funding amounts, join and exit order, payout sizes, fee settings, rounding direction |
 | `test/PotsInvariant.t.sol` | invariants and ten adversarial attack categories |
 | `test/PotsFork.t.sol` | the whole lifecycle against real AUSD on Monad testnet |
+| `test/NivPayTestDollar.t.sol` | the TESTUSD test token: metadata, open mint, permit, refusal of every non test chain |
 
 ### Invariants
 
@@ -351,6 +354,31 @@ Medium.** Every one is listed here; none is suppressed and no
 **Nothing here has been broadcast.** The steps below are prepared and the dry
 run has been verified against the live chain. Run them yourself.
 
+### Two instances
+
+The same `NivPayPots` bytecode is deployed twice, once per token. The token is
+an immutable constructor argument, so each instance is bound to its token for
+ever and the two never share funds.
+
+| Instance | Token | Script | What it is for |
+| --- | --- | --- | --- |
+| **AUSD** | AUSD, Agora's real six decimal stablecoin | `script/Deploy.s.sol` | the product. Real pots, real money on mainnet in due course |
+| **TESTUSD** | NivPay Test Dollar, a worthless token anyone can mint | `script/DeployTestDollar.s.sol`, then `script/DeployTestDollarPots.s.sol` | trying the whole pot lifecycle on Monad testnet without waiting on Agora's faucet, which is often empty |
+
+Both use identical fee settings. Everything else in this section, steps 1 to 5,
+is the AUSD instance and is unchanged. The TESTUSD instance follows in
+[The TESTUSD instance](#the-testusd-instance).
+
+> **TESTUSD must never be deployed to a mainnet, Monad or any other.** It is
+> not a stablecoin. Anyone can mint any amount of it, so it is worth nothing, and
+> a pot holding it holds nothing. It is named *NivPay Test Dollar* with symbol
+> `TESTUSD` precisely so it cannot be mistaken for AUSD or any real dollar.
+> This is enforced in the contract, not only by convention: the
+> `NivPayTestDollar` constructor reverts with `NotATestChain` on every chain id
+> except `10143` (Monad testnet) and `31337` (local Anvil and Forge tests), and
+> both TESTUSD scripts also refuse any chain but `10143`. Do not remove either
+> guard.
+
 ### Toolchain
 
 Built and tested on **Foundry 1.8.3** with `network = "monad"`, so the gas
@@ -389,8 +417,8 @@ forge test
 $env:FOUNDRY_PROFILE = "bench"; forge test
 ```
 
-`quick` runs **every test the default profile runs**, all 7 suites and the same
-152 cases, under the same Monad execution rules and the same invariant depth.
+`quick` runs **every test the default profile runs**, all 8 suites and the same
+159 cases, under the same Monad execution rules and the same invariant depth.
 The only difference is 24 invariant runs instead of 256, which takes the suite
 from around ten minutes to around twelve seconds.
 
@@ -423,6 +451,7 @@ was weakened to let it run.**
 | RPC | `https://testnet-rpc.monad.xyz` |
 | AUSD | `0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC` |
 | AUSD faucet | `0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C` |
+| TESTUSD | not yet deployed; you deploy it, see [The TESTUSD instance](#the-testusd-instance) |
 
 ### Why the gas estimate multiplier is low
 
@@ -555,10 +584,101 @@ forge verify-contract `
     --constructor-args (cast abi-encode "constructor(address,uint256,uint256,address)" 0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC 50 50000000 $env:FEE_RECIPIENT)
 ```
 
+### The TESTUSD instance
+
+**Prepared, not broadcast.** Two transactions: the test token, then a
+`NivPayPots` bound to it. Use the same `nivpay-deployer` keystore and the same
+three fee variables from step 2, so the settings match the AUSD instance.
+
+#### T1. Deploy the test dollar
+
+```powershell
+$env:FOUNDRY_PROFILE = "deploy"
+
+# Dry run. Deploys nothing.
+forge script script/DeployTestDollar.s.sol:DeployTestDollar --rpc-url https://testnet-rpc.monad.xyz -g 105
+
+# Broadcast.
+forge script script/DeployTestDollar.s.sol:DeployTestDollar `
+    --rpc-url https://testnet-rpc.monad.xyz `
+    --account nivpay-deployer `
+    -g 105 `
+    --broadcast
+```
+
+The dry run against the live chain reports **1,001,875 gas**, about
+**0.203 MON** at a 203 gwei max fee. The script reads the deployed name,
+symbol, decimals and permit domain back and fails if any is wrong. Note the
+`TESTUSD` address it prints.
+
+#### T2. Deploy the TESTUSD pots
+
+```powershell
+$env:FOUNDRY_PROFILE = "deploy"
+$env:TEST_DOLLAR = "<TESTUSD address from T1>"
+
+# Optional but recommended once the AUSD instance is live: its address.
+# The script then reads that instance's fee settings off the chain and refuses
+# to deploy unless FEE_BPS, FEE_CAP and FEE_RECIPIENT match them exactly.
+$env:AUSD_POTS = "<AUSD NivPayPots address>"
+
+# Dry run. Deploys nothing.
+forge script script/DeployTestDollarPots.s.sol:DeployTestDollarPots --rpc-url https://testnet-rpc.monad.xyz -g 105
+
+# Broadcast.
+forge script script/DeployTestDollarPots.s.sol:DeployTestDollarPots `
+    --rpc-url https://testnet-rpc.monad.xyz `
+    --account nivpay-deployer `
+    -g 105 `
+    --broadcast
+```
+
+Before deploying, the script checks that `TEST_DOLLAR` is not the AUSD address,
+has code, is named `NivPay Test Dollar` with symbol `TESTUSD`, has six decimals
+and a permit domain separator. Because TESTUSD is not on chain yet, the dry run
+was verified on an Anvil fork of Monad testnet (chain id 10143) with TESTUSD and
+a stand in AUSD instance created there. It reported **2,945,004 gas**, and it
+refused a mismatched fee cap, a mismatched fee recipient, the AUSD address and a
+non token address.
+
+#### T3. Mint and verify
+
+TESTUSD mints to anyone, from anyone, with no faucet and no limit:
+
+```powershell
+cast send <TESTUSD address> "mint(address,uint256)" <recipient_address> 10000000000 `
+    --account nivpay-deployer `
+    --rpc-url https://testnet-rpc.monad.xyz
+```
+
+That is 10,000 TESTUSD. Verification is the same as step 5, with the token
+contract taking no constructor arguments:
+
+```powershell
+forge verify-contract `
+    <TESTUSD address> `
+    src/NivPayTestDollar.sol:NivPayTestDollar `
+    --chain 10143 `
+    --verifier sourcify `
+    --verifier-url https://sourcify-api-monad.blockvision.org/
+
+forge verify-contract `
+    <TESTUSD pots address> `
+    src/NivPayPots.sol:NivPayPots `
+    --chain 10143 `
+    --verifier sourcify `
+    --verifier-url https://sourcify-api-monad.blockvision.org/ `
+    --constructor-args (cast abi-encode "constructor(address,uint256,uint256,address)" $env:TEST_DOLLAR 50 50000000 $env:FEE_RECIPIENT)
+```
+
 ### Broadcast receipts are committed on purpose
 
 `broadcast/Deploy.s.sol/10143/` is **deliberately not gitignored**. The receipt
-from a real deploy gets committed, as provenance.
+from a real deploy gets committed, as provenance. The same applies to
+`broadcast/DeployTestDollar.s.sol/10143/` and
+`broadcast/DeployTestDollarPots.s.sol/10143/`: the ignore rules cover every
+script's Monad testnet receipts, so those record which address is the TESTUSD
+token and which pots instance is bound to it.
 
 The reasoning: this contract has no owner, no admin and no upgrade path. Once it
 is deployed there is no registry to update and no migration to point at, so the
@@ -641,6 +761,11 @@ and still pass as part of the suite. Nothing in `NivPayPots` depends on them.
 
     src/NivPayPots.sol            the pot contract, the whole product
     script/Deploy.s.sol           deployment, with live chain preflight checks
+
+    src/NivPayTestDollar.sol      TESTUSD, a worthless test token, testnet only
+    script/DeployTestDollar.s.sol       deploys TESTUSD on Monad testnet
+    script/DeployTestDollarPots.s.sol   deploys a second NivPayPots bound to TESTUSD
+    test/NivPayTestDollar.t.sol   TESTUSD, including the mainnet refusal
 
     test/Mama60.t.sol             the reference scenario
     test/PotsCore.t.sol           creation, funding, exits, claims
