@@ -395,6 +395,95 @@ contract PotsFuzzTest is PotsTestBase {
         if (spend > 0 && spend + pots.feeOn(spend) <= total) _pay(potId, spend);
     }
 
+    // ---------------------------------------------------------------------
+    // Large amounts
+    // ---------------------------------------------------------------------
+
+    /// One AUSD up to 1e18 base units, a trillion AUSD. Every other fuzz test
+    /// stops at MAX_FUND, but on testnet anyone can loop capped TESTUSD mints
+    /// to around 1e15, so the full lifecycle is checked well past that.
+    uint256 internal constant MAX_LARGE_FUND = 1e18;
+
+    struct Cycle {
+        uint256 funded;
+        uint256 spend;
+        uint256 fee;
+        uint256 remaining;
+        uint256 aliceGot;
+        uint256 bobGot;
+        uint256 carolGot;
+    }
+
+    function testFuzz_fullCycleWithLargeAmounts(uint256 a, uint256 b, uint256 c, uint256 spend, uint256 exitPart)
+        public
+    {
+        a = bound(a, MIN_FUND, MAX_LARGE_FUND);
+        b = bound(b, MIN_FUND, MAX_LARGE_FUND);
+        c = bound(c, MIN_FUND, MAX_LARGE_FUND);
+        uint256 potId = _newPot();
+
+        Cycle memory r = _fundAndPayLarge(potId, a, b, c, spend);
+        _exitAndClaimAll(potId, exitPart, r);
+
+        // Each funder bears the spending in proportion to their stake, to
+        // within rounding. Every redemption rounds to the pot and may leave a
+        // unit behind for whoever redeems later, so a funder can sit a few
+        // units either side of an exact pro rata share: at most one per
+        // redemption in the cycle, of which there are four. The amounts
+        // involved do not move this, it is the same at 1e13 as at 1e18.
+        uint256 tolerance = 4;
+        assertApproxEqAbs(r.aliceGot, (a * r.remaining) / r.funded, tolerance, "alice gets her pro rata share");
+        assertApproxEqAbs(r.bobGot, (b * r.remaining) / r.funded, tolerance, "bob gets his, across an exit and a claim");
+        assertApproxEqAbs(r.carolGot, (c * r.remaining) / r.funded, tolerance, "carol gets hers");
+        uint256 out = r.aliceGot + r.bobGot + r.carolGot;
+        assertLe(out, r.remaining, "funders never take out more than is left");
+
+        uint256 dust = pots.getPot(potId).totalAssets;
+        assertEq(r.spend + r.fee + out + dust, r.funded, "every unit is accounted for");
+        assertLe(dust, 4, "at most a unit of rounding per redemption is left behind");
+        assertEq(token.balanceOf(address(pots)), dust + pots.feesAccrued(), "the contract holds exactly what it owes");
+    }
+
+    function _fundAndPayLarge(uint256 potId, uint256 a, uint256 b, uint256 c, uint256 spend)
+        private
+        returns (Cycle memory r)
+    {
+        vm.prank(alice);
+        pots.fund(potId, a);
+        vm.prank(bob);
+        pots.fund(potId, b);
+        vm.prank(carol);
+        pots.fund(potId, c);
+        r.funded = a + b + c;
+
+        r.spend = bound(spend, 1, (r.funded * 90) / 100);
+        r.fee = pots.feeOn(r.spend);
+        _pay(potId, r.spend);
+        r.remaining = r.funded - r.spend - r.fee;
+
+        assertEq(token.balanceOf(destA), r.spend, "the destination receives exactly the payout");
+        assertEq(pots.feesAccrued(), r.fee, "and exactly one fee is credited");
+        assertEq(pots.getPot(potId).totalAssets, r.remaining, "the pot is down by payout plus fee");
+    }
+
+    /// Bob exits part way, then the pot reaches its end time and everyone
+    /// holding shares claims.
+    function _exitAndClaimAll(uint256 potId, uint256 exitPart, Cycle memory r) private {
+        uint256 burn = bound(exitPart, 1, pots.sharesOf(potId, bob));
+        vm.prank(bob);
+        r.bobGot = pots.exit(potId, burn);
+
+        vm.warp(endTime);
+        vm.prank(alice);
+        r.aliceGot = pots.claim(potId);
+        vm.prank(carol);
+        r.carolGot = pots.claim(potId);
+        if (pots.sharesOf(potId, bob) > 0) {
+            vm.prank(bob);
+            r.bobGot += pots.claim(potId);
+        }
+    }
+
     function _virtualShares() private view returns (uint256) {
         return 10 ** pots.DECIMALS_OFFSET();
     }
