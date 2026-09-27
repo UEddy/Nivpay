@@ -20,8 +20,11 @@ out/
 /broadcast/*/31337/
 /broadcast/**/dry-run/
 
-# Docs
-docs/
+# Docs. forge doc writes generated output under docs/, so ignore everything
+# there except the hand written Markdown and the design comps.
+docs/*
+!docs/*.md
+!docs/design/
 
 # Dotenv file
 .env

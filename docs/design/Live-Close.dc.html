@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Clay Pot live, the pot closes</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Besley:ital,wght@0,400;0,600;0,700;1,400&amp;family=Work+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#FAF1E4}
+a{color:#A5451F}a:hover{color:#7F3316}
+@keyframes lvUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes lvFade{from{opacity:0}to{opacity:1}}
+@keyframes lvMarch{to{stroke-dashoffset:-14px}}
+@keyframes lvWave{from{transform:translateX(0)}to{transform:translateX(40px)}}
+@keyframes lvPing{0%{transform:scale(1);opacity:0.7}75%,100%{transform:scale(2.4);opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:1ms !important;animation-iteration-count:1 !important;transition-duration:1ms !important}}
+</style>
+</helmet>
+<div style="width:390px;height:844px;box-sizing:border-box;background:#FAF1E4;color:#3A2317;font-family:'Work Sans',sans-serif;display:flex;flex-direction:column;overflow:hidden">
+
+<div style="height:56px;padding:0 10px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+<button type="button" aria-label="Back" style="width:44px;height:44px;border:0;background:transparent;color:#3A2317;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg></button>
+<div style="font-size:16px;font-weight:600">Mama’s 60th</div>
+<div style="width:44px;height:44px"></div>
+</div>
+
+<div style="flex-grow:1;padding:4px 24px 0;display:flex;flex-direction:column;gap:14px">
+
+<div style="position:relative;height:232px;border-radius:22px;background:#F4E3CB;overflow:hidden;flex-shrink:0;animation:lvFade 400ms ease-out both">
+<svg width="342" height="232" viewBox="0 0 342 232" role="img" aria-label="Map: the pot is closed with 115 dollars 60 left. It splits back by share: 57 dollars 80 to London, 46 dollars 24 to Houston, 11 dollars 56 to Uyo." style="display:block">
+<g stroke="#EBD4B5" style="stroke-width:1"><path d="M57 0 V232"></path><path d="M114 0 V232"></path><path d="M171 0 V232"></path><path d="M228 0 V232"></path><path d="M285 0 V232"></path><path d="M0 46 H342"></path><path d="M0 92 H342"></path><path d="M0 138 H342"></path><path d="M0 184 H342"></path></g>
+
+<g fill="none" style="stroke-width:2.5;stroke-linecap:round;opacity:0.3">
+<path d="M38 96 Q80 52 131 112" stroke="#245C5A"></path>
+<path d="M236 30 Q224 58 180 78" stroke="#A5451F"></path>
+<path d="M214 204 Q206 170 182 153" stroke="#B07A1E"></path>
+<path d="M201 114 Q248 80 290 92" stroke="#3A2317"></path>
+<path d="M199 131 Q246 158 290 160" stroke="#3A2317"></path>
+</g>
+
+<g fill="none" style="stroke-width:2.4;stroke-linecap:round;stroke-dasharray:1px 6px">
+<path d="M180 78 Q224 58 236 30" stroke="#A5451F" style="animation:lvMarch 1.2s linear infinite;opacity:{{splitL}};transition:opacity 400ms ease-out"></path>
+<path d="M131 112 Q80 52 38 96" stroke="#245C5A" style="animation:lvMarch 1.2s linear infinite;opacity:{{splitH}};transition:opacity 400ms ease-out 150ms"></path>
+<path d="M182 153 Q206 170 214 204" stroke="#B07A1E" style="animation:lvMarch 1.2s linear infinite;opacity:{{splitU}};transition:opacity 400ms ease-out 300ms"></path>
+</g>
+<path d="M180 78 Q224 58 236 30" fill="none" stroke="#A5451F" style="stroke-width:3;stroke-linecap:round;stroke-dasharray:77px 77px;stroke-dashoffset:{{trail}};transition:{{travelT}}"></path>
+<path d="M180 78 Q224 58 236 30" fill="none" stroke="#A5451F" style="stroke-width:9;stroke-linecap:round;stroke-dasharray:0.1px 400px;stroke-dashoffset:{{coin}};transition:{{travelT}}"></path>
+
+<svg x="118" y="66" width="96" height="96" viewBox="0 0 200 200" style="overflow:visible">
+<defs><clipPath id="lvClipClose"><path d="M72 38 C72 50 60 54 50 63 C28 82 23 118 35 146 C47 173 76 186 100 186 C124 186 153 173 165 146 C177 118 172 82 150 63 C140 54 128 50 128 38 Z"></path></clipPath></defs>
+<path d="M72 38 C72 50 60 54 50 63 C28 82 23 118 35 146 C47 173 76 186 100 186 C124 186 153 173 165 146 C177 118 172 82 150 63 C140 54 128 50 128 38 Z" fill="#E7C29C"></path>
+<g style="clip-path:url(#lvClipClose)">
+<g style="transform-box:fill-box;transform-origin:50% 100%;transform:scaleY({{level}});transition:transform 800ms cubic-bezier(0.65,0,0.35,1)">
+<rect x="0" y="122" width="200" height="64.5" fill="#A5451F"></rect>
+<rect x="0" y="70.8" width="200" height="51.7" fill="#245C5A"></rect>
+<rect x="0" y="58" width="200" height="13.3" fill="#D99A2B"></rect>
+<g style="transform:translateY(58px)"><path d="M-40 0 Q-30 -3.5 -20 0 T0 0 T20 0 T40 0 T60 0 T80 0 T100 0 T120 0 T140 0 T160 0 T180 0 T200 0 T220 0 T240 0 V3.5 H-40 Z" fill="#D99A2B" style="animation:lvWave 2.4s linear infinite"></path></g>
+</g>
+<path d="M40 76 L50 82 L60 76 L70 82 L80 76 L90 82 L100 76 L110 82 L120 76 L130 82 L140 76 L150 82 L160 76" fill="none" stroke="#3A2317" style="stroke-width:3;opacity:0.25"></path>
+</g>
+<path d="M72 38 C72 50 60 54 50 63 C28 82 23 118 35 146 C47 173 76 186 100 186 C124 186 153 173 165 146 C177 118 172 82 150 63 C140 54 128 50 128 38 Z" fill="none" stroke="#3A2317" style="stroke-width:5.5;stroke-linejoin:round"></path>
+<rect x="62" y="29" width="76" height="14" rx="7" fill="#C8744A" stroke="#3A2317" style="stroke-width:5.5"></rect>
+</svg>
+
+<circle cx="236" cy="30" r="11" fill="none" stroke="#A5451F" style="stroke-width:2;transform-box:fill-box;transform-origin:center;opacity:{{pingO}};animation:{{ping}}"></circle>
+<circle cx="236" cy="30" r="11" fill="#FAF1E4" stroke="#A5451F" style="stroke-width:2.5"></circle>
+<circle cx="236" cy="30" r="5" fill="#3A2317"></circle>
+<g style="transform-box:fill-box;transform-origin:center;opacity:{{checkO}};transform:scale({{checkS}});transition:transform 420ms cubic-bezier(0.34,1.56,0.64,1), opacity 150ms ease-out">
+<circle cx="245" cy="21" r="6.5" fill="#A5451F" stroke="#F4E3CB" style="stroke-width:1.5"></circle>
+<path d="M242 21 l2 2 l3.5 -4" fill="none" stroke="#FFFFFF" style="stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"></path>
+</g>
+<circle cx="38" cy="96" r="11" fill="#FAF1E4" stroke="#245C5A" style="stroke-width:2.5"></circle>
+<circle cx="38" cy="96" r="5" fill="#3A2317"></circle>
+<circle cx="214" cy="204" r="11" fill="#FAF1E4" stroke="#B07A1E" style="stroke-width:2.5"></circle>
+<circle cx="214" cy="204" r="5" fill="#3A2317"></circle>
+
+<circle cx="304" cy="92" r="14" fill="#3A2317" stroke="#3A2317" style="stroke-width:1.5"></circle>
+<svg x="296" y="84" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FAF1E4" style="stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"></path><path d="M7 2v20"></path><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"></path></svg>
+<circle cx="304" cy="160" r="14" fill="#3A2317" stroke="#3A2317" style="stroke-width:1.5"></circle>
+<svg x="296" y="152" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FAF1E4" style="stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 22h18"></path><path d="M6 18v-7"></path><path d="M10 18v-7"></path><path d="M14 18v-7"></path><path d="M18 18v-7"></path><path d="M12 2l8 5H4z"></path></svg>
+
+<text x="254" y="27" style="font-family:'Work Sans',sans-serif;font-size:11.5px;font-weight:600;fill:#3A2317">London</text>
+<text x="254" y="40" style="font-family:'Work Sans',sans-serif;font-size:10px;font-weight:600;fill:#A5451F">You</text>
+<text x="38" y="121" style="font-family:'Work Sans',sans-serif;font-size:11.5px;font-weight:600;fill:#3A2317;text-anchor:middle">Houston</text>
+<text x="38" y="134" style="font-family:'Work Sans',sans-serif;font-size:10px;fill:#6E5243;text-anchor:middle">Ubong</text>
+<text x="233" y="201" style="font-family:'Work Sans',sans-serif;font-size:11.5px;font-weight:600;fill:#3A2317">Uyo</text>
+<text x="233" y="214" style="font-family:'Work Sans',sans-serif;font-size:10px;fill:#6E5243">Aniekan</text>
+<text x="304" y="120" style="font-family:'Work Sans',sans-serif;font-size:11px;font-weight:600;fill:#3A2317;text-anchor:middle">Caterer</text>
+<text x="304" y="133" style="font-family:'Work Sans',sans-serif;font-size:10px;fill:#6E5243;text-anchor:middle">paid $600</text>
+<text x="304" y="188" style="font-family:'Work Sans',sans-serif;font-size:11px;font-weight:600;fill:#3A2317;text-anchor:middle">Event hall</text>
+<text x="304" y="201" style="font-family:'Work Sans',sans-serif;font-size:10px;fill:#6E5243;text-anchor:middle">paid $280</text>
+<text x="166" y="178" style="font-family:'Besley',serif;font-size:15px;font-weight:600;fill:#3A2317;text-anchor:middle">{{potText}}</text>
+<text x="166" y="191" style="font-family:'Work Sans',sans-serif;font-size:10px;fill:#6E5243;text-anchor:middle">in the pot</text>
+<text x="254" y="56" style="font-family:'Besley',serif;font-size:13.5px;font-weight:600;fill:#A5451F;opacity:{{amountL}};transition:opacity 400ms ease-out 400ms">$57.80</text>
+<text x="38" y="151" style="font-family:'Besley',serif;font-size:13.5px;font-weight:600;fill:#245C5A;text-anchor:middle;opacity:{{splitH}};transition:opacity 400ms ease-out 550ms">$46.24</text>
+<text x="199" y="209" style="font-family:'Besley',serif;font-size:13.5px;font-weight:600;fill:#8A5A0E;text-anchor:end;opacity:{{splitU}};transition:opacity 400ms ease-out 700ms">$11.56</text>
+</svg>
+<div style="position:absolute;left:10px;top:10px;display:flex;align-items:center;gap:6px;height:24px;padding:0 9px 0 8px;border-radius:12px;background:#FFFBF5;border:1px solid #EAD6BD;font-size:11.5px;font-weight:600;color:#3A2317"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3A2317" style="stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>Closed 14 Dec</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px;animation:lvUp 500ms cubic-bezier(0.2,0.8,0.2,1) 120ms both">
+<h1 style="margin:0;font-family:'Besley',serif;font-weight:600;font-size:27px;line-height:1.12">The party’s done. Here’s what’s left.</h1>
+<div style="font-size:14px;line-height:1.5;color:#6E5243">$1,000 went in. $880 paid for the party and $4.40 went on fees. The last $115.60 goes back to the three of you.</div>
+</div>
+
+<div style="background:#FFFBF5;border:1px solid #EAD6BD;border-radius:20px;padding:14px 18px;display:flex;flex-direction:column;gap:4px;flex-shrink:0;animation:lvUp 500ms cubic-bezier(0.2,0.8,0.2,1) 220ms both">
+<div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;color:#6E5243">Your share</span><span style="display:flex;align-items:center;gap:5px;background:#E6F0EC;color:#245C5A;border-radius:10px;padding:3px 9px;font-size:12px;font-weight:600;opacity:{{checkO}};transform:scale({{checkS}});transition:transform 380ms cubic-bezier(0.34,1.56,0.64,1), opacity 150ms ease-out"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width:3;stroke-linecap:round;stroke-linejoin:round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>In your balance</span></div>
+<div style="font-family:'Besley',serif;font-size:42px;font-weight:600;line-height:1.05">$57.80</div>
+<div style="font-size:13.5px;line-height:1.45">You put in $500, half the pot, so half of what’s left is yours.</div>
+</div>
+
+<div style="font-size:12.5px;color:#6E5243;animation:lvUp 500ms cubic-bezier(0.2,0.8,0.2,1) 300ms both">Closed Mon 14 Dec. You asked, Ubong agreed.</div>
+
+</div>
+
+<div style="padding:10px 24px 22px;flex-shrink:0;animation:lvUp 500ms cubic-bezier(0.2,0.8,0.2,1) 360ms both">
+<sc-if value="{{notClaimed}}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:4px">
+<button type="button" onClick="{{claim}}" style="width:100%;height:56px;border:0;border-radius:28px;background:{{btnBg}};color:#FFFFFF;font-family:'Work Sans',sans-serif;font-size:17px;font-weight:600;cursor:pointer;transition:background 200ms ease-out">{{btnLabel}}</button>
+<button type="button" style="width:100%;height:44px;border:0;background:transparent;color:#8C3A1A;font-family:'Work Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer">Share the story with the family</button>
+</div>
+</sc-if>
+<sc-if value="{{claimed}}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:10px;animation:lvUp 420ms cubic-bezier(0.2,0.8,0.2,1) both">
+<div style="font-size:14px;line-height:1.4;text-align:center">Your $57.80 is in your balance. Ubong and Aniekan can take theirs any time.</div>
+<button type="button" style="width:100%;height:52px;border:1.5px solid #A5451F;border-radius:26px;background:transparent;color:#8C3A1A;font-family:'Work Sans',sans-serif;font-size:15.5px;font-weight:600;cursor:pointer">Share the story with the family</button>
+</div>
+</sc-if>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"autoplay":{"editor":"boolean","default":true},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    this.timers = [];
+    this.rafs = {};
+    this.alive = true;
+    this.at(900, () => this.setState({ split: true }));
+    if (this.props.autoplay ?? true) this.at(3400, () => this.claim());
+  }
+  componentWillUnmount() {
+    this.alive = false;
+    (this.timers || []).forEach((t) => clearTimeout(t));
+    Object.keys(this.rafs || {}).forEach((k) => cancelAnimationFrame(this.rafs[k]));
+  }
+  at(ms, fn) {
+    this.timers.push(setTimeout(() => { if (this.alive) fn(); }, ms));
+  }
+  tween(key, from, to, dur) {
+    let t0 = null;
+    const step = (now) => {
+      if (!this.alive) return;
+      if (t0 === null) t0 = now;
+      const p = Math.min(1, (now - t0) / dur);
+      const e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+      const o = {};
+      o[key] = from + (to - from) * e;
+      o[key + 'Live'] = p < 1;
+      this.setState(o);
+      if (p < 1) this.rafs[key] = requestAnimationFrame(step);
+    };
+    this.rafs[key] = requestAnimationFrame(step);
+  }
+  money(v, live) {
+    const n = live ? Math.round(v) : v;
+    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: live ? 0 : 2, maximumFractionDigits: live ? 0 : 2 });
+  }
+  claim() {
+    const s = this.state || {};
+    if (s.claiming) return;
+    this.setState({ split: true, claiming: true });
+    this.at(150, () => { this.setState({ drained: true }); this.tween('pot', 115.6, 57.8, 800); });
+    this.at(900, () => this.setState({ claimed: true }));
+  }
+  renderVals() {
+    const s = this.state || {};
+    const split = !!s.split;
+    const go = !!s.claiming;
+    const claimed = !!s.claimed;
+    return {
+      claim: () => this.claim(),
+      splitL: split && !go ? 1 : 0,
+      amountL: split ? 1 : 0,
+      splitH: split ? 1 : 0,
+      splitU: split ? 1 : 0,
+      trail: go ? '0px' : '77px',
+      coin: go ? '-83px' : '6px',
+      travelT: go ? 'stroke-dashoffset 850ms cubic-bezier(0.65,0,0.35,1)' : 'none',
+      level: s.drained ? 0.0578 : 0.1156,
+      potText: this.money(s.pot ?? 115.6, !!s.potLive),
+      pingO: claimed ? 1 : 0,
+      ping: claimed ? 'lvPing 1.4s cubic-bezier(0,0,0.2,1) 2' : 'none',
+      checkO: claimed ? 1 : 0,
+      checkS: claimed ? 1 : 0.2,
+      btnLabel: go ? 'Sending to your balance…' : 'Take my $57.80',
+      btnBg: go ? '#7F3316' : '#A5451F',
+      claimed: claimed,
+      notClaimed: !claimed
+    };
+  }
+}
+</script>
+</body>
+</html>
