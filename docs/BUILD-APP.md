@@ -125,8 +125,7 @@ A "try it alone" demo in which two server-held testnet keys play Ubong and Aniek
 - TESTUSD is testnet only. Nothing in this app may point at mainnet.
 - Small commits with clear messages and no AI attribution lines. Don't push; I push.
 - No em dashes or en dashes anywhere in UI copy or docs.
-- My setup: you run in WSL2 Ubuntu inside `/mnt/c/Users/Eddy/dev/nivpay`, which is on the Windows drive. I also use PowerShell on Windows, where Foundry is installed. Keep npm scripts free of bash-only and PowerShell-only syntax so they run in both.
-- WSL quirks on this machine: Vite's file watching needs polling on `/mnt/c` (`server.watch.usePolling`), npm installs on `/mnt/c` are slow, and if Node hits DNS failures, set `NODE_OPTIONS=--dns-result-order=ipv4first`. WSL can't launch Windows programs here, so you can't open my browser; I test in Chrome myself.
+- My setup: you run natively on Windows in `C:\Users\Eddy\dev\nivpay`, with Git Bash and PowerShell. Foundry 1.8.3 is on the Windows PATH. I use WSL only to push over SSH. Keep npm scripts free of bash-only and PowerShell-only syntax so they run in both. I test in Chrome myself.
 - Verify before you claim. If you say something works, say how you checked it.
 
 ## Timeline
