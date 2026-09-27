@@ -11,6 +11,28 @@ Built for the Monad Metropolis hackathon, Consumer Products and Payments track.
 Contracts only, no frontend. The whole product is
 [`src/NivPayPots.sol`](./src/NivPayPots.sol).
 
+## Deployments
+
+Live on **Monad testnet** (chain id `10143`). All three are verified on
+Sourcify, which MonadVision reads, with an exact match. The deploy transactions
+are taken from the committed broadcast receipts under `broadcast/*/10143/`. Both `NivPayPots` instances have identical fee settings:
+50 bps, a fee cap of 50 tokens per payout (50 AUSD or 50 TESTUSD), and the same
+fee recipient.
+
+| Contract | Address | Deploy transaction | What it is for |
+| --- | --- | --- | --- |
+| NivPayPots on AUSD | [`0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB`](https://testnet.monadvision.com/address/0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB) | [`0xa2de65f6…8a18a286`](https://testnet.monadvision.com/tx/0xa2de65f6cdc7bcd8ab0d3e4e11f7652fb2e0392e2e5eff88bc31c4548a18a286) | The product. Pots funded in AUSD, Agora's real six decimal stablecoin. |
+| NivPayTestDollar (TESTUSD) | [`0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7`](https://testnet.monadvision.com/address/0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7) | [`0x561e9908…40a5d856`](https://testnet.monadvision.com/tx/0x561e99082af17a9873948ccbe32b534b311777db6a995d6f48ee047440a5d856) | A worthless test token anyone can mint, 100,000 per call. Testnet only, never mainnet. |
+| NivPayPots on TESTUSD | [`0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA`](https://testnet.monadvision.com/address/0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA) | [`0x68e15496…b19fe0eb`](https://testnet.monadvision.com/tx/0x68e15496691cfbe7bfa117db8e023141309a03e52b42e30b98fbca1bb19fe0eb) | The same contract bound to TESTUSD, for trying the full pot lifecycle without Agora's faucet. |
+
+Full transaction hashes:
+
+```
+NivPayPots on AUSD          0xa2de65f6cdc7bcd8ab0d3e4e11f7652fb2e0392e2e5eff88bc31c4548a18a286
+NivPayTestDollar (TESTUSD)  0x561e99082af17a9873948ccbe32b534b311777db6a995d6f48ee047440a5d856
+NivPayPots on TESTUSD       0x68e15496691cfbe7bfa117db8e023141309a03e52b42e30b98fbca1bb19fe0eb
+```
+
 ## The problem
 
 Every group that collects money for one thing has the same two fears. The
@@ -351,8 +373,9 @@ Medium.** Every one is listed here; none is suppressed and no
 
 ## Deployment
 
-**Nothing here has been broadcast.** The steps below are prepared and the dry
-run has been verified against the live chain. Run them yourself.
+**All three contracts are deployed and verified on Monad testnet**; the
+addresses are under [Deployments](#deployments). The steps below are how they
+were deployed, kept as the record and for redeploying elsewhere.
 
 ### Two instances
 
@@ -452,7 +475,7 @@ was weakened to let it run.**
 | RPC | `https://testnet-rpc.monad.xyz` |
 | AUSD | `0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC` |
 | AUSD faucet | `0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C` |
-| TESTUSD | not yet deployed; you deploy it, see [The TESTUSD instance](#the-testusd-instance) |
+| TESTUSD | `0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7` |
 
 ### Why the gas estimate multiplier is low
 
@@ -597,7 +620,7 @@ forge verify-contract `
 
 ### The TESTUSD instance
 
-**Prepared, not broadcast.** Two transactions: the test token, then a
+**Deployed**, see [Deployments](#deployments). Two transactions: the test token, then a
 `NivPayPots` bound to it. Use the same `nivpay-deployer` keystore and the same
 three fee variables from step 2, so the settings match the AUSD instance.
 
