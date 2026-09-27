@@ -382,9 +382,14 @@ contract PotsCoreTest is PotsTestBase {
         (uint8 v, bytes32 r, bytes32 s) = _signPermit(pk, signer, 100 * ONE, block.timestamp + 1 days);
 
         assertEq(token.allowance(signer, address(pots)), 0, "no allowance beforehand");
+        assertEq(token.nonces(signer), 0, "permit unused beforehand");
         vm.prank(signer);
         pots.fundWithPermit(potId, 100 * ONE, block.timestamp + 1 days, v, r, s);
 
+        // The try/catch around permit would swallow a failure, so prove this
+        // permit, and nothing else, supplied the allowance that was spent.
+        assertEq(token.nonces(signer), 1, "the permit was consumed");
+        assertEq(token.allowance(signer, address(pots)), 0, "and its allowance spent exactly");
         assertEq(pots.getPot(potId).totalAssets, 100 * ONE, "funded through the permit");
         assertEq(token.balanceOf(signer), 0, "signer's tokens moved");
     }
@@ -399,14 +404,23 @@ contract PotsCoreTest is PotsTestBase {
         uint256 deadline = block.timestamp + 1 days;
 
         (uint8 v, bytes32 r, bytes32 s) = _signPermit(pk, signer, 100 * ONE, deadline);
+        assertEq(token.allowance(signer, address(pots)), 0, "no allowance beforehand");
+        assertEq(token.nonces(signer), 0, "permit unused beforehand");
 
         // The griefer replays the permit, which now cannot be used again.
         vm.prank(stranger);
         token.permit(signer, address(pots), 100 * ONE, deadline, v, r, s);
+        assertEq(token.nonces(signer), 1, "the front run consumed the permit");
         assertEq(token.allowance(signer, address(pots)), 100 * ONE, "allowance already set");
 
+        // Here, by design, the allowance does the work: the funder's own permit
+        // call fails and is swallowed. What must hold is that the allowance is
+        // the one this same signature created, not one from elsewhere, and
+        // that the swallowed call consumed nothing further.
         vm.prank(signer);
         pots.fundWithPermit(potId, 100 * ONE, deadline, v, r, s);
+        assertEq(token.nonces(signer), 1, "the funder's own permit call failed and was swallowed");
+        assertEq(token.allowance(signer, address(pots)), 0, "the front run allowance was spent exactly");
         assertEq(pots.getPot(potId).totalAssets, 100 * ONE, "funding still succeeded");
     }
 

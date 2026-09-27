@@ -126,12 +126,20 @@ contract PotsForkTest is Test {
         _dealAusd(idara, amount);
         assertEq(ausd.balanceOf(idara), amount, "credited real AUSD");
         assertEq(ausd.allowance(idara, address(pots)), 0, "no allowance beforehand");
+        {
+            uint256 nonceBefore = IERC20Permit(AUSD).nonces(idara);
+            uint256 deadline = block.timestamp + 1 hours;
+            (uint8 v, bytes32 r, bytes32 s) = _signPermit(idaraKey, idara, address(pots), amount, deadline);
 
-        uint256 deadline = block.timestamp + 1 hours;
-        (uint8 v, bytes32 r, bytes32 s) = _signPermit(idaraKey, idara, address(pots), amount, deadline);
+            vm.prank(idara);
+            pots.fundWithPermit(potId, amount, deadline, v, r, s);
 
-        vm.prank(idara);
-        pots.fundWithPermit(potId, amount, deadline, v, r, s);
+            // The try/catch around permit would swallow a failure against the
+            // real domain separator, so prove the permit itself supplied the
+            // allowance.
+            assertEq(IERC20Permit(AUSD).nonces(idara), nonceBefore + 1, "the real AUSD permit was consumed");
+        }
+        assertEq(ausd.allowance(idara, address(pots)), 0, "and its allowance spent exactly");
 
         assertEq(pots.getPot(potId).totalAssets, amount, "the permit funded the pot");
         assertEq(ausd.balanceOf(address(pots)), amount, "the contract holds real AUSD");
