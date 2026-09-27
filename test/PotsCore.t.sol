@@ -414,13 +414,31 @@ contract PotsCoreTest is PotsTestBase {
         (address signer, uint256 pk) = makeAddrAndKey("permitSigner");
         token.mint(signer, 100 * ONE);
         uint256 potId = _pot();
-        uint256 deadline = block.timestamp + 1 days;
+        // The deadline must outlive the warp to endTime below, or the permit
+        // is already expired when it is used and the test proves nothing
+        // about a good one.
+        uint256 deadline = uint256(endTime) + 1 days;
         (uint8 v, bytes32 r, bytes32 s) = _signPermit(pk, signer, 100 * ONE, deadline);
 
         vm.warp(endTime);
+        assertEq(token.allowance(signer, address(pots)), 0, "no allowance beforehand");
+        assertEq(token.nonces(signer), 0, "permit unused beforehand");
+
         vm.prank(signer);
         vm.expectRevert(NivPayPots.PotClosed.selector);
         pots.fundWithPermit(potId, 100 * ONE, deadline, v, r, s);
+
+        // The revert rolled the permit back along with everything else.
+        assertEq(token.nonces(signer), 0, "the permit was rolled back, not consumed");
+        assertEq(token.allowance(signer, address(pots)), 0, "and left no allowance behind");
+        assertEq(token.balanceOf(signer), 100 * ONE, "no tokens moved");
+
+        // Proof the permit was good at that moment: the same signature, at the
+        // same timestamp, is accepted by the token directly. So PotClosed, not
+        // a bad permit, is what refused the funding.
+        token.permit(signer, address(pots), 100 * ONE, deadline, v, r, s);
+        assertEq(token.nonces(signer), 1, "the same permit is valid at this time");
+        assertEq(token.allowance(signer, address(pots)), 100 * ONE, "and grants the allowance");
     }
 
     function _signPermit(uint256 pk, address owner, uint256 value, uint256 deadline)
