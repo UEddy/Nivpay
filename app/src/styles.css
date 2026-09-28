@@ -218,6 +218,15 @@ h1 {
   margin: 10px 0 0;
 }
 
+.reason {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 4px 0 0;
+  word-break: break-word;
+  user-select: text;
+}
+
 .amount {
   font-family: var(--font-display);
   font-weight: 600;

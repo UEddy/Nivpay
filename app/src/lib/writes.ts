@@ -1,4 +1,5 @@
 import type { Address, Hex } from "viem";
+import { AppError } from "./errors.ts";
 
 /**
  * The write path's rules, from docs/APP-CONTRACT-MAP.md section 9. The one bug
@@ -54,9 +55,9 @@ export type Outcome =
   /** Not included and the nonce is unused at finalized. May be replaced, same nonce only. */
   | { kind: "stuck" };
 
-export class WriteInFlightError extends Error {
+export class WriteInFlightError extends AppError {
   constructor() {
-    super("Another payment from this account is still going through. Wait for it to finish.");
+    super("Another payment from this account is still going through. Wait for it to finish.", "a write is already in flight");
   }
 }
 
@@ -162,9 +163,9 @@ async function nonceVerdict(chain: WriteChain, write: PendingWrite): Promise<"un
  */
 export async function nonceForReplacement(store: WriteStore, chain: WriteChain, address: Address): Promise<number> {
   const old = await store.get(address);
-  if (!old || !old.replaceable) throw new Error("There is no stuck payment to replace.");
+  if (!old || !old.replaceable) throw new AppError("There is no stuck payment to replace.", "nothing stuck to replace");
   if ((await nonceVerdict(chain, old)) !== "unused") {
-    throw new Error("The earlier attempt may still go through. Wait a little longer.");
+    throw new AppError("The earlier attempt may still go through. Wait a little longer.", "old nonce not confirmed unused at finalized");
   }
   return old.nonce;
 }
@@ -172,9 +173,9 @@ export async function nonceForReplacement(store: WriteStore, chain: WriteChain, 
 /** Swaps a stuck write for its replacement. Refuses anything but the same nonce. */
 export async function replace(store: WriteStore, chain: WriteChain, replacement: PendingWrite): Promise<void> {
   const old = await store.get(replacement.address);
-  if (!old || !old.replaceable) throw new Error("There is no stuck payment to replace.");
+  if (!old || !old.replaceable) throw new AppError("There is no stuck payment to replace.", "nothing stuck to replace");
   if (replacement.nonce !== old.nonce) {
-    throw new Error(`A replacement must reuse nonce ${old.nonce}, got ${replacement.nonce}.`);
+    throw new AppError(`A replacement must reuse nonce ${old.nonce}, got ${replacement.nonce}.`, "replacement on a different nonce");
   }
   await store.put({ ...replacement, replaceable: false });
   await chain.sendRawTransaction(replacement.raw).catch(() => undefined);

@@ -1,14 +1,13 @@
 import { keccak256, type Address, type Hex } from "viem";
 import { CHAIN_ID } from "./config.ts";
 import { waitForFinalized, liveWriteChain } from "./chain.ts";
+import { NotEnoughGasError, SendFailure, type SendStage } from "./errors.ts";
 import { idbWriteStore } from "./idb.ts";
 import { withSigner } from "./passkey.ts";
 import { readClient } from "./rpc.ts";
 import { nonceForNewWrite, nonceForReplacement, replace, submit, type PendingWrite } from "./writes.ts";
 
 export type Step = "preparing" | "getting-ready" | "confirm" | "sending";
-
-export class NotEnoughGasError extends Error {}
 
 type Call = { from: Address; to: Address; data: Hex; label: string; onStep?: (step: Step) => void };
 
@@ -29,23 +28,37 @@ async function fees() {
 export async function ensureGas(address: Address, needed: bigint): Promise<void> {
   const balance = await readClient.getBalance({ address });
   if (balance >= needed && needed > 0n) return;
-  const res = await fetch("/api/fund", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ address }),
-  }).catch(() => null);
-  if (!res) throw new NotEnoughGasError("Couldn't reach NivPay to get your account ready. Check your connection and try again.");
-  const body = (await res.json().catch(() => ({}))) as { hash?: Hex; error?: string };
+  let res: Response;
+  try {
+    res = await fetch("/api/fund", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ address }),
+    });
+  } catch {
+    throw new NotEnoughGasError(
+      "Couldn't reach NivPay to get your account ready. Check your connection and try again.",
+      "grant request did not reach the server",
+    );
+  }
+  const body = (await res.json().catch(() => ({}))) as { hash?: Hex; error?: string; code?: string };
+  const answer = `HTTP ${res.status}${body.code ? ` ${body.code}` : ""}${body.error ? `, ${body.error}` : ""}`;
   if (res.ok && body.hash) {
-    const status = await waitForFinalized(body.hash);
-    if (status !== "success") throw new NotEnoughGasError("Getting your account ready didn't go through. Try again.");
+    let status: "success" | "reverted";
+    try {
+      status = await waitForFinalized(body.hash);
+    } catch {
+      throw new NotEnoughGasError("Getting your account ready is taking too long. Try again in a minute.", `grant ${body.hash.slice(0, 10)}… not final after 60s`);
+    }
+    if (status !== "success") {
+      throw new NotEnoughGasError("Getting your account ready didn't go through. Try again.", `grant ${body.hash.slice(0, 10)}… reverted`);
+    }
     return;
   }
   if (res.status === 409 && balance >= needed && needed > 0n) return;
   throw new NotEnoughGasError(
-    body.error === "funding is paused" || res.status === 503
-      ? "NivPay can't cover network costs right now. Try again later."
-      : "Your account couldn't be made ready for this. Try again in a minute.",
+    res.status === 503 ? "NivPay can't cover network costs right now. Try again later." : "Your account couldn't be made ready for this. Try again in a minute.",
+    answer,
   );
 }
 
@@ -61,40 +74,65 @@ async function estimate(from: Address, to: Address, data: Hex): Promise<bigint> 
 }
 
 async function signAndSubmit(call: Call, nonce: number, replacing: boolean): Promise<PendingWrite> {
-  call.onStep?.("preparing");
-  const gas = await estimate(call.from, call.to, call.data);
-  const f = await fees();
-  call.onStep?.("getting-ready");
-  await ensureGas(call.from, gas * f.maxFeePerGas);
+  let stage: SendStage = "preparing";
+  let broadcast = false;
+  try {
+    call.onStep?.("preparing");
+    const gas = await estimate(call.from, call.to, call.data);
+    const f = await fees();
 
-  call.onStep?.("confirm");
-  const raw = await withSigner(call.from, (account) =>
-    account.signTransaction({ chainId: CHAIN_ID, type: "eip1559", to: call.to, data: call.data, value: 0n, nonce, gas, ...f }),
-  );
+    stage = "gas grant";
+    call.onStep?.("getting-ready");
+    await ensureGas(call.from, gas * f.maxFeePerGas);
 
-  call.onStep?.("sending");
-  const write: PendingWrite = {
-    address: call.from,
-    nonce,
-    raw,
-    hash: keccak256(raw),
-    label: call.label,
-    submittedAt: Date.now(),
-    replaceable: false,
-  };
-  if (replacing) await replace(idbWriteStore, liveWriteChain, write);
-  else await submit(idbWriteStore, liveWriteChain, write);
-  return write;
+    stage = "passkey";
+    call.onStep?.("confirm");
+    const raw = await withSigner(call.from, (account) => {
+      stage = "signing";
+      return account.signTransaction({ chainId: CHAIN_ID, type: "eip1559", to: call.to, data: call.data, value: 0n, nonce, gas, ...f });
+    });
+
+    stage = "broadcast";
+    call.onStep?.("sending");
+    const write: PendingWrite = {
+      address: call.from,
+      nonce,
+      raw,
+      hash: keccak256(raw),
+      label: call.label,
+      submittedAt: Date.now(),
+      replaceable: false,
+    };
+    // submit and replace save the record, then broadcast, and swallow
+    // broadcast errors. So if they throw, it was before any broadcast, and
+    // once they return the bytes have been handed to the network.
+    if (replacing) await replace(idbWriteStore, liveWriteChain, write);
+    else await submit(idbWriteStore, liveWriteChain, write);
+    broadcast = true;
+    return write;
+  } catch (error) {
+    throw new SendFailure(stage, broadcast, error);
+  }
 }
 
 /** A brand new write. Refused while this account has one in flight. */
 export async function sendWrite(call: Call): Promise<PendingWrite> {
-  const nonce = await nonceForNewWrite(idbWriteStore, liveWriteChain, call.from);
+  let nonce: number;
+  try {
+    nonce = await nonceForNewWrite(idbWriteStore, liveWriteChain, call.from);
+  } catch (error) {
+    throw new SendFailure("preparing", false, error);
+  }
   return signAndSubmit(call, nonce, false);
 }
 
 /** Replaces a stuck write, on the same nonce, after re-checking it is safe. */
 export async function retryStuckWrite(call: Call): Promise<PendingWrite> {
-  const nonce = await nonceForReplacement(idbWriteStore, liveWriteChain, call.from);
+  let nonce: number;
+  try {
+    nonce = await nonceForReplacement(idbWriteStore, liveWriteChain, call.from);
+  } catch (error) {
+    throw new SendFailure("preparing", false, error);
+  }
   return signAndSubmit(call, nonce, true);
 }

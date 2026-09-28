@@ -60,8 +60,13 @@ test("passkeys only on localhost and the production hostname", () => {
 test("Mera errors become plain words", () => {
   assert.match(passkeyErrorMessage(new MeraError("PRF_UNAVAILABLE", "x")), /Google Password Manager/);
   assert.match(passkeyErrorMessage(new MeraError("PRF_UNAVAILABLE", "x")), /Samsung Pass/);
-  assert.match(passkeyErrorMessage(new MeraError("PASSKEY_OPERATION_FAILED", "x")), /Nothing was saved/);
+  assert.match(passkeyErrorMessage(new MeraError("PASSKEY_OPERATION_FAILED", "x")), /cancelled or didn't finish/);
   assert.match(passkeyErrorMessage(new MeraError("CRYPTO_UNAVAILABLE", "x")), /Update Chrome/);
   assert.match(passkeyErrorMessage(new WrongPasskeyError()), /different NivPay account/);
-  assert.match(passkeyErrorMessage(new Error("boom")), /Nothing was sent/);
+  // No passkey message claims anything about sending. That claim belongs to
+  // describeFailure, which knows whether a broadcast happened.
+  for (const code of ["PRF_UNAVAILABLE", "PASSKEY_OPERATION_FAILED", "CRYPTO_UNAVAILABLE", "SESSION_ENDED"] as const) {
+    assert.doesNotMatch(passkeyErrorMessage(new MeraError(code, "x")), /sent/i);
+  }
+  assert.doesNotMatch(passkeyErrorMessage(new Error("boom")), /sent/i);
 });

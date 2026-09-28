@@ -4,13 +4,25 @@ import { AccountStore, shortAddress, type StoredAccount } from "./lib/accounts.t
 import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
 import { AUSD, TESTUSD } from "./lib/config.ts";
-import { passkeyErrorMessage } from "./lib/errors.ts";
+import { describeFailure, SendFailure } from "./lib/errors.ts";
 import { idbWriteStore } from "./lib/idb.ts";
 import { formatAmount, parseAmount } from "./lib/money.ts";
 import { hostCheck, signIn, signUp } from "./lib/passkey.ts";
 import { readClient } from "./lib/rpc.ts";
 import { retryStuckWrite, sendWrite, type Step } from "./lib/send.ts";
-import { followToFinality, WriteInFlightError, type Outcome, type PendingWrite } from "./lib/writes.ts";
+import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
+
+type Notice = { tone: "ok" | "bad"; text: string; reason?: string };
+
+/** A result line, with the short reason under it so it can be reported from the phone. */
+function NoticeLine({ notice }: { notice: Notice }) {
+  return (
+    <div role="status">
+      <p className={notice.tone === "ok" ? "success" : "error"}>{notice.text}</p>
+      {notice.reason && <p className="reason">Reason: {notice.reason}</p>}
+    </div>
+  );
+}
 
 const accounts = new AccountStore(localStorage);
 
@@ -87,7 +99,7 @@ function Welcome(props: {
   const host = useMemo(() => hostCheck(), []);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState<"up" | "in" | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Notice | null>(null);
 
   const run = async (kind: "up" | "in") => {
     setError(null);
@@ -99,7 +111,7 @@ function Welcome(props: {
         props.onReady(address, props.known.find((a) => a.address === address)?.name ?? "");
       }
     } catch (e) {
-      setError(e instanceof Error && e.name === "HostNotAllowedError" ? e.message : passkeyErrorMessage(e));
+      setError({ tone: "bad", ...describeFailure(e) });
     } finally {
       setBusy(null);
     }
@@ -159,11 +171,7 @@ function Welcome(props: {
         </>
       )}
 
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <NoticeLine notice={error} />}
       {props.onCancel && (
         <button className="btn ghost" onClick={props.onCancel}>
           Back
@@ -211,7 +219,7 @@ function Home(props: {
   const [balances, setBalances] = useState<Balances | null>(null);
   const [amountText, setAmountText] = useState("1,000");
   const [step, setStep] = useState<Step | "landing" | null>(null);
-  const [result, setResult] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
+  const [result, setResult] = useState<Notice | null>(null);
   const [stuck, setStuck] = useState(false);
   const alive = useRef(true);
 
@@ -235,7 +243,18 @@ function Home(props: {
   const land = useCallback(
     async (write: PendingWrite, amountLabel: string) => {
       setStep("landing");
-      const outcome: Outcome = await followToFinality(idbWriteStore, liveWriteChain, write);
+      let outcome: Outcome;
+      try {
+        outcome = await followToFinality(idbWriteStore, liveWriteChain, write);
+      } catch (e) {
+        // The transaction was broadcast; only following it failed. The
+        // record is still saved and tracking resumes on the next load.
+        if (alive.current) {
+          setStep(null);
+          setResult({ tone: "bad", ...describeFailure(new SendFailure("confirming", true, e)) });
+        }
+        return;
+      }
       if (!alive.current) return;
       setStep(null);
       if (outcome.kind === "final") {
@@ -243,10 +262,25 @@ function Home(props: {
         setResult({ tone: "ok", text: `Added ${amountLabel} test dollars. Settled in ${(outcome.settledMs / 1000).toFixed(1)}s.` });
       } else if (outcome.kind === "stuck") {
         setStuck(true);
-        setResult({ tone: "bad", text: "This is taking longer than it should. Nothing has moved yet." });
+        setResult({
+          tone: "bad",
+          text: "This is taking longer than it should. It hasn't gone through, and nothing has moved yet.",
+          reason: `not in any block after 45s, nonce ${write.nonce} still unused at finalized`,
+        });
+      } else if (outcome.kind === "reverted") {
+        setStuck(false);
+        setResult({
+          tone: "bad",
+          text: "That didn't go through. No test dollars moved.",
+          reason: `reverted in block ${outcome.blockNumber.toString()}`,
+        });
       } else {
         setStuck(false);
-        setResult({ tone: "bad", text: "That didn't go through. Nothing moved." });
+        setResult({
+          tone: "bad",
+          text: "That didn't go through. No test dollars moved.",
+          reason: `nonce ${write.nonce} was used by another transaction`,
+        });
       }
       refresh();
     },
@@ -259,7 +293,11 @@ function Home(props: {
       if (!w) return;
       if (w.replaceable) {
         setStuck(true);
-        setResult({ tone: "bad", text: "An earlier attempt is taking longer than it should. Nothing has moved yet." });
+        setResult({
+          tone: "bad",
+          text: "An earlier attempt is taking longer than it should. It hasn't gone through, and nothing has moved yet.",
+          reason: `stuck on nonce ${w.nonce}`,
+        });
       } else void land(w, "your");
     });
   }, [account.address, land]);
@@ -285,13 +323,7 @@ function Home(props: {
       await land(write, label);
     } catch (e) {
       setStep(null);
-      const text =
-        e instanceof WriteInFlightError || (e instanceof Error && e.name === "NotEnoughGasError")
-          ? e.message
-          : e instanceof Error && /may still go through|no stuck payment/.test(e.message)
-            ? e.message
-            : passkeyErrorMessage(e);
-      setResult({ tone: "bad", text });
+      setResult({ tone: "bad", ...describeFailure(e) });
     }
   };
 
@@ -353,11 +385,7 @@ function Home(props: {
             Try again
           </button>
         )}
-        {result && (
-          <p className={result.tone === "ok" ? "success" : "error"} role="status">
-            {result.text}
-          </p>
-        )}
+        {result && <NoticeLine notice={result} />}
       </section>
     </>
   );
