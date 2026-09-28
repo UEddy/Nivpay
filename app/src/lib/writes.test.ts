@@ -1,0 +1,186 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import type { Address, Hex } from "viem";
+import {
+  followToFinality,
+  nonceForNewWrite,
+  nonceForReplacement,
+  replace,
+  submit,
+  WriteInFlightError,
+  type PendingWrite,
+  type Timing,
+  type WriteChain,
+  type WriteStore,
+} from "./writes.ts";
+
+const ME = "0x1A9A136f1cf59899C6b8cfE84ac4df388620467d" as Address;
+
+function memoryStore(): WriteStore & { map: Map<string, PendingWrite> } {
+  const map = new Map<string, PendingWrite>();
+  return {
+    map,
+    get: async (a) => map.get(a),
+    put: async (w) => void map.set(w.address, w),
+    delete: async (a) => void map.delete(a),
+  };
+}
+
+/** A scripted chain. Every raw broadcast is recorded. */
+function fakeChain(opts: {
+  failBroadcasts?: number;
+  receiptAfterPolls?: number;
+  receiptBlock?: bigint;
+  status?: "success" | "reverted";
+  finalized?: (poll: number) => bigint;
+  finalizedNonce?: number;
+  pendingNonce?: number;
+  inBlock?: boolean;
+}) {
+  const broadcasts: Hex[] = [];
+  let polls = 0;
+  let failures = opts.failBroadcasts ?? 0;
+  const chain: WriteChain = {
+    async sendRawTransaction(raw) {
+      broadcasts.push(raw);
+      if (failures > 0) {
+        failures--;
+        throw new Error("network");
+      }
+      return "0x";
+    },
+    async getReceipt() {
+      polls++;
+      if (opts.receiptAfterPolls === undefined || polls <= opts.receiptAfterPolls) return null;
+      return { blockNumber: opts.receiptBlock ?? 100n, status: opts.status ?? "success" };
+    },
+    async getFinalizedBlockNumber() {
+      return opts.finalized ? opts.finalized(polls) : 1_000n;
+    },
+    async getNonce(_a, tag) {
+      return tag === "finalized" ? (opts.finalizedNonce ?? 5) : (opts.pendingNonce ?? 5);
+    },
+    async isInBlock() {
+      return opts.inBlock ?? false;
+    },
+  };
+  return { chain, broadcasts };
+}
+
+function clock(stepMs = 400): Timing {
+  let t = 0;
+  return { now: () => t, sleep: async (ms) => void (t += ms), pollMs: stepMs, rebroadcastEveryMs: 2_000, stuckAfterMs: 20_000 };
+}
+
+function write(raw: Hex = "0xaa01", nonce = 5): PendingWrite {
+  return { address: ME, nonce, raw, hash: `0x${"11".repeat(32)}`, label: "pour in", submittedAt: 0, replaceable: false };
+}
+
+test("the record is saved before the first broadcast, and retries re-send the identical bytes", async () => {
+  const store = memoryStore();
+  const { chain, broadcasts } = fakeChain({ failBroadcasts: 3, receiptAfterPolls: 20 });
+  let savedBeforeBroadcast = false;
+  const wrapped: WriteChain = {
+    ...chain,
+    sendRawTransaction: async (raw) => {
+      if (broadcasts.length === 0) savedBeforeBroadcast = store.map.has(ME);
+      return chain.sendRawTransaction(raw);
+    },
+  };
+  const w = write();
+  await submit(store, wrapped, w);
+  const outcome = await followToFinality(store, wrapped, w, clock());
+  assert.equal(outcome.kind, "final");
+  assert.ok(savedBeforeBroadcast, "record must exist before the first broadcast");
+  assert.ok(broadcasts.length >= 3, "retried after failures");
+  assert.ok(broadcasts.every((b) => b === w.raw), "every retry is the same signed bytes");
+  assert.equal(store.map.size, 0, "lock released once final");
+});
+
+test("a second write for the same account is refused while one is pending", async () => {
+  const store = memoryStore();
+  const { chain } = fakeChain({});
+  await submit(store, chain, write());
+  await assert.rejects(submit(store, chain, write("0xbb02", 6)), WriteInFlightError);
+  await assert.rejects(nonceForNewWrite(store, chain, ME), WriteInFlightError);
+});
+
+test("success is reported only once the receipt's block is finalized", async () => {
+  const store = memoryStore();
+  // Receipt in block 100 from the 2nd poll; finalized reaches 100 only at poll 10.
+  const { chain } = fakeChain({ receiptAfterPolls: 1, receiptBlock: 100n, finalized: (p) => (p >= 10 ? 100n : 99n) });
+  const w = write();
+  await submit(store, chain, w);
+  let polls = 0;
+  const counting: WriteChain = { ...chain, getReceipt: async (h) => (polls++, chain.getReceipt(h)) };
+  const outcome = await followToFinality(store, counting, w, clock());
+  assert.equal(outcome.kind, "final");
+  assert.ok(polls >= 10, "kept waiting until finalized");
+});
+
+test("a reverted transaction releases the lock and says so", async () => {
+  const store = memoryStore();
+  const { chain } = fakeChain({ receiptAfterPolls: 0, status: "reverted" });
+  const w = write();
+  await submit(store, chain, w);
+  assert.equal((await followToFinality(store, chain, w, clock())).kind, "reverted");
+  assert.equal(store.map.size, 0);
+});
+
+test("stuck: nonce unused at finalized and not in a block, the lock is kept and marked replaceable", async () => {
+  const store = memoryStore();
+  const { chain } = fakeChain({ finalizedNonce: 5 });
+  const w = write();
+  await submit(store, chain, w);
+  assert.equal((await followToFinality(store, chain, w, clock())).kind, "stuck");
+  assert.equal(store.map.get(ME)?.replaceable, true);
+  await assert.rejects(nonceForNewWrite(store, chain, ME), WriteInFlightError, "still locked");
+});
+
+test("a replacement must reuse the stuck nonce, and a different nonce is refused", async () => {
+  const store = memoryStore();
+  const { chain, broadcasts } = fakeChain({ finalizedNonce: 5 });
+  const w = write("0xaa01", 5);
+  await submit(store, chain, w);
+  await followToFinality(store, chain, w, clock());
+  assert.equal(await nonceForReplacement(store, chain, ME), 5);
+  await assert.rejects(replace(store, chain, write("0xcc03", 6)), /reuse nonce 5/);
+  await replace(store, chain, write("0xcc03", 5));
+  assert.equal(store.map.get(ME)?.raw, "0xcc03");
+  assert.equal(broadcasts.at(-1), "0xcc03");
+});
+
+test("no replacement while the old transaction is in a block, even an unfinalized one", async () => {
+  const store = memoryStore();
+  const { chain } = fakeChain({ finalizedNonce: 5 });
+  const w = write();
+  await submit(store, chain, w);
+  await followToFinality(store, chain, w, clock());
+  const nowInBlock: WriteChain = { ...chain, isInBlock: async () => true };
+  await assert.rejects(nonceForReplacement(store, nowInBlock, ME), /may still go through/);
+});
+
+test("no replacement once the nonce is used at finalized", async () => {
+  const store = memoryStore();
+  const { chain } = fakeChain({ finalizedNonce: 5 });
+  const w = write();
+  await submit(store, chain, w);
+  await followToFinality(store, chain, w, clock());
+  const used: WriteChain = { ...chain, getNonce: async () => 6 };
+  await assert.rejects(nonceForReplacement(store, used, ME), /may still go through/);
+});
+
+test("superseded: the nonce was used by something else at finalized, the lock is released", async () => {
+  const store = memoryStore();
+  const { chain } = fakeChain({ finalizedNonce: 6 });
+  const w = write();
+  await submit(store, chain, w);
+  assert.equal((await followToFinality(store, chain, w, clock())).kind, "superseded");
+  assert.equal(store.map.size, 0);
+});
+
+test("a new write takes the pending nonce, only when nothing is in flight", async () => {
+  const store = memoryStore();
+  const { chain } = fakeChain({ pendingNonce: 9 });
+  assert.equal(await nonceForNewWrite(store, chain, ME), 9);
+});
