@@ -131,6 +131,7 @@ export async function handleFund(
 
   if (inFlight.has(address)) return refuse(409, "a grant for this address is already on its way");
   inFlight.add(address);
+  let stage: "checks" | "send" = "checks";
   try {
     const chain = makeChain(env);
     if ((await chain.chainId()) !== CHAIN_ID) return refuse(503, "wrong chain, refusing to fund");
@@ -144,6 +145,7 @@ export async function handleFund(
     const cost = GRANT + GRANT_GAS * fees.maxFeePerGas;
     if ((await chain.balance(funder)) - cost < FLOOR) return refuse(503, "funding is paused, the funder is at its floor");
 
+    stage = "send";
     const hash = await serialized(async () => {
       let lastError: unknown;
       for (let attempt = 0; attempt < 4; attempt++) {
@@ -160,13 +162,46 @@ export async function handleFund(
 
     log({ event: "grant", address, amountWei: GRANT.toString(), hash });
     return json(200, { hash });
-  } catch {
-    // The error itself is not logged or returned: it could carry request or
-    // configuration details. The address is enough to find the attempt.
-    return refuse(502, "could not send the grant, try again in a minute");
+  } catch (error) {
+    // Only a short category and a sanitized one line detail are logged and
+    // returned, never the raw error: it could carry configuration details.
+    const code =
+      error instanceof FundConfigError ? error.code : stage === "checks" ? "RPC_FAILED" : "SEND_FAILED";
+    const detail = error instanceof FundConfigError ? "" : safeDetail(error);
+    log({ event: "failed", address, code, detail });
+    return json(502, { error: "could not send the grant, try again in a minute", code });
   } finally {
     inFlight.delete(address);
   }
+}
+
+/** A configuration problem, with a code that is safe to log and return. */
+export class FundConfigError extends Error {
+  readonly code: "FUNDER_KEY_MALFORMED" | "FUNDER_KEY_MISMATCH";
+  constructor(code: "FUNDER_KEY_MALFORMED" | "FUNDER_KEY_MISMATCH") {
+    super(code);
+    this.name = "FundConfigError";
+    this.code = code;
+  }
+}
+
+/**
+ * Accepts the key as pasted into Vercel: surrounding spaces or newlines, with
+ * or without 0x. Anything else is malformed. The key itself never appears in
+ * any error.
+ */
+export function normalizeFunderKey(raw: string | undefined): Hex {
+  const key = (raw ?? "").trim();
+  const withPrefix = /^[0-9a-fA-F]{64}$/.test(key) ? `0x${key}` : key;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(withPrefix)) throw new FundConfigError("FUNDER_KEY_MALFORMED");
+  return withPrefix as Hex;
+}
+
+/** One short line about a failure, with anything long and hex removed. */
+export function safeDetail(error: unknown): string {
+  const e = error as { shortMessage?: unknown; message?: unknown; name?: unknown };
+  const text = String(e?.shortMessage ?? e?.message ?? e?.name ?? "unknown").split("\n")[0] ?? "";
+  return text.replace(/0x[0-9a-fA-F]{40,}/g, "0x…").replace(/[0-9a-fA-F]{40,}/g, "…").slice(0, 120);
 }
 
 /** The real chain, on the public testnet RPC. The key is read here, and only here. */
@@ -177,10 +212,8 @@ export function liveChain(env: FundEnv): FundChain {
   let wallet: ReturnType<typeof createWalletClient> | undefined;
   const walletClient = () => {
     if (wallet) return wallet;
-    const key = env.FUNDER_PRIVATE_KEY;
-    if (!key || !/^0x[0-9a-fA-F]{64}$/.test(key)) throw new Error("funder key missing or malformed");
-    const account = privateKeyToAccount(key as Hex);
-    if (account.address !== funderAddress) throw new Error("funder key does not match FUNDER_ADDRESS");
+    const account = privateKeyToAccount(normalizeFunderKey(env.FUNDER_PRIVATE_KEY));
+    if (account.address !== funderAddress) throw new FundConfigError("FUNDER_KEY_MISMATCH");
     wallet = createWalletClient({ account, chain: monadTestnet, transport: http(RPC_URL, { timeout: 10_000, retryCount: 0 }) });
     return wallet;
   };

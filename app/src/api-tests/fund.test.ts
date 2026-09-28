@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import type { Address, Hex } from "viem";
 import {
   FLOOR,
+  FundConfigError,
   GRANT,
   handleFund,
+  normalizeFunderKey,
+  safeDetail,
   THRESHOLD,
   type FundChain,
   type FundEnv,
@@ -188,4 +191,61 @@ test("status returns whether funding is on and the funder balance, nothing else"
   assert.deepEqual(await res.json(), { enabled: true, funderBalance: "12.345 MON" });
   const off = await handleStatus({ FUNDING_ENABLED: "false" }, async () => 0n);
   assert.deepEqual(await off.json(), { enabled: false, funderBalance: null });
+});
+
+test("the funder key is accepted as pasted: spaces, a newline, with or without 0x", () => {
+  const hex = "ab".repeat(32);
+  for (const raw of [`0x${hex}`, ` 0x${hex}\n`, hex, `\t${hex} `]) {
+    assert.equal(normalizeFunderKey(raw), `0x${hex}`);
+  }
+  for (const bad of [undefined, "", "0x1234", `0x${hex}00`, `0x${"zz".repeat(32)}`, `"0x${hex}"`]) {
+    assert.throws(() => normalizeFunderKey(bad), (e: unknown) => e instanceof FundConfigError && e.code === "FUNDER_KEY_MALFORMED");
+  }
+});
+
+test("a malformed key error never contains the key", () => {
+  const secretish = `0x${"cd".repeat(31)}`;
+  try {
+    normalizeFunderKey(secretish);
+    assert.fail("should have thrown");
+  } catch (e) {
+    assert.ok(!String((e as Error).message).includes("cdcd"));
+    assert.ok(!String((e as Error).stack).includes("cdcd"));
+  }
+});
+
+test("a failed send answers 502 with a code, and logs the code without the key", async () => {
+  const { lines, log } = capture();
+  const configBroken: FundChain = {
+    ...chain().c,
+    sendGrant: async () => {
+      throw new FundConfigError("FUNDER_KEY_MALFORMED");
+    },
+  };
+  const res = await handleFund(req({ address: USER }), env(), () => configBroken, log);
+  assert.equal(res.status, 502);
+  assert.deepEqual(await res.json(), { error: "could not send the grant, try again in a minute", code: "FUNDER_KEY_MALFORMED" });
+  assert.deepEqual(lines.at(-1), { event: "failed", address: USER, code: "FUNDER_KEY_MALFORMED", detail: "" });
+
+  const rpcDown: FundChain = {
+    ...chain().c,
+    sendGrant: async () => {
+      throw new Error(`send failed, raw 0x${"ef".repeat(120)}`);
+    },
+  };
+  const res2 = await handleFund(req({ address: USER }), env(), () => rpcDown, log);
+  assert.equal(((await res2.json()) as { code: string }).code, "SEND_FAILED");
+  const last = lines.at(-1) ?? {};
+  assert.equal(last.code, "SEND_FAILED");
+  assert.ok(!String(last.detail).includes("efef"), "long hex stripped from the detail");
+  assert.ok(!JSON.stringify(lines).includes(KEY_MARKER.slice(2)));
+
+  const readsDown: FundChain = { ...chain().c, hasCode: async () => { throw new Error("timeout"); } };
+  const res3 = await handleFund(req({ address: USER }), env(), () => readsDown, log);
+  assert.equal(((await res3.json()) as { code: string }).code, "RPC_FAILED");
+});
+
+test("safeDetail keeps one short line", () => {
+  assert.equal(safeDetail({ shortMessage: "Nonce too low.\nDetails: x" }), "Nonce too low.");
+  assert.ok(safeDetail(new Error("x".repeat(500))).length <= 120);
 });
