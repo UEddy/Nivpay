@@ -125,3 +125,105 @@ h1 {
     transition-duration: 150ms !important;
   }
 }
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1.5px solid var(--card-border);
+  background: var(--card);
+  color: var(--ink);
+  font: 600 16px/1.2 var(--font-body);
+  cursor: pointer;
+  transition: background-color var(--dur-press) ease-out;
+}
+
+.btn.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+
+.btn.primary:active:not(:disabled) {
+  background: var(--primary-pressed);
+}
+
+.btn.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--primary-text);
+}
+
+.btn.small {
+  width: auto;
+  margin-top: 0;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.field input {
+  font: 500 18px/1.3 var(--font-body);
+  color: var(--ink);
+  background: #ffffff;
+  border: 1.5px solid var(--card-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.field input:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 8px 0 0;
+}
+
+.error {
+  color: var(--primary-text);
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 10px 0 0;
+}
+
+.success {
+  color: var(--person-2);
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 10px 0 0;
+}
+
+.amount {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 18px;
+}
+
+small {
+  font-size: 12px;
+}
