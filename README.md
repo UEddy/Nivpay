@@ -784,6 +784,39 @@ cast call 0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC "balanceOf(address)(uint256
 At the time of writing it holds exactly one drip and therefore refuses, which is
 why `test_fork_faucetDispensesAusd` skips rather than fails.
 
+## Gas grants in the app, and their limits
+
+The app (`app/`, in progress) never shows people gas or MON. A Vercel function,
+`POST /api/fund` in `app/api/fund/index.ts`, sends an account a small grant of
+testnet MON from a dedicated funder key before its first transaction, and the
+app waits until that grant is finalized before sending anything of the
+person's own. Sizes come from the gas measured in
+`docs/APP-CONTRACT-MAP.md`, at 102 gwei:
+
+| Rule | Value | Why |
+| --- | --- | --- |
+| Grant | 0.1 MON, fixed | a decider's whole story costs about 0.071 MON, a creator's first three actions about 0.084 |
+| Only when the account holds under | 0.05 MON | above the most expensive single action, making a pot, about 0.044 |
+| Only while the account has sent fewer than | 10 transactions | a full story is 5 to 7 per person |
+| Only accounts with | no contract code | |
+| Funder floor | 1 MON | granting stops before the funder can run dry |
+| Kill switch | `FUNDING_ENABLED` not `true` | answers "funding is paused" without reading the key |
+
+`GET /api/fund/status` returns only whether funding is on and the funder's
+balance. Each grant is logged with the address, the amount and the
+transaction hash; nothing else from the request is logged, and the key never
+is.
+
+**The honest limit.** These rules bound what one address can take, about 10
+grants or 1 MON if someone deliberately spends each grant away. They do not
+bound how many addresses someone can make, and new addresses cost nothing.
+A determined abuser can therefore drain the funder down to its 1 MON floor,
+where granting stops until it is refilled. The same-origin check only stops
+other websites from using a visitor's browser; a script can send any Origin
+header it likes. Two requests for the same address that reach different
+server instances at the same moment can both be granted. None of this can
+touch anyone's pot: the funder only ever holds testnet MON for gas.
+
 ## A note on the benchmark files
 
 This repository also contains an earlier settlement benchmark: `StreamBench`,
