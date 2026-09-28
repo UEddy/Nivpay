@@ -20,6 +20,19 @@ test("the derived address matches an independent BIP-39/BIP-32 derivation at m/4
   }
 });
 
+test("FROZEN: this PRF output always derives this exact address", () => {
+  // nivpay.vercel.app is the permanent home and real accounts exist. If this
+  // test fails, the derivation changed and every existing passkey would open
+  // a different, empty account. Do not update the expected value: revert the
+  // change instead.
+  const session = sessionFromPrfOutput(fakePrf());
+  try {
+    assert.equal(sessionAddress(session), "0x9eBA8D5Dc196826B262d3882cbFA5B87E93Ef2A8");
+  } finally {
+    session.end();
+  }
+});
+
 test("the PRF output passed in is zeroed once the session exists", () => {
   const prf = fakePrf();
   const session = sessionFromPrfOutput(prf);
