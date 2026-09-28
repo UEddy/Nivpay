@@ -12,7 +12,7 @@ import {
   type FundChain,
   type FundEnv,
 } from "../../api/fund/index.ts";
-import { handleStatus } from "../../api/fund/status.ts";
+import { funderKeyMatches, handleStatus } from "../../api/fund/status.ts";
 
 const SITE = "https://nivpay.example";
 const FUNDER = "0x7EAf7f3e330ac388A0e951e80957B7274597297c";
@@ -186,11 +186,43 @@ test("the same address twice at once gets one grant on this instance", async () 
   assert.equal(sentWith.length, 1);
 });
 
-test("status returns whether funding is on and the funder balance, nothing else", async () => {
-  const res = await handleStatus({ FUNDING_ENABLED: "true", FUNDER_ADDRESS: FUNDER }, async () => 12_345n * 10n ** 15n);
-  assert.deepEqual(await res.json(), { enabled: true, funderBalance: "12.345 MON" });
+// Anvil's default account #0. A published test key, never a real funder.
+const PUBLIC_TEST_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const PUBLIC_TEST_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+
+test("status returns enabled, keyMatches and the funder balance, nothing else", async () => {
+  const res = await handleStatus(
+    { FUNDING_ENABLED: "true", FUNDER_ADDRESS: PUBLIC_TEST_ADDRESS, FUNDER_PRIVATE_KEY: PUBLIC_TEST_KEY },
+    async () => 12_345n * 10n ** 15n,
+  );
+  const body = await res.json();
+  assert.deepEqual(body, { enabled: true, keyMatches: true, funderBalance: "12.345 MON" });
+  assert.ok(!JSON.stringify(body).includes(PUBLIC_TEST_KEY.slice(2)), "the key is never in the answer");
   const off = await handleStatus({ FUNDING_ENABLED: "false" }, async () => 0n);
-  assert.deepEqual(await off.json(), { enabled: false, funderBalance: null });
+  assert.deepEqual(await off.json(), { enabled: false, keyMatches: false, funderBalance: null });
+});
+
+test("keyMatches is false for a key that is missing, malformed or belongs to another address", () => {
+  const ok = { FUNDER_ADDRESS: PUBLIC_TEST_ADDRESS, FUNDER_PRIVATE_KEY: PUBLIC_TEST_KEY };
+  assert.equal(funderKeyMatches(ok), true);
+  assert.equal(funderKeyMatches({ ...ok, FUNDER_PRIVATE_KEY: `  ${PUBLIC_TEST_KEY.slice(2)}\n` }), true, "as pasted");
+  assert.equal(funderKeyMatches({ ...ok, FUNDER_PRIVATE_KEY: undefined }), false);
+  assert.equal(funderKeyMatches({ ...ok, FUNDER_PRIVATE_KEY: "0x1234" }), false);
+  assert.equal(funderKeyMatches({ ...ok, FUNDER_ADDRESS: FUNDER }), false, "mismatch");
+  assert.equal(funderKeyMatches({ ...ok, FUNDER_ADDRESS: "not an address" }), false);
+});
+
+test("status and /api/fund agree on which keys parse", () => {
+  const hex = PUBLIC_TEST_KEY.slice(2);
+  for (const raw of [PUBLIC_TEST_KEY, ` ${PUBLIC_TEST_KEY}\n`, hex, `\t${hex} `, "", "0x12", `0x${hex}00`, `"${PUBLIC_TEST_KEY}"`, `0X${hex}`]) {
+    let grantPathAccepts = true;
+    try {
+      normalizeFunderKey(raw);
+    } catch {
+      grantPathAccepts = false;
+    }
+    assert.equal(funderKeyMatches({ FUNDER_ADDRESS: PUBLIC_TEST_ADDRESS, FUNDER_PRIVATE_KEY: raw }), grantPathAccepts, JSON.stringify(raw));
+  }
 });
 
 test("the funder key is accepted as pasted: spaces, a newline, with or without 0x", () => {
