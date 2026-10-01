@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { encodeFunctionData, type Address } from "viem";
-import { copy, ERROR_CODES } from "./copy.ts";
+import { copy, ERROR_CODES, offlineMessage } from "./copy.ts";
 import { AccountStore, type StoredAccount } from "./lib/accounts.ts";
 import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
 import { AUSD, TESTUSD } from "./lib/config.ts";
 import { describeFailure, SendFailure } from "./lib/errors.ts";
-import { idbWriteStore } from "./lib/idb.ts";
+import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
 import { formatAmount, parseAmount } from "./lib/money.ts";
 import { hostCheck, signIn, signUp } from "./lib/passkey.ts";
 import { readClient } from "./lib/rpc.ts";
@@ -66,6 +66,22 @@ export function App() {
   const [active, setActive] = useState<StoredAccount | undefined>(() => accounts.active());
   const [switching, setSwitching] = useState(false);
   const connection = useConnection();
+  // Requests from this phone still in flight. Unknown until checked, and
+  // unknown is never read as "nothing moved".
+  const [inFlight, setInFlight] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (!connection.down) return;
+    let live = true;
+    const check = () => pendingWriteCount().then((n) => live && setInFlight(n));
+    void check();
+    const t = setInterval(check, 2_000);
+    return () => {
+      live = false;
+      clearInterval(t);
+      setInFlight(undefined);
+    };
+  }, [connection.down]);
 
   const choose = (address: Address, name: string) => {
     accounts.upsert({ address, name });
@@ -78,7 +94,7 @@ export function App() {
     <>
       {connection.down && (
         <div className="banner" role="status">
-          {copy.offline}
+          {offlineMessage(inFlight)}
         </div>
       )}
       {active && !switching ? (

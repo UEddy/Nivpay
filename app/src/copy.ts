@@ -57,8 +57,10 @@ export const copy = {
   added: (amount: string, seconds: string) => `Added ${amount} test dollars. Settled in ${seconds}s.`,
   tryAgain: "Try again",
 
-  // Connection
-  offline: "Can't connect right now. Nothing has moved. Trying again.",
+  // Connection. "Nothing has moved" only when no request of ours is in flight.
+  offlineNothingInFlight: "Can't connect right now. Nothing has moved. Trying again.",
+  offlineRequestInFlight:
+    "Can't connect right now. Your request was sent and is still being confirmed. Don't send it again. Trying again.",
 
   // Hosts
   onlyAtHome: (home: string) => `Accounts can only be made and used at ${home}. This copy of NivPay is for testing and can't hold an account.`,
@@ -98,6 +100,14 @@ export const copy = {
   /** How a vendor or person is shown when a name alone isn't enough. */
   accountEnding: (id: string) => `account ending ${id.slice(-4)}`,
 } as const;
+
+/**
+ * The connection banner. "Nothing has moved" is only true when no request of
+ * ours is in flight; when that is unknown, it is not claimed.
+ */
+export function offlineMessage(requestsInFlight: number | undefined): string {
+  return requestsInFlight === 0 ? copy.offlineNothingInFlight : copy.offlineRequestInFlight;
+}
 
 /**
  * The code table, mirrored in docs/ERROR-CODES.md. People read a code off the

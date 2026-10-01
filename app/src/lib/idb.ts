@@ -48,3 +48,18 @@ export const idbWriteStore: WriteStore = {
     await run("readwrite", (s) => s.delete(address));
   },
 };
+
+/**
+ * How many requests from any account on this phone are still in flight. A
+ * record exists from before the first broadcast until the request is final,
+ * reverted or superseded, so zero means nothing of ours can still move.
+ * If storage can't be read, the answer is unknown, and that is treated as
+ * "maybe": the caller must not claim nothing moved.
+ */
+export async function pendingWriteCount(): Promise<number | undefined> {
+  try {
+    return await run<number>("readonly", (s) => s.count());
+  } catch {
+    return undefined;
+  }
+}

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { copy, ERROR_CODES } from "./copy.ts";
+import { copy, ERROR_CODES, offlineMessage } from "./copy.ts";
 
 /**
  * Product rule: NivPay reads like a fintech app, and people never need to know
@@ -130,5 +130,14 @@ test("no banned word in the page title, description or app manifest", () => {
   const manifest = JSON.parse(readFileSync(join(APP, "public", "manifest.webmanifest"), "utf8")) as Record<string, string>;
   for (const text of [title, description, manifest.name ?? "", manifest.short_name ?? "", manifest.description ?? ""]) {
     assert.deepEqual(bannedIn(text), [], text);
+  }
+});
+
+test("'Nothing has moved' is only said when no request is in flight", () => {
+  assert.match(offlineMessage(0), /Nothing has moved/);
+  for (const unsure of [1, 3, undefined]) {
+    const text = offlineMessage(unsure);
+    assert.doesNotMatch(text, /nothing has moved/i, String(unsure));
+    assert.match(text, /sent and is still being confirmed/, String(unsure));
   }
 });
