@@ -51,8 +51,20 @@ People never see gas or MON.
 - A Vercel serverless function at `/api/fund` tops up an address with a small amount of testnet MON from a dedicated funder key. I will create that key myself in a separate terminal and type it only into Vercel's environment settings. It is never the deployer key, never in the repo, never printed. Never ask me for it.
 - The function accepts only a valid address, runs only on chain 10143 (and refuses otherwise), funds only when the address holds less than a small minimum and has sent fewer than a small number of transactions, sends a fixed amount sized from measured gas costs, stops at a floor so the funder never runs dry, accepts same-origin requests only, handles two requests arriving together without nonce clashes, and returns the transaction hash. Write its abuse limits down honestly.
 - The app waits until the funding transaction is finalized before it sends the person's own transaction.
-- TESTUSD mode: a "Get test dollars" button mints TESTUSD to the person (read the mint function and its cap from the contract). Wherever TESTUSD appears, the copy says these are test dollars, not real money. Never label TESTUSD as AUSD. The design's line "Held as AUSD digital dollars" is only true in AUSD mode.
+- TESTUSD mode: an "Add test dollars" button mints TESTUSD to the person (read the mint function and its cap from the contract). Wherever TESTUSD appears, the copy says these are test dollars, not real money. Never label TESTUSD as AUSD. The AUSD balance is called "Dollars", with the line "Held as AUSD, a digital dollar issued by Agora.", which is only true in AUSD mode.
 - A pot's token is whatever its NivPayPots contract is bound to. Read it from the contract and label amounts to match.
+
+## Product language
+
+NivPay must read like a fintech app. People should never need to know it runs on crypto. This holds for every screen.
+
+- No word on screen may be any of these, as a whole word, plurals included: crypto, blockchain, block, chain, onchain, wallet, token, gas, Monad, testnet, network, address, hash, contract, stablecoin, seed, mnemonic, private key, 0x, and MON in capitals. `app/src/copy.test.ts` fails if one appears in the app's copy, in any screen's visible text, or in the page title, description or manifest.
+- All words people see live in `app/src/copy.ts`. Screens take their text from there.
+- No 0x address on screen. A person or vendor who needs identifying is "account ending 7bC1". The full identifier appears only as "Account ID" in the account details sheet, with a copy button, for support.
+- The AUSD balance is "Dollars", with "Held as AUSD, a digital dollar issued by Agora." Test dollars are always "test dollars, not real money".
+- While on testnet the header shows a small "Test mode" badge, and on screen the test network is "test mode".
+- Errors show plain words and a short neutral code, like "Code 16". Never "gas", "HTTP", server answers or internal names. The table is `docs/ERROR-CODES.md`.
+- The README, the pitch and the submission may name Monad and AUSD freely. This rule covers what people see in the app.
 
 ## Design
 
@@ -69,7 +81,7 @@ Find out from the contract how an invited person becomes a funder and a decider,
 - A. People can be added after the pot exists (invite codes, signatures or an open funder list). The creator makes the pot and shares a link; the invitee signs up and joins.
 - B. Every decider's address is needed when the pot is made. A draft pot lives on the creator's phone. Each invitee opens a join link, signs up, and sends their address back as a link over WhatsApp or any chat. When everyone is in, the creator makes the pot.
 
-Names and labels (pot name, people, cities, vendor names): if the contract stores them, read them. If it doesn't, the creator signs a small JSON with their account and it travels in the invite link's `#` fragment, which is never sent to a server. The app accepts the labels only if the signer is the pot's creator on chain. Labels are for display only. Destination addresses and limits always come from the contract, and the payment screen shows the short address next to the vendor's name.
+Names and labels (pot name, people, cities, vendor names): if the contract stores them, read them. If it doesn't, the creator signs a small JSON with their account and it travels in the invite link's `#` fragment, which is never sent to a server. The app accepts the labels only if the signer is the pot's creator on chain. Labels are for display only. Destinations and limits always come from the contract, and the payment screen shows each vendor as "account ending 7bC1" (the last four characters of its account) next to the vendor's name. Never a 0x address on screen.
 
 ## Live data
 
@@ -99,7 +111,7 @@ Names and labels (pot name, people, cities, vendor names): if the contract store
 
 ### Phase 2: accounts and gas
 
-- Sign up, sign in, the signing-session helper, `/api/fund`, and the "Get test dollars" flow, working end to end on localhost and on my phone.
+- Sign up, sign in, the signing-session helper, `/api/fund`, and the "Add test dollars" flow, working end to end on localhost and on my phone.
 - Stop.
 
 ### Phase 3: the five screens, with live data and motion

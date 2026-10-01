@@ -132,7 +132,7 @@ The potId is not known until the receipt: read it from `PotCreated`.
 | --- | --- | --- | --- | --- | --- |
 | Pour in | `fundWithPermit(uint256 potId, uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) returns (uint256 sharesMinted)` | anyone | pot exists, open (not closed, not past endTime), not frozen, amount > 0, balance >= amount, a valid permit or an existing allowance | token `Approval` (from the permit) and `Transfer`, `Funded(potId, funder, assets, sharesMinted)` | `NoSuchPot`, `PotClosed`, `PotFrozen`, `ZeroAmount`, `ZeroShares`, `TransferAmountMismatch`, the token's own balance or allowance error |
 | Fallback without permit | token `approve(pots, amount)` then `fund(potId, amount)` | anyone | same | `Approval`, then `Transfer` and `Funded` | same |
-| Get test dollars (TESTUSD mode) | TESTUSD `mint(address to, uint256 amount)` | anyone | amount <= `MAX_MINT` | `Transfer(0x0, to, amount)` | `MintAboveCap(amount, cap)` |
+| Add test dollars (TESTUSD mode) | TESTUSD `mint(address to, uint256 amount)` | anyone | amount <= `MAX_MINT` | `Transfer(0x0, to, amount)` | `MintAboveCap(amount, cap)` |
 
 ### Screen 3: Approve a pour (`Live-Approve`)
 
@@ -297,8 +297,9 @@ approvers. Handling: from the `Approved` events for that `proposalId`, less
 any `ApprovalRevoked`.
 
 **G12. "Held as AUSD digital dollars".** True only on the AUSD instance.
-Handling: the line comes from `token()`; TESTUSD shows "test dollars, not real
-money".
+Handling: the AUSD balance is labelled "Dollars" with "Held as AUSD, a
+digital dollar issued by Agora."; TESTUSD shows "test dollars, not real
+money". Which line applies comes from `token()`.
 
 **G13. The creator is not stored.** Handling: `PotCreated.creator`, which is
 also what signed labels are checked against. Invite links carry the pot's
@@ -446,13 +447,14 @@ contracts, if you want one in the demo. I have not planned it in.
   role is decider or destination. The link back to the creator carries that
   in its `#` fragment. The creator's app accepts it only if the signature
   recovers to the address in it and the draft id is one of its own drafts.
-* **Pasted vendor addresses.** For a vendor not on NivPay, the creator can
-  paste a plain address. It must be a valid address; if it is written in
-  mixed case, its EIP-55 checksum must be right. Because destinations are
-  fixed forever, the creator then types the address's last 4 characters to
-  confirm it. This applies to every pasted address, not only suspicious ones.
+* **Pasted vendor Account IDs.** For a vendor not on NivPay, the creator
+  can paste the vendor's Account ID (on screen it is never called an
+  address). It must be a valid address; if it is written in mixed case, its
+  EIP-55 checksum must be right. Because destinations are fixed forever, the
+  creator then types its last 4 characters to confirm it. This applies to
+  every pasted Account ID, not only suspicious ones.
 * **The confirm screen before "Make the pot"** lists every decider and every
-  destination with its short address, whether it joined by link or was
+  destination as "account ending 7bC1", whether it joined by link or was
   pasted, and says that none of it can ever change.
 * **Switch account.** One phone can hold more than one account for testing.
   The app stores a list of addresses, one per passkey, and "Switch account"
