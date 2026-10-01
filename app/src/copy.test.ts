@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { copy, ERROR_CODES, offlineMessage } from "./copy.ts";
@@ -30,6 +31,9 @@ const BANNED: [string, RegExp][] = [
   ["private key", /\bprivate\s+keys?\b/i],
   ["0x", /\b0x/i],
   ["MON", /\bMONs?\b/],
+  // Typography rule, not a crypto word: no em or en dashes anywhere.
+  ["em dash", /\u2014/],
+  ["en dash", /\u2013/],
 ];
 
 export function bannedIn(text: string): string[] {
@@ -44,7 +48,7 @@ test("the checker catches every banned word, plurals and phrases included", () =
   const cases = [
     "crypto", "cryptos", "Blockchain", "blocks", "chain", "on-chain", "onchain", "wallets", "Token", "gas",
     "Monad", "testnet", "networks", "address", "addresses", "hash", "hashes", "contract", "stablecoins",
-    "seed", "mnemonic", "private key", "Private keys", "0x1234", "1 MON", "MONs",
+    "seed", "mnemonic", "private key", "Private keys", "0x1234", "1 MON", "MONs", "a \u2014 b", "1\u20132",
   ];
   for (const c of cases) assert.ok(bannedIn(`see ${c} here`).length > 0, c);
 });
@@ -140,4 +144,38 @@ test("'Nothing has moved' is only said when no request is in flight", () => {
     assert.doesNotMatch(text, /nothing has moved/i, String(unsure));
     assert.match(text, /sent and is still being confirmed/, String(unsure));
   }
+});
+
+// ---------------------------------------------------------------------------
+// The dash rule covers the whole codebase, not just the screens
+// ---------------------------------------------------------------------------
+
+test("no em or en dash in any tracked file except package-lock.json", () => {
+  const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: APP, encoding: "utf8" }).trim();
+  const files = execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8" })
+    .split("\0")
+    .filter((f) => f && !f.endsWith("package-lock.json"));
+  assert.ok(files.length > 50, `found the tracked files (${files.length})`);
+  const offenders: string[] = [];
+  let checked = 0;
+  for (const file of files) {
+    const path = join(root, file);
+    let bytes: Buffer;
+    try {
+      if (!statSync(path).isFile()) continue; // submodule entries are folders
+      bytes = readFileSync(path);
+    } catch {
+      continue;
+    }
+    if (bytes.includes(0)) continue; // binary files (icons) hold no prose
+    checked++;
+    bytes
+      .toString("utf8")
+      .split("\n")
+      .forEach((line, i) => {
+        if (/[\u2013\u2014]/.test(line)) offenders.push(`${file}:${i + 1}`);
+      });
+  }
+  assert.ok(checked > 50, `checked ${checked} text files`);
+  assert.deepEqual(offenders, [], "em or en dash found");
 });
