@@ -39,7 +39,7 @@ export class AccountStore {
     const address = getAddress(account.address);
     const others = this.list().filter((a) => a.address !== address);
     const existing = this.list().find((a) => a.address === address);
-    const name = account.name.trim() || existing?.name || shortAddress(address);
+    const name = account.name.trim() || existing?.name || defaultAccountName(address);
     this.kv.setItem(ACCOUNTS, JSON.stringify([...others, { address, name }]));
   }
 
@@ -53,6 +53,7 @@ export class AccountStore {
   }
 }
 
-export function shortAddress(address: string): string {
-  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+/** The name shown when someone signs in with a passkey this phone hasn't seen. */
+export function defaultAccountName(address: string): string {
+  return `Account ${address.slice(-4)}`;
 }

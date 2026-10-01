@@ -1,6 +1,7 @@
 import { createPasskeyWithPrfOutput, getPasskeyPrfOutput } from "@category-labs/mera";
 import { toViemAccount } from "@category-labs/mera/viem";
 import type { Address, LocalAccount } from "viem";
+import { ERROR_CODES } from "../copy.ts";
 import { AppError, WrongPasskeyError } from "./errors.ts";
 import { checkPasskeyHost } from "./hosts.ts";
 import { sessionAddress, sessionFromPrfOutput } from "./keys.ts";
@@ -12,7 +13,7 @@ export class HostNotAllowedError extends AppError {}
 
 function rpId(): string {
   const check = checkPasskeyHost(location.hostname, PRODUCTION_HOSTNAME);
-  if (!check.ok) throw new HostNotAllowedError(check.message, `passkeys not allowed on ${location.hostname}`);
+  if (!check.ok) throw new HostNotAllowedError(check.message, ERROR_CODES.HOST_NOT_ALLOWED);
   return check.rpId;
 }
 

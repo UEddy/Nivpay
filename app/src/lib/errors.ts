@@ -1,34 +1,57 @@
 import { isMeraError } from "@category-labs/mera";
+import { copy, ERROR_CODES, type ErrorCode } from "../copy.ts";
 
-/** An error with a short reason that is safe to show on the phone and report. */
+/** An error that already knows what to tell people and which code to show. */
 export class AppError extends Error {
-  readonly reason: string;
-  constructor(message: string, reason: string) {
+  readonly code: ErrorCode;
+  constructor(message: string, code: ErrorCode) {
     super(message);
     this.name = new.target.name;
-    this.reason = reason;
+    this.code = code;
   }
 }
 
 /** Thrown when the passkey someone chose belongs to a different account. */
 export class WrongPasskeyError extends AppError {
   constructor() {
-    super(
-      "That passkey belongs to a different NivPay account. Choose the passkey for this account and try again.",
-      "passkey for a different account",
-    );
+    super(copy.errWrongPasskey, ERROR_CODES.WRONG_PASSKEY);
   }
 }
 
-/** The account could not be given gas. `reason` says which step and what the server answered. */
+/** The account could not be made ready to send. */
 export class NotEnoughGasError extends AppError {}
+
+/**
+ * Turns the setup service's answer into a code people can read off the phone.
+ * The status and the service's code never reach the screen, only this.
+ */
+export function setupFailure(status: number, body: { error?: string; code?: string }): NotEnoughGasError {
+  const failed = (code: ErrorCode) => new NotEnoughGasError(copy.errSetupFailed, code);
+  switch (body.code) {
+    case "FUNDER_KEY_MALFORMED":
+      return failed(ERROR_CODES.SETUP_KEY_MALFORMED);
+    case "FUNDER_KEY_MISMATCH":
+      return failed(ERROR_CODES.SETUP_KEY_MISMATCH);
+    case "SEND_FAILED":
+      return failed(ERROR_CODES.SETUP_SEND_FAILED);
+    case "RPC_FAILED":
+      return failed(ERROR_CODES.SETUP_READ_FAILED);
+  }
+  if (status === 503) {
+    if (body.error === "funding is not configured") return failed(ERROR_CODES.SETUP_KEY_MALFORMED);
+    if (body.error === "wrong chain, refusing to fund") return failed(ERROR_CODES.SETUP_REFUSED);
+    return new NotEnoughGasError(copy.errSetupPaused, ERROR_CODES.SETUP_PAUSED);
+  }
+  if (status === 409 && body.error === "this account has reached its limit") return failed(ERROR_CODES.SETUP_LIMIT_REACHED);
+  return failed(ERROR_CODES.SETUP_REFUSED);
+}
 
 export type SendStage = "preparing" | "gas grant" | "passkey" | "signing" | "broadcast" | "confirming";
 
 /**
  * Wraps any failure in the send flow with where it happened and whether the
- * person's own transaction had been broadcast by then. "Nothing was sent" is
- * only ever said when `broadcast` is false.
+ * person's own request had been broadcast by then. "Nothing was sent" is only
+ * ever said when `broadcast` is false.
  */
 export class SendFailure extends Error {
   readonly stage: SendStage;
@@ -43,54 +66,52 @@ export class SendFailure extends Error {
   }
 }
 
-/** One short line: long hex removed, first line only, capped. */
-export function shortDetail(error: unknown): string {
-  if (error instanceof AppError) return error.reason;
-  if (isMeraError(error)) return `passkey ${error.code}`;
-  const e = error as { shortMessage?: unknown; message?: unknown; name?: unknown } | null;
-  const text = String(e?.shortMessage ?? e?.message ?? e?.name ?? error ?? "unknown").split("\n")[0] ?? "";
-  return text.replace(/0x[0-9a-fA-F]{40,}/g, "0x…").slice(0, 100);
-}
-
-/**
- * Plain words for everything that can go wrong around a passkey, without any
- * claim about whether something was sent. Support facts from
- * https://mera.category.xyz/authenticator-support/ (27 Sep 2026).
- */
-export function passkeyErrorMessage(error: unknown): string {
-  if (error instanceof AppError) return error.message;
+/** Message and code for anything that isn't already an AppError. */
+function classify(error: unknown, stage?: SendStage): { text: string; code: ErrorCode } {
+  if (error instanceof AppError) return { text: error.message, code: error.code };
   if (isMeraError(error)) {
     switch (error.code) {
       case "PRF_UNAVAILABLE":
-        return (
-          "This passkey can't hold a NivPay account. On Android, save it to Google Password Manager. " +
-          "On iPhone, use iCloud Keychain on iOS 18 or later. Chrome's desktop profile, Bitwarden and Dashlane don't work. " +
-          "If you use Samsung Pass, choose Google Password Manager instead."
-        );
+        return { text: copy.errPasskeyUnsupported, code: ERROR_CODES.PASSKEY_UNSUPPORTED };
       case "PASSKEY_OPERATION_FAILED":
-        return "The passkey step was cancelled or didn't finish.";
+        return { text: copy.errPasskeyCancelled, code: ERROR_CODES.PASSKEY_CANCELLED };
       case "CRYPTO_UNAVAILABLE":
-        return "This browser is missing a security feature NivPay needs. Update Chrome and try again.";
+        return { text: copy.errBrowserMissingFeature, code: ERROR_CODES.BROWSER_MISSING_FEATURE };
       case "SESSION_ENDED":
-        return "The signing step timed out.";
+        return { text: copy.errPasskeyTimedOut, code: ERROR_CODES.PASSKEY_TIMED_OUT };
       default:
-        return "Something went wrong with the passkey.";
+        return { text: copy.errPasskeyOther, code: ERROR_CODES.PASSKEY_OTHER };
     }
   }
-  return "Something went wrong.";
+  switch (stage) {
+    case "preparing":
+    case "gas grant":
+      return { text: copy.errPreparing, code: ERROR_CODES.PREPARING };
+    case "passkey":
+      return { text: copy.errPasskeyOther, code: ERROR_CODES.PASSKEY_OTHER };
+    case "signing":
+      return { text: copy.errSigning, code: ERROR_CODES.SIGNING };
+    case "broadcast":
+      return { text: copy.errSaving, code: ERROR_CODES.SAVING };
+    case "confirming":
+      return { text: copy.errConfirming, code: ERROR_CODES.CONFIRMING };
+    default:
+      return { text: copy.errUnknown, code: ERROR_CODES.UNKNOWN };
+  }
 }
 
-/** What the person sees when something fails, and the short reason to report. */
-export function describeFailure(error: unknown): { text: string; reason: string } {
+/**
+ * What people see when something fails: plain words and a neutral code that
+ * maps to docs/ERROR-CODES.md. Never internal names, never server answers.
+ */
+export function describeFailure(error: unknown): { text: string; code: ErrorCode } {
   if (error instanceof SendFailure) {
-    const reason = `${error.stage}: ${shortDetail(error.cause)}`;
     if (error.broadcast) {
-      return {
-        text: "Your request was sent but isn't confirmed yet. Don't send it again: NivPay keeps checking and will show the result here.",
-        reason,
-      };
+      const code = error.cause instanceof AppError ? error.cause.code : ERROR_CODES.CONFIRMING;
+      return { text: copy.sentNotConfirmed, code };
     }
-    return { text: `${passkeyErrorMessage(error.cause)} Nothing was sent.`, reason };
+    const { text, code } = classify(error.cause, error.stage);
+    return { text: `${text} ${copy.nothingWasSent}`, code };
   }
-  return { text: passkeyErrorMessage(error), reason: shortDetail(error) };
+  return classify(error);
 }

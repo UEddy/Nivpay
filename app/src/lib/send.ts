@@ -1,7 +1,8 @@
 import { keccak256, type Address, type Hex } from "viem";
 import { CHAIN_ID } from "./config.ts";
 import { waitForFinalized, liveWriteChain } from "./chain.ts";
-import { NotEnoughGasError, SendFailure, type SendStage } from "./errors.ts";
+import { copy, ERROR_CODES } from "../copy.ts";
+import { NotEnoughGasError, SendFailure, setupFailure, type SendStage } from "./errors.ts";
 import { idbWriteStore } from "./idb.ts";
 import { withSigner } from "./passkey.ts";
 import { readClient } from "./rpc.ts";
@@ -36,30 +37,21 @@ export async function ensureGas(address: Address, needed: bigint): Promise<void>
       body: JSON.stringify({ address }),
     });
   } catch {
-    throw new NotEnoughGasError(
-      "Couldn't reach NivPay to get your account ready. Check your connection and try again.",
-      "grant request did not reach the server",
-    );
+    throw new NotEnoughGasError(copy.errSetupUnreachable, ERROR_CODES.SETUP_UNREACHABLE);
   }
   const body = (await res.json().catch(() => ({}))) as { hash?: Hex; error?: string; code?: string };
-  const answer = `HTTP ${res.status}${body.code ? ` ${body.code}` : ""}${body.error ? `, ${body.error}` : ""}`;
   if (res.ok && body.hash) {
     let status: "success" | "reverted";
     try {
       status = await waitForFinalized(body.hash);
     } catch {
-      throw new NotEnoughGasError("Getting your account ready is taking too long. Try again in a minute.", `grant ${body.hash.slice(0, 10)}… not final after 60s`);
+      throw new NotEnoughGasError(copy.errSetupSlow, ERROR_CODES.SETUP_SLOW);
     }
-    if (status !== "success") {
-      throw new NotEnoughGasError("Getting your account ready didn't go through. Try again.", `grant ${body.hash.slice(0, 10)}… reverted`);
-    }
+    if (status !== "success") throw new NotEnoughGasError(copy.errSetupReverted, ERROR_CODES.SETUP_REVERTED);
     return;
   }
   if (res.status === 409 && balance >= needed && needed > 0n) return;
-  throw new NotEnoughGasError(
-    res.status === 503 ? "NivPay can't cover network costs right now. Try again later." : "Your account couldn't be made ready for this. Try again in a minute.",
-    answer,
-  );
+  throw setupFailure(res.status, body);
 }
 
 async function estimate(from: Address, to: Address, data: Hex): Promise<bigint> {

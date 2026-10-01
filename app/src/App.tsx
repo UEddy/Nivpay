@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { encodeFunctionData, type Address } from "viem";
-import { AccountStore, shortAddress, type StoredAccount } from "./lib/accounts.ts";
+import { copy, ERROR_CODES } from "./copy.ts";
+import { AccountStore, type StoredAccount } from "./lib/accounts.ts";
 import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
 import { AUSD, TESTUSD } from "./lib/config.ts";
@@ -12,22 +13,22 @@ import { readClient } from "./lib/rpc.ts";
 import { retryStuckWrite, sendWrite, type Step } from "./lib/send.ts";
 import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
 
-type Notice = { tone: "ok" | "bad"; text: string; reason?: string };
+type Notice = { tone: "ok" | "bad"; text: string; code?: number };
 
-/** A result line, with the short reason under it so it can be reported from the phone. */
+/** A result line. Failures end with a neutral code people can read out to support. */
 function NoticeLine({ notice }: { notice: Notice }) {
   return (
     <div role="status">
       <p className={notice.tone === "ok" ? "success" : "error"}>{notice.text}</p>
-      {notice.reason && <p className="reason">Reason: {notice.reason}</p>}
+      {notice.code !== undefined && <p className="reason">{copy.code(notice.code)}</p>}
     </div>
   );
 }
 
 const accounts = new AccountStore(localStorage);
 
-/** Network health comes from real RPC failures, not navigator.onLine. */
-function useNetwork() {
+/** Connection health comes from real read failures, not navigator.onLine. */
+function useConnection() {
   const [down, setDown] = useState(false);
   const track = useCallback(async <T,>(p: Promise<T>): Promise<T> => {
     try {
@@ -57,10 +58,14 @@ function PotMark() {
   );
 }
 
+function TestModeBadge() {
+  return <span className="badge">{copy.testMode}</span>;
+}
+
 export function App() {
   const [active, setActive] = useState<StoredAccount | undefined>(() => accounts.active());
   const [switching, setSwitching] = useState(false);
-  const network = useNetwork();
+  const connection = useConnection();
 
   const choose = (address: Address, name: string) => {
     accounts.upsert({ address, name });
@@ -71,13 +76,13 @@ export function App() {
 
   return (
     <>
-      {network.down && (
+      {connection.down && (
         <div className="banner" role="status">
-          Can't reach the network right now. Nothing has moved. Trying again.
+          {copy.offline}
         </div>
       )}
       {active && !switching ? (
-        <Home account={active} network={network} onSwitch={() => setSwitching(true)} />
+        <Home account={active} connection={connection} onSwitch={() => setSwitching(true)} />
       ) : (
         <Welcome
           known={accounts.list()}
@@ -119,53 +124,57 @@ function Welcome(props: {
 
   return (
     <>
-      <PotMark />
-      <h1>{props.current ? "Switch account" : "NivPay"}</h1>
-      <p className="lede">A group purse for one purpose that no single person can pocket.</p>
+      <header className="top">
+        <PotMark />
+        <TestModeBadge />
+      </header>
+      <h1>{props.current ? copy.switchAccount : copy.appName}</h1>
+      <p className="lede">{copy.tagline}</p>
 
       {!host.ok ? (
         <div className="card">
           <p className="lede">{host.message}</p>
+          <p className="reason">{copy.code(ERROR_CODES.HOST_NOT_ALLOWED)}</p>
         </div>
       ) : (
         <>
           {props.known.length > 0 && (
             <section className="card">
-              <p className="eyebrow">Accounts on this phone</p>
+              <p className="eyebrow">{copy.accountsOnThisPhone}</p>
               {props.known.map((a) => (
                 <div className="row" key={a.address}>
                   <span className="value">{a.name}</span>
-                  <span className="label">{shortAddress(a.address)}</span>
+                  <span className="label">{copy.accountEnding(a.address)}</span>
                 </div>
               ))}
               <button className="btn" disabled={busy !== null} onClick={() => run("in")}>
-                {busy === "in" ? "Waiting for your passkey…" : "Use one of these"}
+                {busy === "in" ? copy.waitingForPasskey : copy.useOneOfThese}
               </button>
-              <p className="hint">Your phone asks which passkey. Pick the account you want.</p>
+              <p className="hint">{copy.pickAccountHint}</p>
             </section>
           )}
 
           <section className="card">
-            <p className="eyebrow">{props.known.length ? "Add another account" : "Make your account"}</p>
+            <p className="eyebrow">{props.known.length ? copy.addAnotherAccount : copy.makeYourAccount}</p>
             <label className="field">
-              <span>Your name</span>
+              <span>{copy.yourName}</span>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoComplete="given-name"
                 maxLength={40}
-                placeholder="Idara"
+                placeholder={copy.namePlaceholder}
               />
             </label>
             <button className="btn primary" disabled={busy !== null || !name.trim()} onClick={() => run("up")}>
-              {busy === "up" ? "Waiting for your passkey…" : "Create your account"}
+              {busy === "up" ? copy.waitingForPasskey : copy.createAccount}
             </button>
-            <p className="hint">Your account is a passkey on this phone. There is no password and nothing to write down.</p>
+            <p className="hint">{copy.createAccountHint}</p>
           </section>
 
           {props.known.length === 0 && (
             <button className="btn" disabled={busy !== null} onClick={() => run("in")}>
-              {busy === "in" ? "Waiting for your passkey…" : "I already have an account"}
+              {busy === "in" ? copy.waitingForPasskey : copy.alreadyHaveAccount}
             </button>
           )}
         </>
@@ -174,61 +183,94 @@ function Welcome(props: {
       {error && <NoticeLine notice={error} />}
       {props.onCancel && (
         <button className="btn ghost" onClick={props.onCancel}>
-          Back
+          {copy.back}
         </button>
       )}
     </>
   );
 }
 
-type Token = { symbol: string; decimals: number; balance: bigint };
-type Balances = { testusd: Token; ausd: Token; maxMint: bigint };
+/** Account details: the only place the Account ID appears, for support. */
+function AccountSheet(props: { account: StoredAccount; onSwitch: () => void; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copyId = () => {
+    navigator.clipboard
+      .writeText(props.account.address)
+      .then(() => setCopied(true))
+      .catch(() => setCopied(false));
+  };
+  return (
+    <div className="sheet-backdrop" role="presentation" onClick={props.onClose}>
+      <section className="sheet" role="dialog" aria-modal="true" aria-label={copy.accountDetails} onClick={(e) => e.stopPropagation()}>
+        <p className="eyebrow">{copy.accountDetails}</p>
+        <h2>{props.account.name}</h2>
+        <div className="field">
+          <span>{copy.accountId}</span>
+          <code className="account-id">{props.account.address}</code>
+        </div>
+        <button className="btn" onClick={copyId}>
+          {copied ? copy.copied : copy.copyAction}
+        </button>
+        <p className="hint">{copy.accountIdHint}</p>
+        <button className="btn" onClick={props.onSwitch}>
+          {copy.switchAccount}
+        </button>
+        <button className="btn ghost" onClick={props.onClose}>
+          {copy.close}
+        </button>
+      </section>
+    </div>
+  );
+}
+
+type Holding = { decimals: number; balance: bigint };
+type Balances = { testDollars: Holding; dollars: Holding; maxMint: bigint };
 
 async function readBalances(address: Address): Promise<Balances> {
   const block = await readClient.getBlock({ blockTag: "finalized" });
   const at = { blockNumber: block.number } as const;
-  const token = async (addr: Address): Promise<Token> => {
-    const [symbol, decimals, balance] = await Promise.all([
-      readClient.readContract({ address: addr, abi: ERC20_READ_ABI, functionName: "symbol", ...at }),
-      readClient.readContract({ address: addr, abi: ERC20_READ_ABI, functionName: "decimals", ...at }),
-      readClient.readContract({ address: addr, abi: ERC20_READ_ABI, functionName: "balanceOf", args: [address], ...at }),
+  const holding = async (asset: Address): Promise<Holding> => {
+    const [decimals, balance] = await Promise.all([
+      readClient.readContract({ address: asset, abi: ERC20_READ_ABI, functionName: "decimals", ...at }),
+      readClient.readContract({ address: asset, abi: ERC20_READ_ABI, functionName: "balanceOf", args: [address], ...at }),
     ]);
-    return { symbol, decimals, balance };
+    return { decimals, balance };
   };
-  const [testusd, ausd, maxMint] = await Promise.all([
-    token(TESTUSD),
-    token(AUSD),
+  const [testDollars, dollars, maxMint] = await Promise.all([
+    holding(TESTUSD),
+    holding(AUSD),
     readClient.readContract({ address: TESTUSD, abi: TEST_DOLLAR_ABI, functionName: "MAX_MINT", ...at }),
   ]);
-  return { testusd, ausd, maxMint };
+  return { testDollars, dollars, maxMint };
 }
 
 const STEP_LABEL: Record<Step, string> = {
-  preparing: "Getting ready…",
-  "getting-ready": "Getting your account ready…",
-  confirm: "Confirm with your fingerprint",
-  sending: "Adding test dollars…",
+  preparing: copy.stepPreparing,
+  "getting-ready": copy.stepGettingReady,
+  confirm: copy.stepConfirm,
+  sending: copy.stepSending,
 };
 
 function Home(props: {
   account: StoredAccount;
-  network: ReturnType<typeof useNetwork>;
+  connection: ReturnType<typeof useConnection>;
   onSwitch: () => void;
 }) {
-  const { account, network } = props;
+  const { account, connection } = props;
   const [balances, setBalances] = useState<Balances | null>(null);
   const [amountText, setAmountText] = useState("1,000");
   const [step, setStep] = useState<Step | "landing" | null>(null);
   const [result, setResult] = useState<Notice | null>(null);
   const [stuck, setStuck] = useState(false);
+  const [details, setDetails] = useState(false);
   const alive = useRef(true);
 
   const refresh = useCallback(() => {
-    network
+    connection
       .track(readBalances(account.address))
       .then((b) => alive.current && setBalances(b))
       .catch(() => {});
-  }, [account.address, network]);
+  }, [account.address, connection]);
 
   useEffect(() => {
     alive.current = true;
@@ -247,8 +289,8 @@ function Home(props: {
       try {
         outcome = await followToFinality(idbWriteStore, liveWriteChain, write);
       } catch (e) {
-        // The transaction was broadcast; only following it failed. The
-        // record is still saved and tracking resumes on the next load.
+        // It was sent; only following it failed. The record is still saved
+        // and tracking resumes on the next load.
         if (alive.current) {
           setStep(null);
           setResult({ tone: "bad", ...describeFailure(new SendFailure("confirming", true, e)) });
@@ -259,50 +301,34 @@ function Home(props: {
       setStep(null);
       if (outcome.kind === "final") {
         setStuck(false);
-        setResult({ tone: "ok", text: `Added ${amountLabel} test dollars. Settled in ${(outcome.settledMs / 1000).toFixed(1)}s.` });
+        setResult({ tone: "ok", text: copy.added(amountLabel, (outcome.settledMs / 1000).toFixed(1)) });
       } else if (outcome.kind === "stuck") {
         setStuck(true);
-        setResult({
-          tone: "bad",
-          text: "This is taking longer than it should. It hasn't gone through, and nothing has moved yet.",
-          reason: `not in any block after 45s, nonce ${write.nonce} still unused at finalized`,
-        });
+        setResult({ tone: "bad", text: copy.stuck, code: ERROR_CODES.STUCK });
       } else if (outcome.kind === "reverted") {
         setStuck(false);
-        setResult({
-          tone: "bad",
-          text: "That didn't go through. No test dollars moved.",
-          reason: `reverted in block ${outcome.blockNumber.toString()}`,
-        });
+        setResult({ tone: "bad", text: copy.didNotGoThrough, code: ERROR_CODES.REVERTED });
       } else {
         setStuck(false);
-        setResult({
-          tone: "bad",
-          text: "That didn't go through. No test dollars moved.",
-          reason: `nonce ${write.nonce} was used by another transaction`,
-        });
+        setResult({ tone: "bad", text: copy.didNotGoThrough, code: ERROR_CODES.SUPERSEDED });
       }
       refresh();
     },
     [refresh],
   );
 
-  // Resume a write that was in flight when the page was closed or reloaded.
+  // Resume a request that was in flight when the page was closed or reloaded.
   useEffect(() => {
     idbWriteStore.get(account.address).then((w) => {
       if (!w) return;
       if (w.replaceable) {
         setStuck(true);
-        setResult({
-          tone: "bad",
-          text: "An earlier attempt is taking longer than it should. It hasn't gone through, and nothing has moved yet.",
-          reason: `stuck on nonce ${w.nonce}`,
-        });
+        setResult({ tone: "bad", text: copy.earlierStuck, code: ERROR_CODES.STUCK });
       } else void land(w, "your");
     });
   }, [account.address, land]);
 
-  const decimals = balances?.testusd.decimals ?? 6;
+  const decimals = balances?.testDollars.decimals ?? 6;
   const amount = parseAmount(amountText, decimals);
   const tooMuch = amount !== null && balances !== null && amount > balances.maxMint;
   const valid = amount !== null && amount > 0n && !tooMuch;
@@ -332,61 +358,68 @@ function Home(props: {
       <header className="top">
         <div>
           <h1>{account.name}</h1>
-          <p className="hint">{shortAddress(account.address)}</p>
+          <TestModeBadge />
         </div>
-        <button className="btn ghost small" onClick={props.onSwitch}>
-          Switch account
+        <button className="btn ghost small" onClick={() => setDetails(true)}>
+          {copy.accountDetails}
         </button>
       </header>
 
       <section className="card" aria-live="polite">
-        <p className="eyebrow">Your balance</p>
+        <p className="eyebrow">{copy.yourBalance}</p>
         {!balances ? (
-          <p className="lede">Reading your balance…</p>
+          <p className="lede">{copy.readingBalance}</p>
         ) : (
           <>
             <div className="row">
               <span className="label">
-                Test dollars
+                {copy.dollars}
                 <br />
-                <small>Test dollars, not real money.</small>
+                <small>{copy.dollarsLine}</small>
               </span>
-              <span className="value amount">{formatAmount(balances.testusd.balance, balances.testusd.decimals, "cents")}</span>
+              <span className="value amount">{formatAmount(balances.dollars.balance, balances.dollars.decimals, "cents")}</span>
             </div>
             <div className="row">
               <span className="label">
-                {balances.ausd.symbol}
+                {copy.testDollars}
                 <br />
-                <small>Held as AUSD digital dollars.</small>
+                <small>{copy.testDollarsLine}</small>
               </span>
-              <span className="value amount">{formatAmount(balances.ausd.balance, balances.ausd.decimals, "cents")}</span>
+              <span className="value amount">{formatAmount(balances.testDollars.balance, balances.testDollars.decimals, "cents")}</span>
             </div>
           </>
         )}
       </section>
 
       <section className="card">
-        <p className="eyebrow">Get test dollars</p>
-        <p className="hint">
-          For trying NivPay out. These are test dollars, not real money, and they only work on the test network.
-        </p>
+        <p className="eyebrow">{copy.addTestDollars}</p>
+        <p className="hint">{copy.addTestDollarsHint}</p>
         <label className="field">
-          <span>How many</span>
+          <span>{copy.howMany}</span>
           <input inputMode="decimal" value={amountText} onChange={(e) => setAmountText(e.target.value)} />
         </label>
-        {tooMuch && balances && (
-          <p className="error">Up to {formatAmount(balances.maxMint, decimals, "auto")} at a time.</p>
-        )}
+        {tooMuch && balances && <p className="error">{copy.upToAtATime(formatAmount(balances.maxMint, decimals, "auto"))}</p>}
         <button className="btn primary" disabled={!valid || step !== null || !balances} onClick={() => mint(false)}>
-          {step === "landing" ? "Adding test dollars…" : step ? STEP_LABEL[step] : "Get test dollars"}
+          {step === "landing" ? copy.stepSending : step ? STEP_LABEL[step] : copy.addTestDollars}
         </button>
         {stuck && step === null && (
           <button className="btn" onClick={() => mint(true)}>
-            Try again
+            {copy.tryAgain}
           </button>
         )}
         {result && <NoticeLine notice={result} />}
       </section>
+
+      {details && (
+        <AccountSheet
+          account={account}
+          onClose={() => setDetails(false)}
+          onSwitch={() => {
+            setDetails(false);
+            props.onSwitch();
+          }}
+        />
+      )}
     </>
   );
 }

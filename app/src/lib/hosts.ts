@@ -1,3 +1,5 @@
+import { copy } from "../copy.ts";
+
 /**
  * A passkey is bound to the hostname it was made on (the WebAuthn rpId) and
  * can never be used on another. So passkeys are only made or used on the
@@ -13,10 +15,5 @@ export function checkPasskeyHost(hostname: string, production: string | undefine
   const host = hostname.toLowerCase();
   if (host === "localhost") return { ok: true, rpId: host };
   if (production && host === production.toLowerCase()) return { ok: true, rpId: host };
-  return {
-    ok: false,
-    message: production
-      ? `Accounts can only be made and used at ${production}. This copy of NivPay (${hostname}) is for testing and cannot hold an account.`
-      : `Accounts can't be made at ${hostname} yet. NivPay's home address hasn't been chosen, and an account made here could never move.`,
-  };
+  return { ok: false, message: production ? copy.onlyAtHome(production) : copy.homeNotChosen };
 }

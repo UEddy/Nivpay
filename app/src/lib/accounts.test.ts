@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MeraError } from "@category-labs/mera";
-import { AccountStore, shortAddress } from "./accounts.ts";
+import { AccountStore, defaultAccountName } from "./accounts.ts";
 import { checkPasskeyHost } from "./hosts.ts";
-import { passkeyErrorMessage, WrongPasskeyError } from "./errors.ts";
+import { describeFailure, WrongPasskeyError } from "./errors.ts";
 
 function memory() {
   const m = new Map<string, string>();
@@ -43,8 +43,11 @@ test("corrupt storage reads as no accounts rather than throwing", () => {
   assert.deepEqual(new AccountStore(kv).list().map((a) => a.name), ["ok"]);
 });
 
-test("shortAddress", () => {
-  assert.equal(shortAddress(B), "0x0710…9B20");
+test("an account with no name is named by its last four characters, never a 0x form", () => {
+  assert.equal(defaultAccountName(B), "Account 9B20");
+  const store = new AccountStore(memory());
+  store.upsert({ address: B, name: "" });
+  assert.equal(store.list()[0]?.name, "Account 9B20");
 });
 
 test("passkeys only on localhost and the production hostname", () => {
@@ -57,16 +60,13 @@ test("passkeys only on localhost and the production hostname", () => {
   if (!preview.ok) assert.match(preview.message, /nivpay\.example/);
 });
 
-test("Mera errors become plain words", () => {
-  assert.match(passkeyErrorMessage(new MeraError("PRF_UNAVAILABLE", "x")), /Google Password Manager/);
-  assert.match(passkeyErrorMessage(new MeraError("PRF_UNAVAILABLE", "x")), /Samsung Pass/);
-  assert.match(passkeyErrorMessage(new MeraError("PASSKEY_OPERATION_FAILED", "x")), /cancelled or didn't finish/);
-  assert.match(passkeyErrorMessage(new MeraError("CRYPTO_UNAVAILABLE", "x")), /Update Chrome/);
-  assert.match(passkeyErrorMessage(new WrongPasskeyError()), /different NivPay account/);
-  // No passkey message claims anything about sending. That claim belongs to
-  // describeFailure, which knows whether a broadcast happened.
+test("Mera errors become plain words with a code, and never claim anything about sending", () => {
   for (const code of ["PRF_UNAVAILABLE", "PASSKEY_OPERATION_FAILED", "CRYPTO_UNAVAILABLE", "SESSION_ENDED"] as const) {
-    assert.doesNotMatch(passkeyErrorMessage(new MeraError(code, "x")), /sent/i);
+    const d = describeFailure(new MeraError(code, "x"));
+    assert.doesNotMatch(d.text, /sent/i, code);
+    assert.ok(d.code >= 30 && d.code < 40, code);
   }
-  assert.doesNotMatch(passkeyErrorMessage(new Error("boom")), /sent/i);
+  assert.match(describeFailure(new MeraError("PRF_UNAVAILABLE", "x")).text, /Google Password Manager/);
+  assert.match(describeFailure(new MeraError("PRF_UNAVAILABLE", "x")).text, /Samsung Pass/);
+  assert.match(describeFailure(new WrongPasskeyError()).text, /different NivPay account/);
 });

@@ -236,3 +236,50 @@ h1 {
 small {
   font-size: 12px;
 }
+
+.badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--primary-text);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  margin: 0 0 12px;
+}
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(58, 35, 23, 0.35);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 10;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 480px;
+  background: var(--card);
+  border-radius: 22px 22px 0 0;
+  padding: 20px 20px max(24px, env(safe-area-inset-bottom));
+}
+
+.account-id {
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--chip);
+  border-radius: 10px;
+  padding: 10px 12px;
+  word-break: break-all;
+  user-select: all;
+}

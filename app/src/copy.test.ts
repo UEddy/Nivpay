@@ -1,0 +1,134 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { copy, ERROR_CODES } from "./copy.ts";
+
+/**
+ * Product rule: NivPay reads like a fintech app, and people never need to know
+ * it runs on crypto. Whole words, plurals included. "MON" counts only in
+ * capitals, so "Mon 14 Dec" stays allowed.
+ */
+const BANNED: [string, RegExp][] = [
+  ["crypto", /\bcryptos?\b/i],
+  ["blockchain", /\bblockchains?\b/i],
+  ["block", /\bblocks?\b/i],
+  ["chain", /\bchains?\b/i],
+  ["onchain", /\bonchains?\b/i],
+  ["wallet", /\bwallets?\b/i],
+  ["token", /\btokens?\b/i],
+  ["gas", /\bgas(es)?\b/i],
+  ["Monad", /\bmonads?\b/i],
+  ["testnet", /\btestnets?\b/i],
+  ["network", /\bnetworks?\b/i],
+  ["address", /\baddress(es)?\b/i],
+  ["hash", /\bhash(es)?\b/i],
+  ["contract", /\bcontracts?\b/i],
+  ["stablecoin", /\bstablecoins?\b/i],
+  ["seed", /\bseeds?\b/i],
+  ["mnemonic", /\bmnemonics?\b/i],
+  ["private key", /\bprivate\s+keys?\b/i],
+  ["0x", /\b0x/i],
+  ["MON", /\bMONs?\b/],
+];
+
+export function bannedIn(text: string): string[] {
+  return BANNED.filter(([, re]) => re.test(text)).map(([word]) => word);
+}
+
+// ---------------------------------------------------------------------------
+// The checker itself
+// ---------------------------------------------------------------------------
+
+test("the checker catches every banned word, plurals and phrases included", () => {
+  const cases = [
+    "crypto", "cryptos", "Blockchain", "blocks", "chain", "on-chain", "onchain", "wallets", "Token", "gas",
+    "Monad", "testnet", "networks", "address", "addresses", "hash", "hashes", "contract", "stablecoins",
+    "seed", "mnemonic", "private key", "Private keys", "0x1234", "1 MON", "MONs",
+  ];
+  for (const c of cases) assert.ok(bannedIn(`see ${c} here`).length > 0, c);
+});
+
+test("the checker leaves ordinary words alone", () => {
+  for (const ok of ["Closed Mon 14 Dec", "blocked", "unblock", "tokenless", "chained", "10x faster", "addressed", "contractor", "money", "Agora", "AUSD", "Settled in 0.7s"]) {
+    assert.deepEqual(bannedIn(ok), [], ok);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// What people see
+// ---------------------------------------------------------------------------
+
+const SAMPLE_ID = "0x725C9A4Bb4c3dE2F11aC0e7C9b1E8f0D3a2B7bC1";
+
+/** Every string in copy, with each message function called on realistic values. */
+function allCopy(): [string, string][] {
+  const samples: Record<string, unknown[]> = {
+    upToAtATime: ["$100,000"],
+    added: ["$1,000", "0.7"],
+    onlyAtHome: ["nivpay.vercel.app"],
+    code: [12],
+    accountEnding: [SAMPLE_ID],
+  };
+  return Object.entries(copy).map(([key, value]) => {
+    if (typeof value === "string") return [key, value];
+    const args = samples[key];
+    assert.ok(args, `copy.${key} is a function with no sample arguments in this test`);
+    return [key, (value as (...a: unknown[]) => string)(...args)];
+  });
+}
+
+test("no banned word in any copy, including generated messages", () => {
+  for (const [key, text] of allCopy()) assert.deepEqual(bannedIn(text), [], `copy.${key}: ${text}`);
+});
+
+test("vendors and people are shown as 'account ending', never a 0x form", () => {
+  assert.equal(copy.accountEnding(SAMPLE_ID), "account ending 7bC1");
+});
+
+test("every error code is shown as a short neutral 'Code N'", () => {
+  for (const n of Object.values(ERROR_CODES)) assert.match(copy.code(n), /^Code \d{2}$/);
+  const codes = Object.values(ERROR_CODES);
+  assert.equal(new Set(codes).size, codes.length, "codes are unique");
+});
+
+function filesUnder(dir: string, ext: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return filesUnder(path, ext);
+    return path.endsWith(ext) && !path.includes(".test.") ? [path] : [];
+  });
+}
+
+const SRC = new URL(".", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+const APP = join(SRC, "..");
+
+/** Text people can see in a screen: JSX text, visible attributes, and string literals. */
+function visibleTextIn(source: string): string[] {
+  const out: string[] = [];
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "").replace(/^import .*$/gm, "");
+  for (const m of code.matchAll(/>([^<>{}]*[A-Za-z][^<>{}]*)</g)) out.push(m[1]!.trim());
+  for (const m of code.matchAll(/\b(?:aria-label|placeholder|title|alt)="([^"]*)"/g)) out.push(m[1]!);
+  for (const m of code.matchAll(/"([^"\n]*)"|`([^`]*)`/g)) out.push(m[1] ?? m[2] ?? "");
+  return out.filter(Boolean);
+}
+
+test("no banned word in the text of any screen", () => {
+  const screens = filesUnder(SRC, ".tsx");
+  assert.ok(screens.length > 0, "found the screens");
+  for (const file of screens) {
+    for (const text of visibleTextIn(readFileSync(file, "utf8"))) {
+      assert.deepEqual(bannedIn(text), [], `${file}: ${text}`);
+    }
+  }
+});
+
+test("no banned word in the page title, description or app manifest", () => {
+  const html = readFileSync(join(APP, "index.html"), "utf8");
+  const title = /<title>([^<]*)<\/title>/.exec(html)?.[1] ?? "";
+  const description = /name="description" content="([^"]*)"/.exec(html)?.[1] ?? "";
+  const manifest = JSON.parse(readFileSync(join(APP, "public", "manifest.webmanifest"), "utf8")) as Record<string, string>;
+  for (const text of [title, description, manifest.name ?? "", manifest.short_name ?? "", manifest.description ?? ""]) {
+    assert.deepEqual(bannedIn(text), [], text);
+  }
+});
