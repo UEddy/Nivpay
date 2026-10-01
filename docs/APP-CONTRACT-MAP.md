@@ -456,6 +456,14 @@ contracts, if you want one in the demo. I have not planned it in.
 * **The confirm screen before "Make the pot"** lists every decider and every
   destination as "account ending 7bC1", whether it joined by link or was
   pasted, and says that none of it can ever change.
+* **Links in chats carry no 0x.** Invite, reply and request links will be
+  pasted into WhatsApp. Their payload (draft id, role, name, account,
+  signature, labels, pot and creation block) is packed as compact binary and
+  put in the `#` fragment as lowercase RFC 4648 base32 without padding. That
+  alphabet has no digit 0, so "0x" cannot appear even by chance, and it
+  cannot spell MON in capitals. Base32 is about 20% longer than base64url,
+  which is the price of the guarantee. A test builds links from realistic
+  data and fails if one contains "0x" or any banned word.
 * **Switch account.** One phone can hold more than one account for testing.
   The app stores a list of addresses, one per passkey, and "Switch account"
   asks for that account's passkey. Keys are still never stored; only

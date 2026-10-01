@@ -83,6 +83,8 @@ Find out from the contract how an invited person becomes a funder and a decider,
 
 Names and labels (pot name, people, cities, vendor names): if the contract stores them, read them. If it doesn't, the creator signs a small JSON with their account and it travels in the invite link's `#` fragment, which is never sent to a server. The app accepts the labels only if the signer is the pot's creator on chain. Labels are for display only. Destinations and limits always come from the contract, and the payment screen shows each vendor as "account ending 7bC1" (the last four characters of its account) next to the vendor's name. Never a 0x address on screen.
 
+Links travel through WhatsApp and other chats, so no raw 0x string may appear in them. Invite, reply and request links pack everything they carry (draft id, role, name, account, signature, labels, pot and creation block) into a compact binary payload and put it in the `#` fragment as lowercase RFC 4648 base32 without padding. That alphabet (a to z, 2 to 7) has no digit 0, so "0x" can never appear, not even by chance, and it can't spell MON in capitals. A test builds links from realistic data and fails if one contains "0x" or any banned word.
+
 ## Live data
 
 - One event feed per pot. Every second, poll `eth_getLogs` up to the finalized block, in pages no bigger than the limit you measured, starting from the block the pot was created in (store it with the pot and put it in the invite link). Keep a cursor per pot in IndexedDB.
