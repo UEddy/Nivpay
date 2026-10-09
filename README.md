@@ -1157,6 +1157,28 @@ publicly documented Anvil test account key used by `app/src/api-tests/fund.test.
 and named `PUBLIC_TEST_KEY` there. It is not a secret: Foundry and Hardhat
 publish it as their first local test account.
 
+## Future work
+
+**Usernames for accounts.** Today an account is a 42 character address, and
+the names people see ("Idara", "the caterer") are labels signed inside pot and request
+links: the person who made the link signs the name together with the account
+it belongs to, and the app shows it only in that link's context. A name is
+never looked up from, or trusted because of, the account alone.
+
+A human-readable username, through a name registry or an ENS-style resolver,
+would let someone pay `@idara` without a link. It comes with tradeoffs that
+have to be settled first:
+
+* **Squatting and impersonation.** Names are first come, first served unless
+  something says otherwise. Someone can claim `@caterer`, or a name one letter
+  away from a real person's, and collect payments meant for them. A registry
+  needs a rule for disputes and a way to show that two similar names are
+  different accounts.
+* **A public name links an identity to a balance.** Anyone who resolves a name
+  to an account can read that account's balance and every payment it has made
+  or received. So a username must be opt-in, never assigned, and the app must
+  keep working for people who never take one.
+
 ## A note on the benchmark files
 
 This repository also contains an earlier settlement benchmark: `StreamBench`,
