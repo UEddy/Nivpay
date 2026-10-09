@@ -7,38 +7,35 @@ pot was created, and only when enough of the named approvers agree. When the
 pot ends, whatever is left goes back to the people who put it in, split by what
 they contributed.
 
-Built for the Monad Metropolis hackathon, Consumer Products and Payments track.
-Contracts only, no frontend. The whole product is
-[`src/NivPayPots.sol`](./src/NivPayPots.sol).
+Built for the Monad Metropolis hackathon, Consumer Products and Payments
+track. [CHECK: the track name matches the one you enter on the submission
+form.] The repository has two parts:
 
-## Deployments
+* **The contracts.** [`src/NivPayPots.sol`](./src/NivPayPots.sol) is the whole
+  pot product, deployed and verified on Monad testnet.
+* **The app.** [`app/`](./app) is a mobile first web app (a PWA) with passkey
+  accounts, live at [nivpay.vercel.app](https://nivpay.vercel.app). It reads
+  like a fintech app: people see dollars and names, never gas, keys or
+  addresses.
 
-Live on **Monad testnet** (chain id `10143`). All three are verified on
-Sourcify, which MonadVision reads, with an exact match. The deploy transactions
-are taken from the committed broadcast receipts under `broadcast/*/10143/`. Both `NivPayPots` instances have identical fee settings:
-50 bps, a fee cap of 50 tokens per payout (50 AUSD or 50 TESTUSD), and the same
-fee recipient.
+Released under the MIT License, see [LICENSE](./LICENSE). The hackathon
+checklist is in [docs/SUBMISSION.md](./docs/SUBMISSION.md), and the use of AI
+coding tools is disclosed under [AI disclosure](#ai-disclosure).
 
-| Contract | Address | Deploy transaction | What it is for |
-| --- | --- | --- | --- |
-| NivPayPots on AUSD | [`0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB`](https://testnet.monadvision.com/address/0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB) | [`0xa2de65f6…8a18a286`](https://testnet.monadvision.com/tx/0xa2de65f6cdc7bcd8ab0d3e4e11f7652fb2e0392e2e5eff88bc31c4548a18a286) | The product. Pots funded in AUSD, Agora's real six decimal stablecoin. |
-| NivPayTestDollar (TESTUSD) | [`0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7`](https://testnet.monadvision.com/address/0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7) | [`0x561e9908…40a5d856`](https://testnet.monadvision.com/tx/0x561e99082af17a9873948ccbe32b534b311777db6a995d6f48ee047440a5d856) | A worthless test token anyone can mint, 100,000 per call. Testnet only, never mainnet. |
-| NivPayPots on TESTUSD | [`0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA`](https://testnet.monadvision.com/address/0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA) | [`0x68e15496…b19fe0eb`](https://testnet.monadvision.com/tx/0x68e15496691cfbe7bfa117db8e023141309a03e52b42e30b98fbca1bb19fe0eb) | The same contract bound to TESTUSD, for trying the full pot lifecycle without Agora's faucet. |
-
-Full transaction hashes:
-
-```
-NivPayPots on AUSD          0xa2de65f6cdc7bcd8ab0d3e4e11f7652fb2e0392e2e5eff88bc31c4548a18a286
-NivPayTestDollar (TESTUSD)  0x561e99082af17a9873948ccbe32b534b311777db6a995d6f48ee047440a5d856
-NivPayPots on TESTUSD       0x68e15496691cfbe7bfa117db8e023141309a03e52b42e30b98fbca1bb19fe0eb
-```
-
-## The problem
+## The problem, and who it is for
 
 Every group that collects money for one thing has the same two fears. The
 person holding the money might spend it on something else, and the person
 holding the money might simply keep it. The usual answer is to trust somebody.
 A pot removes the need to.
+
+The intended user is a family or group of friends spread across countries,
+paying for one shared thing together: a parent's birthday, a wedding, a
+funeral, school fees. Today one relative collects everyone's transfers into
+their own account and pays the vendors, and everyone else has to trust them.
+The story the app is built and tested around is "Mama's 60th": three siblings
+in London, Houston and Uyo pay for their mother's party, and the money can only
+ever reach the caterer and the event hall. [CHECK: the list of example uses.]
 
 A pot is created with a purpose, a list of approvers, a threshold, a list of
 destinations each with its own spending cap, and an end time. **None of those
@@ -118,6 +115,350 @@ the event hall, each with its own cap.
 878.7 of the 1000 leaves the pot and 121.3 remains, split by contribution with
 no dust left over. The test asserts
 `paid out + fees + claimed == funded` exactly.
+
+## Why Monad
+
+**Finality.** A payment app has to choose between telling people their money
+moved before it is certain, or making them wait. On Monad testnet blocks come
+about every 0.31 s and the `finalized` block trails the latest by about two
+blocks, roughly 0.6 s (measured, see `docs/APP-CONTRACT-MAP.md` section 6).
+So the app can afford to report success **only at Finalized**, the point after
+which a block cannot be reverted, and still feel instant. Every receipt in the
+app shows the time measured on the phone from sending to Finalized, for
+example "Settled in 0.7s"; the figure is measured, never hardcoded.
+
+**Fees.** Every action costs a small, predictable amount. At the 102 gwei
+measured on testnet: making a pot is about 0.044 MON, putting money in with a
+permit about 0.021 MON, a threshold approval that pays out about 0.022 MON.
+That is cheap enough for the app to pay people's fees for them from a small
+grant (see [Gas grants](#gas-grants-in-the-app-and-their-limits)), so nobody
+needs to hold MON. Monad charges the gas limit rather than the gas used, so the
+app estimates each transaction and does not pad the limit.
+
+**It is the EVM.** The contracts are ordinary Solidity on OpenZeppelin, tested
+with Foundry under `network = "monad"` so gas, opcode pricing and size limits
+are Monad's. The app uses viem's `monadTestnet` chain. AUSD, Agora's dollar,
+is live on Monad testnet with permit support, which lets a person put money in
+with one signature.
+
+## Contract addresses
+
+Monad testnet, chain id `10143`, RPC `https://testnet-rpc.monad.xyz`. The
+explorer is [MonadVision](https://testnet.monadvision.com), which reads
+verified source from Monad's Sourcify. The "Verified" links below are the
+Sourcify records themselves, so anyone can check them; each was checked on 9
+Oct 2026.
+
+| Contract | Address | Verified source | What it is for |
+| --- | --- | --- | --- |
+| NivPayPots on AUSD | [`0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB`](https://testnet.monadvision.com/address/0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB) | The product. Pots funded in AUSD. The app runs on this by default. |
+| NivPayPots on TESTUSD | [`0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA`](https://testnet.monadvision.com/address/0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA) | The same bytecode bound to TESTUSD, the fallback for testing. |
+| NivPayTestDollar (TESTUSD) | [`0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7`](https://testnet.monadvision.com/address/0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7) | A worthless test token anyone can mint, 100,000 per call. Testnet only. |
+| AUSD (Agora) | [`0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC`](https://testnet.monadvision.com/address/0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC) | not on Monad's Sourcify (see below) | Agora's six decimal dollar. Not ours. |
+| Agora AUSD faucet | [`0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C`](https://testnet.monadvision.com/address/0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C) | not on Monad's Sourcify (see below) | Dispenses test AUSD. Not ours. |
+
+AUSD and the faucet are Agora's contracts. Both are EIP-1967 proxies: AUSD's
+implementation is `0xc1e3C7D486d6A92fBE920232E439EeC2cEb112dA` and the
+faucet's is `0xba804DF5c476E8EaeF87BF8085F295300ccE2a49`, read from the
+standard implementation slot. On 9 Oct 2026 Monad's Sourcify had no match for
+either proxy or either implementation. [CHECK: whether MonadVision or Monadscan
+shows Agora's verified source by another route; if so, link it here.]
+
+The three NivPay contracts were deployed from
+`0x7EAf7f3e330ac388A0e951e80957B7274597297c`. Their deploy transactions, from
+the committed broadcast receipts under `broadcast/*/10143/`:
+
+```
+NivPayPots on AUSD          0xa2de65f6cdc7bcd8ab0d3e4e11f7652fb2e0392e2e5eff88bc31c4548a18a286
+NivPayTestDollar (TESTUSD)  0x561e99082af17a9873948ccbe32b534b311777db6a995d6f48ee047440a5d856
+NivPayPots on TESTUSD       0x68e15496691cfbe7bfa117db8e023141309a03e52b42e30b98fbca1bb19fe0eb
+```
+
+Both pot instances have identical fee settings, read back from the chain on 9
+Oct 2026: `feeBps` 50 (0.5 percent), `feeCap` 50,000,000 base units (50 AUSD
+or 50 TESTUSD per payout), `feeRecipient`
+`0x7EAf7f3e330ac388A0e951e80957B7274597297c`.
+
+## What the contract can and cannot do, read from the source
+
+This was checked by reading `src/NivPayPots.sol` line by line, not assumed
+from its comments.
+
+* **There is no owner or admin.** No `owner` variable, no role, no
+  `Ownable` or `AccessControl`. The only imports are OpenZeppelin's `IERC20`,
+  `IERC20Permit`, `SafeERC20`, `ReentrancyGuard` and `Math`, none of which
+  carries any privileged role.
+* **Nothing global can be changed after deployment.** The constructor sets
+  four `immutable` values, `token`, `feeBps` (refused above 100), `feeCap` and
+  `feeRecipient`, and there is no function that sets anything else global.
+  No pause, no setter, no `delegatecall`, no `selfdestruct`, no inline
+  assembly, no `payable` function, no `receive` or `fallback`. The deployed
+  contract is not a proxy (its implementation slot is empty) and its bytecode
+  is an exact Sourcify match for this source.
+* **The deployer has no power at all** after the deployment transaction. The
+  deployer's address appears nowhere in the code paths.
+* **One address gated power exists: `collectFees()`.** Only `feeRecipient`
+  may call it, and it can only transfer the `feesAccrued` counter, which grows
+  only by the fee on each executed payout. It cannot reach any pot's money. On
+  the two deployed instances the fee recipient happens to be the deployer's
+  address, so that key can collect fees and nothing else.
+* **Every other check is per pot**, set by whoever creates the pot and fixed
+  for its life: only that pot's approvers can propose, approve, revoke their
+  own approval or freeze; only a proposal's proposer can cancel it.
+  `closePot` is open to anyone, but only after the end time.
+* **Tokens leave the contract in exactly three places**: a payout to a
+  destination listed at creation (`_executePayout`), a funder redeeming their
+  own shares (`_redeem`, used by `exit` and `claim`), and `collectFees` to the
+  fee recipient.
+* **Tokens sent straight to the contract are stuck for good.** There is no
+  rescue function, by design; they do not change any pot's share price.
+
+Outside this contract: AUSD itself is Agora's upgradeable token with asset
+freezing controls. Agora can freeze an address, which would block that
+address's own payout or exit and nothing else (see
+[Token and security](#token-and-security)). `NivPayTestDollar` has no owner
+either; anyone can mint up to 100,000 per call, and its constructor refuses any
+chain but Monad testnet and local test chains.
+
+## Architecture
+
+```
+  Phone (installable web app, React)
+   |
+   |-- Passkey (Mera): the passkey's PRF output becomes the account key,
+   |   in memory, only while signing. Only the account and a display name
+   |   are stored on the phone.
+   |
+   |-- Reads: public Monad testnet RPC, finalized block only.
+   |   A pot's history comes from its events (eth_getLogs in 101 block pages).
+   |
+   |-- Writes: signed on the phone, raw transaction sent to the RPC.
+   |   The signed bytes are saved in IndexedDB before sending, so a retry
+   |   re-sends the same transaction and can never pay twice.
+   |   Success is shown only at Finalized.
+   |
+   |-- POST /api/fund (Vercel function): a small grant of testnet MON
+   |   before an account's first transactions, so nobody sees fees.
+   |
+   |-- Links shared in chats: invites, signed replies and pot links,
+   |   packed binary in the URL fragment, checked by signature.
+   v
+  NivPayPots (AUSD or TESTUSD instance)  ->  AUSD / TESTUSD token
+```
+
+There is no app server or database beyond the one function above, and no
+server ever sees a key. Pot state is read from the contract; the names people
+give each other travel in signed links and are stored on each phone.
+
+The documents behind the design:
+
+| File | What it holds |
+| --- | --- |
+| `docs/APP-CONTRACT-MAP.md` | every screen mapped to contract calls, with testnet measurements of finality, log limits and gas |
+| `docs/BUILD-APP.md` | the app brief: accounts, gas, product language, phases |
+| `docs/MOTION.md` | animation rules |
+| `docs/ERROR-CODES.md` | every "Code N" the app can show |
+| `docs/BOUNTIES.md` | the Agora bounty and how the app meets it |
+| `docs/SUBMISSION.md` | the hackathon terms checklist |
+| `docs/design/` | the design comps for the core screens |
+
+## Tech stack
+
+| Layer | Choice |
+| --- | --- |
+| Chain | Monad testnet, chain id 10143 |
+| Contracts | Solidity 0.8.28, OpenZeppelin Contracts 5.1.0, Foundry 1.8.3 with `network = "monad"`, forge-std 1.16.2 |
+| Money | AUSD (Agora) by default, TESTUSD as the test fallback |
+| Accounts | Mera 0.2.0 passkeys (WebAuthn PRF), `@scure/bip39` and `@scure/bip32` for the key path `m/44'/60'/0'/0/0` |
+| App | React 19, TypeScript 7, Vite 8, viem 2.56, self hosted fonts, a service worker that caches the app shell only |
+| Hosting | Vercel: static app plus two functions, `/api/fund` and `/api/fund/status` |
+| Tests | `forge test` (unit, fuzz, invariant, fork), `node --test` for the app |
+
+## Run it yourself
+
+### Prerequisites
+
+* Git, with submodules: `git clone --recurse-submodules <repo>`, or
+  `git submodule update --init` in an existing clone.
+* [Foundry](https://getfoundry.sh) 1.8.0 or later for the contracts.
+* Node.js 24.x for the app (`engine-strict` is on, so other majors are
+  refused).
+
+### The contracts
+
+```powershell
+forge build
+$env:FOUNDRY_PROFILE = "quick"; forge test   # everyday, seconds
+Remove-Item Env:\FOUNDRY_PROFILE; forge test # thorough, before a deploy
+```
+
+The fork tests read Monad testnet and need network access. Deploying your own
+instances is under [Deploying the contracts](#deploying-the-contracts).
+
+### The app, locally
+
+```powershell
+cd app
+npm ci            # exact versions from the committed lockfile
+npm run dev       # http://localhost:5173
+npm test          # unit tests, including the product language check
+npm run build     # type-check, then a production build in app/dist
+npm run preview   # serves the build under the production security headers
+npm run test:live # optional, reads Monad testnet
+```
+
+Passkeys work on `localhost` without any configuration. The app uses the
+deployed contracts above; nothing needs deploying to try it.
+
+The gas grant function only runs on Vercel. Locally you have two choices:
+
+* set `NIVPAY_API_TARGET` to a Vercel deployment of this app whose
+  `ALLOWED_ORIGINS` includes `http://localhost:5173`, and the dev server
+  forwards `/api` there; or
+* run without grants and send a little testnet MON to the account yourself
+  (the Account ID is under Account details), for example from Monad's testnet
+  faucet. Without either, an account with no MON stops at its first action
+  with one of the setup codes (12 to 21) in `docs/ERROR-CODES.md`.
+
+### Deploying the app to Vercel
+
+1. Import the repository in Vercel and set the project's **Root Directory** to
+   `app`. `app/vercel.json` sets the framework, `npm ci`, the build command,
+   the output directory and the security headers.
+2. Set the environment variables below. Set `VITE_PRODUCTION_HOSTNAME` to the
+   final hostname **before anyone makes an account**: a passkey is bound to the
+   hostname it was made on and can never move to another.
+3. To pay people's fees, create a **new key used for nothing else**, in your
+   own terminal, and paste it only into Vercel's environment settings (mark it
+   Sensitive). Never the deployer key. Send that address some testnet MON. To
+   run without it, leave `FUNDING_ENABLED` unset or `false` and leave the key
+   out entirely; `/api/fund` then answers "funding is paused" without reading
+   anything.
+4. Deploy. `GET /api/fund/status` should answer `"enabled": true`,
+   `"keyMatches": true` and the funder's balance.
+
+**Never put a key in this repository**, in a `.env` file or anywhere else.
+`.gitignore` covers `.env*`, keystores and key files, but the rule is not to
+have them in the working tree at all.
+
+### Environment variables
+
+None is needed to run the app locally or the tests.
+
+| Variable | Where | Required | What it does |
+| --- | --- | --- | --- |
+| `FUNDING_ENABLED` | Vercel, server | no | The kill switch. Grants are sent only when it is exactly `true`. Anything else, or unset, pauses funding without reading the key. |
+| `FUNDER_PRIVATE_KEY` | Vercel, server, Sensitive | only if funding is enabled | The dedicated testnet key that sends gas grants. Read only after every check has passed, never logged. Never the deployer key, never in the repo. |
+| `FUNDER_ADDRESS` | Vercel, server | only if funding is enabled | The address of that key. The function refuses to sign unless the key derives exactly this address. |
+| `ALLOWED_ORIGINS` | Vercel, server | no | Comma separated extra origins allowed to call `/api/fund`, for example `http://localhost:5173`. The deployment's own origin is always allowed. |
+| `VITE_PRODUCTION_HOSTNAME` | Vercel, build time | yes in production | The only hostname besides `localhost` where passkeys can be made or used. For this deployment, `nivpay.vercel.app`, and it must never change. |
+| `VITE_NIVPAY_POTS` | build time | no | `testusd` builds the app on the TESTUSD instance. Anything else, or unset, is AUSD. |
+| `NIVPAY_API_TARGET` | your machine, `npm run dev` | no | Forwards `/api` from the dev server to a Vercel deployment. |
+| `FOUNDRY_PROFILE` | your machine | no | `quick`, `bench` or `deploy`; see [Profiles](#profiles). |
+| `FEE_RECIPIENT`, `FEE_BPS`, `FEE_CAP` | your machine, contract deploy | to deploy | The immutable fee settings for a new NivPayPots. |
+| `TEST_DOLLAR`, `AUSD_POTS` | your machine, TESTUSD deploy | to deploy TESTUSD pots | The TESTUSD address, and optionally the AUSD instance to copy fee settings from. |
+| `MONADSCAN_API_KEY` | your machine | no | Only for verifying on Monadscan instead of Sourcify. |
+
+The contract deployer key is never an environment variable: it lives in an
+encrypted Foundry keystore outside the repository, see
+[Create the encrypted keystore](#1-create-the-encrypted-keystore).
+
+## Gas grants in the app, and their limits
+
+The app (`app/`) never shows people gas or MON. A Vercel function,
+`POST /api/fund` in `app/api/fund/index.ts`, sends an account a small grant of
+testnet MON from a dedicated funder key before its first transaction, and the
+app waits until that grant is finalized before sending anything of the
+person's own. Sizes come from the gas measured in
+`docs/APP-CONTRACT-MAP.md`, at 102 gwei:
+
+| Rule | Value | Why |
+| --- | --- | --- |
+| Grant | 0.1 MON, fixed | a decider's whole story costs about 0.071 MON, a creator's first three actions about 0.084 |
+| Only when the account holds under | 0.05 MON | above the most expensive single action, making a pot, about 0.044 |
+| Only while the account has sent fewer than | 10 transactions | a full story is 5 to 7 per person |
+| Only accounts with | no contract code | |
+| Funder floor | 1 MON | granting stops before the funder can run dry |
+| Kill switch | `FUNDING_ENABLED` not `true` | answers "funding is paused" without reading the key |
+
+`GET /api/fund/status` returns only whether funding is on and the funder's
+balance. Each grant is logged with the address, the amount and the
+transaction hash; nothing else from the request is logged, and the key never
+is.
+
+**The honest limit.** These rules bound what one address can take, about 10
+grants or 1 MON if someone deliberately spends each grant away. They do not
+bound how many addresses someone can make, and new addresses cost nothing.
+A determined abuser can therefore drain the funder down to its 1 MON floor,
+where granting stops until it is refilled. The same-origin check only stops
+other websites from using a visitor's browser; a script can send any Origin
+header it likes. Two requests for the same address that reach different
+server instances at the same moment can both be granted. None of this can
+touch anyone's pot: the funder only ever holds testnet MON for gas.
+
+## Getting test AUSD
+
+Agora's faucet at `0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C` is a UUPS proxy.
+Its implementation was read off chain at
+`0xba804df5c476e8eaef87bf8085f295300cce2a49` and its interface recovered from
+the bytecode, since the source is not published through the Monad Sourcify
+endpoint.
+
+**Claim by calling `requestFunds(address)` with the address that should receive
+the tokens.** You do not need to be that address.
+
+```powershell
+cast send 0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C `
+    "requestFunds(address)" `
+    <recipient_address> `
+    --account nivpay-deployer `
+    --rpc-url https://testnet-rpc.monad.xyz
+```
+
+The terms it enforces, read from the live contract:
+
+| Getter | Value | Meaning |
+| --- | --- | --- |
+| `faucetDripAmount()` | `10000000000` | 10,000 AUSD per claim |
+| `maxDripFrequency()` | `60` | one claim per 60 seconds for the whole faucet, not per account (`lastDripTimestamp()` is a single value) |
+| `maxAmountToOwn()` | `100000000000` | refuses if you already hold 100,000 AUSD or more |
+| `token()` | `0xa901...22dC` | the same AUSD this contract uses |
+
+Check it has stock before trying, because it reverts with `InsufficientFunds()`
+(`0x356680b7`) once its balance is down to a single drip:
+
+```powershell
+cast call 0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC "balanceOf(address)(uint256)" 0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C --rpc-url https://testnet-rpc.monad.xyz
+```
+
+It was dry in Phase 0 (one base unit), which is why
+`test_fork_faucetDispensesAusd` skips rather than fails when it is. It has
+since been restocked: on 9 October 2026 it held 996,345,050 AUSD, and the app's
+"Add test dollars" now claims from it on the AUSD deployment.
+
+Its refusals, recovered from the bytecode and confirmed on a fork of the live
+contract (the error names aren't published, so the app matches selectors):
+
+| Selector | When |
+| --- | --- |
+| `0x20e5bc67` | a claim inside 60 seconds of anyone's last claim |
+| `0x0949dab9` | the recipient already holds 100,000 AUSD or more |
+| `0x356680b7` | the faucet is down to a single drip (`InsufficientFunds()`) |
+
+### In the app
+
+The app runs on the AUSD pots unless it was built with
+`VITE_NIVPAY_POTS=testusd`. On AUSD, "Add test dollars" first gets a gas grant
+from `/api/fund` if the account needs one, then the person's own passkey
+account calls `requestFunds(its own address)` for one drip. Before anything is
+sent, the app runs the claim as a call against the latest block, so a cooldown
+or the ceiling is reported (codes 60 and 61 in `docs/ERROR-CODES.md`) without a
+grant or a passkey prompt. On a cooldown the screen counts down the seconds
+left and enables "Try again" at 0; it never claims again without a tap. A
+claim that is included but reverts, usually because someone else claimed
+first, is code 62. The new balance appears only once the claim is finalized.
+On TESTUSD, the button mints TESTUSD as before; both deployments are on the
+testnet only.
 
 ## Accounting
 
@@ -371,10 +712,10 @@ Medium.** Every one is listed here; none is suppressed and no
 | 8 | `pragma` | 0.8.28 here against OpenZeppelin's `^0.8.20` | Expected. Everything compiles under the single pinned 0.8.28. |
 | 9 | `cyclomatic-complexity` | `createPot` scores 13 | Accepted. Every branch is one validation of one parameter that can never be changed afterwards. Splitting it would add indirection to the one function where the checks most deserve to be read in a single place. |
 
-## Deployment
+## Deploying the contracts
 
 **All three contracts are deployed and verified on Monad testnet**; the
-addresses are under [Deployments](#deployments). The steps below are how they
+addresses are under [Contract addresses](#contract-addresses). The steps below are how they
 were deployed, kept as the record and for redeploying elsewhere.
 
 ### Two instances
@@ -532,7 +873,9 @@ only copy of it.** There is no mnemonic to write down. Back up
 `$HOME\.foundry\keystores\nivpay-deployer` somewhere safe and keep
 the password separately. For a deployer that only pays gas, losing it is a
 small loss, since `NivPayPots` has no owner and the deployer has no powers over
-it afterwards, but any MON left on the address goes with it.
+any pot. The deployed instances do use the deployer's address as their fee
+recipient, so losing the key also loses the ability to call `collectFees()`,
+along with any MON left on the address.
 
 If a keystore named `nivpay-deployer` already exists, `cast wallet new` refuses
 and lists it rather than overwriting it. To check what exists, or to start
@@ -620,7 +963,7 @@ forge verify-contract `
 
 ### The TESTUSD instance
 
-**Deployed**, see [Deployments](#deployments). Two transactions: the test token, then a
+**Deployed**, see [Contract addresses](#contract-addresses). Two transactions: the test token, then a
 `NivPayPots` bound to it. Use the same `nivpay-deployer` keystore and the same
 three fee variables from step 2, so the settings match the AUSD instance.
 
@@ -741,107 +1084,14 @@ Still ignored, because they are noise rather than provenance:
   On the dry runs so far that file has held nothing but the public RPC URL,
   since no wallet was involved, but it stays ignored regardless.
 
-A scan of the full object store, reachable and unreachable, found no private
-key, mnemonic or keystore material anywhere in this repository's history. The
-longest hex literal in the entire history is 40 characters: the three public
-contract addresses above.
-
-## Getting test AUSD
-
-Agora's faucet at `0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C` is a UUPS proxy.
-Its implementation was read off chain at
-`0xba804df5c476e8eaef87bf8085f295300cce2a49` and its interface recovered from
-the bytecode, since the source is not published through the Monad Sourcify
-endpoint.
-
-**Claim by calling `requestFunds(address)` with the address that should receive
-the tokens.** You do not need to be that address.
-
-```powershell
-cast send 0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C `
-    "requestFunds(address)" `
-    <recipient_address> `
-    --account nivpay-deployer `
-    --rpc-url https://testnet-rpc.monad.xyz
-```
-
-The terms it enforces, read from the live contract:
-
-| Getter | Value | Meaning |
-| --- | --- | --- |
-| `faucetDripAmount()` | `10000000000` | 10,000 AUSD per claim |
-| `maxDripFrequency()` | `60` | one claim per 60 seconds for the whole faucet, not per account (`lastDripTimestamp()` is a single value) |
-| `maxAmountToOwn()` | `100000000000` | refuses if you already hold 100,000 AUSD or more |
-| `token()` | `0xa901...22dC` | the same AUSD this contract uses |
-
-Check it has stock before trying, because it reverts with `InsufficientFunds()`
-(`0x356680b7`) once its balance is down to a single drip:
-
-```powershell
-cast call 0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC "balanceOf(address)(uint256)" 0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C --rpc-url https://testnet-rpc.monad.xyz
-```
-
-It was dry in Phase 0 (one base unit), which is why
-`test_fork_faucetDispensesAusd` skips rather than fails when it is. It has
-since been restocked: on 9 October 2026 it held 996,345,050 AUSD, and the app's
-"Add test dollars" now claims from it on the AUSD deployment.
-
-Its refusals, recovered from the bytecode and confirmed on a fork of the live
-contract (the error names aren't published, so the app matches selectors):
-
-| Selector | When |
-| --- | --- |
-| `0x20e5bc67` | a claim inside 60 seconds of anyone's last claim |
-| `0x0949dab9` | the recipient already holds 100,000 AUSD or more |
-| `0x356680b7` | the faucet is down to a single drip (`InsufficientFunds()`) |
-
-### In the app
-
-The app runs on the AUSD pots unless it was built with
-`VITE_NIVPAY_POTS=testusd`. On AUSD, "Add test dollars" first gets a gas grant
-from `/api/fund` if the account needs one, then the person's own passkey
-account calls `requestFunds(its own address)` for one drip. Before anything is
-sent, the app runs the claim as a call against the latest block, so a cooldown
-or the ceiling is reported (codes 60 and 61 in `docs/ERROR-CODES.md`) without a
-grant or a passkey prompt. On a cooldown the screen counts down the seconds
-left and enables "Try again" at 0; it never claims again without a tap. A
-claim that is included but reverts, usually because someone else claimed
-first, is code 62. The new balance appears only once the claim is finalized.
-On TESTUSD, the button mints TESTUSD as before; both deployments are on the
-testnet only.
-
-## Gas grants in the app, and their limits
-
-The app (`app/`, in progress) never shows people gas or MON. A Vercel function,
-`POST /api/fund` in `app/api/fund/index.ts`, sends an account a small grant of
-testnet MON from a dedicated funder key before its first transaction, and the
-app waits until that grant is finalized before sending anything of the
-person's own. Sizes come from the gas measured in
-`docs/APP-CONTRACT-MAP.md`, at 102 gwei:
-
-| Rule | Value | Why |
-| --- | --- | --- |
-| Grant | 0.1 MON, fixed | a decider's whole story costs about 0.071 MON, a creator's first three actions about 0.084 |
-| Only when the account holds under | 0.05 MON | above the most expensive single action, making a pot, about 0.044 |
-| Only while the account has sent fewer than | 10 transactions | a full story is 5 to 7 per person |
-| Only accounts with | no contract code | |
-| Funder floor | 1 MON | granting stops before the funder can run dry |
-| Kill switch | `FUNDING_ENABLED` not `true` | answers "funding is paused" without reading the key |
-
-`GET /api/fund/status` returns only whether funding is on and the funder's
-balance. Each grant is logged with the address, the amount and the
-transaction hash; nothing else from the request is logged, and the key never
-is.
-
-**The honest limit.** These rules bound what one address can take, about 10
-grants or 1 MON if someone deliberately spends each grant away. They do not
-bound how many addresses someone can make, and new addresses cost nothing.
-A determined abuser can therefore drain the funder down to its 1 MON floor,
-where granting stops until it is refilled. The same-origin check only stops
-other websites from using a visitor's browser; a script can send any Origin
-header it likes. Two requests for the same address that reach different
-server instances at the same moment can both be granted. None of this can
-touch anyone's pot: the funder only ever holds testnet MON for gas.
+A scan on 9 Oct 2026 of every object in the repository, reachable from any
+branch, the reflog or nothing at all, found no private key, mnemonic, API key,
+keystore, `.env` file or other credential in any file or commit message. Every
+64 character hex value in the history was checked: each is a transaction
+hash, a block hash or an EIP-712 domain separator, except one, which is the
+publicly documented Anvil test account key used by `app/src/api-tests/fund.test.ts`
+and named `PUBLIC_TEST_KEY` there. It is not a secret: Foundry and Hardhat
+publish it as their first local test account.
 
 ## A note on the benchmark files
 
@@ -852,6 +1102,123 @@ subscription design that has since been **replaced** by the pot design above.
 
 The files are kept untouched as evidence of process, and their tests still run
 and still pass as part of the suite. Nothing in `NivPayPots` depends on them.
+
+## Pre-existing work
+
+**Nothing in this repository predates 1 Sep 2026.** The first commit,
+`e627991`, is dated 6 Sep 2026, and every commit on every branch was authored
+between 6 Sep and 9 Oct 2026. The history has not been rewritten or squashed.
+[CHECK]
+
+* The streaming benchmark (`StreamBench`, `MockStable`, `BENCHMARK.md`) was the
+  first thing built in this repository, on 6 Sep 2026, inside the build window.
+  It is an earlier design that was retired, not code from another project.
+* No file here was copied from an earlier project. Checked on 9 Oct 2026 by
+  comparing every tracked file's content hash against the files in the
+  author's seven other local repositories: no file is identical. [CHECK: no
+  code was pasted in from anywhere else, edited or not.]
+* The design comps in `docs/design/` were taken from a "NivPay UI Concepts"
+  design canvas and committed on 27 Sep 2026. [CHECK: when that canvas was
+  made; if before 1 Sep 2026, list it here as pre-existing.]
+* Third-party libraries are listed under
+  [Third-party code and licenses](#third-party-code-and-licenses). They are
+  used as published and are not this project's work.
+
+## AI disclosure
+
+**Claude Code, Anthropic's AI coding tool, was used across this whole
+project**: the Solidity contracts and deploy scripts, the app and its
+serverless functions, the Foundry and app tests, and the documentation,
+including this README. A large share of the code and prose in this repository
+was written by Claude Code from written instructions and then reviewed.
+[CHECK: replace "a large share" with a description you are comfortable
+stating, for example "most".] No other AI tool was used. [CHECK]
+
+The instructions it worked from are in the repository: `docs/BUILD-APP.md` is
+the app brief, and the "My notes on this bounty" section of `docs/BOUNTIES.md`
+records the author's decisions for the Agora bounty. Commit messages carry no
+AI attribution lines; this section is the disclosure.
+
+What the human author, UEddy, did:
+
+* **Product concept and rules.** The pot, and the rules it must keep: fixed
+  destinations with caps, threshold approvals, any single approver can freeze
+  but only a threshold can unfreeze, exits never blocked, the remainder
+  returned pro rata. The "Mama's 60th" story. The decision to retire the
+  streaming design in favour of pots. [CHECK]
+* **Design decisions.** The chosen visual direction (the "Clay Pot" look with
+  the Three Cities map in `docs/design/`), the motion rules in
+  `docs/MOTION.md`, and the product language rule that no crypto word appears
+  in the app. [CHECK: who made the design comps.]
+* **Architecture choices.** Mera passkey accounts that store only an address;
+  gas paid through a small grant function so people never see fees; reads
+  only at Finalized; AUSD by default with TESTUSD as the fallback; no
+  third-party scripts, no analytics, exact dependency versions. These are set
+  out in `docs/BUILD-APP.md`.
+* **Security decisions.** No owner, admin or upgrade path in the contract;
+  which keys exist and where they live (the deployer key in an encrypted
+  keystore, the funder key only in Vercel's settings); a kill switch for
+  funding; and the rule that the AI tool is never given, shown or asked for a
+  private key or seed phrase.
+* **Review** of the changes before they were committed. [CHECK: describe how
+  you reviewed, for example every diff.]
+* **Testing on real phones.** The passkey, pot and payment flows were tested
+  by hand on two phones. [CHECK: which phones, operating systems and
+  browsers.]
+* **Deployment.** Ran the contract deployments and verification from their
+  own keystore, created and funded the funder key and entered it in Vercel,
+  and deployed the app to nivpay.vercel.app. [CHECK]
+
+## Third-party code and licenses
+
+This project's own code is MIT licensed (see [License](#license)). It builds
+on the following, each used unmodified under its own license. App versions
+are the exact ones in `app/package-lock.json`; license fields were read from
+each installed package's `package.json`.
+
+### Contracts (git submodules under `lib/`)
+
+| Library | Version | License | Used for |
+| --- | --- | --- | --- |
+| [OpenZeppelin Contracts](https://github.com/OpenZeppelin/openzeppelin-contracts) | 5.1.0 | MIT | `IERC20`, `IERC20Permit`, `SafeERC20`, `ReentrancyGuard`, `Math` in NivPayPots; `ERC20`, `ERC20Permit` in TESTUSD |
+| [forge-std](https://github.com/foundry-rs/forge-std) | 1.16.2 | MIT OR Apache-2.0 | tests and deploy scripts only |
+
+### App, direct dependencies
+
+| Package | Version | License | Used for |
+| --- | --- | --- | --- |
+| [`@category-labs/mera`](https://github.com/category-labs/mera) | 0.2.0 | MIT OR Apache-2.0 | passkey accounts and signing sessions |
+| [`viem`](https://github.com/wevm/viem) | 2.56.9 | MIT | reading the chain, encoding calls, signing |
+| [`@scure/bip39`](https://github.com/paulmillr/scure-bip39) | 2.4.0 | MIT | passkey output to seed |
+| [`@scure/bip32`](https://github.com/paulmillr/scure-bip32) | 2.4.0 | MIT | seed to account key |
+| [`react`](https://github.com/facebook/react), `react-dom` | 19.3.0 | MIT | the interface |
+| [`@fontsource/besley`](https://fontsource.org/fonts/besley) | 5.3.0 | OFL-1.1 | self hosted Besley font |
+| [`@fontsource/work-sans`](https://fontsource.org/fonts/work-sans) | 5.3.0 | OFL-1.1 | self hosted Work Sans font |
+| `typescript` (dev) | 7.0.2 | Apache-2.0 | type-checking |
+| `vite` (dev) | 8.3.1 | MIT | dev server and build |
+| `@types/node`, `@types/react`, `@types/react-dom` (dev) | 24.19.0, 19.3.0, 19.3.0 | MIT | type definitions |
+
+### App, indirect dependencies
+
+Shipped in the app: `@noble/curves`, `@noble/hashes`, `@noble/ciphers`,
+`@scure/base`, `ox`, `abitype`, `isows`, `ws`, `eventemitter3`,
+`@adraffy/ens-normalize` and `scheduler`, all MIT.
+
+Build time only: `rolldown`, `postcss`, `nanoid`, `fdir`, `picomatch`,
+`tinyglobby`, `csstype`, `undici-types`, `@oxc-project/types` and
+`@rolldown/pluginutils` (MIT); `lightningcss` (MPL-2.0); `source-map-js`
+(BSD-3-Clause); `picocolors` (ISC); `detect-libc` (Apache-2.0). Platform
+specific native binaries of `rolldown`, `lightningcss` and `typescript` are
+installed only for the machine building the app and carry the same licenses as
+their parent packages.
+
+### Services and contracts used, not included
+
+* **AUSD and its faucet**, by Agora, on Monad testnet. Called, not copied.
+* **Monad testnet** and its public RPC, `https://testnet-rpc.monad.xyz`.
+* **Sourcify** for contract verification, as used by MonadVision.
+* **Vercel** for hosting the app and its functions.
+* **Slither** was run for static analysis; it is not a dependency.
 
 ## Layout
 
@@ -878,3 +1245,14 @@ and still pass as part of the suite. Nothing in `NivPayPots` depends on them.
     test/StreamBench.t.sol        retired streaming benchmark
     script/cost_model.py          retired streaming cost model
     bench/gas.json                retired streaming measurements
+
+    app/                          the app: React screens in app/src, functions in app/api
+    app/src/lib/                  accounts, writes, feeds, links, money, config
+    app/api/fund/                 the gas grant function and its status endpoint
+    docs/                         design, measurements, error codes, bounty and submission notes
+
+## License
+
+MIT, copyright (c) 2026 UEddy. See [LICENSE](./LICENSE). Third-party code keeps
+its own license, listed under
+[Third-party code and licenses](#third-party-code-and-licenses).
