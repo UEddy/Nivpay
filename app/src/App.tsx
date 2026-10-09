@@ -445,28 +445,28 @@ function Home(props: {
         </button>
       </header>
 
-      <section className="card" aria-live="polite">
+      <section className="card balances" aria-live="polite">
         <p className="eyebrow">{copy.yourBalance}</p>
         {!balances ? (
           <p className="lede">{copy.readingBalance}</p>
         ) : (
           <>
-            <div className="row">
+            <div className="row balance">
               <span className="label">
                 {copy.dollars}
                 <br />
                 <small>{copy.dollarsLine}</small>
               </span>
-              <span className="value amount">{formatAmount(balances.dollars.balance, balances.dollars.decimals, "cents")}</span>
+              <span className="balance-amount">{formatAmount(balances.dollars.balance, balances.dollars.decimals, "cents")}</span>
             </div>
             {balances.kind === "testusd" && (
-              <div className="row">
+              <div className="row balance">
                 <span className="label">
                   {copy.testDollars}
                   <br />
                   <small>{copy.testDollarsLine}</small>
                 </span>
-                <span className="value amount">{formatAmount(balances.testDollars.balance, balances.testDollars.decimals, "cents")}</span>
+                <span className="balance-amount">{formatAmount(balances.testDollars.balance, balances.testDollars.decimals, "cents")}</span>
               </div>
             )}
           </>
