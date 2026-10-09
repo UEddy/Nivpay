@@ -6,7 +6,7 @@ The map and the pot are how people see where their money is. Every animation sta
 
 | Moment | Real trigger | What moves | Time |
 |---|---|---|---|
-| Pot created | create tx finalized | lid drops, lock pops onto the pot, invites fly out to each city | about 1.8s |
+| Pot created | create tx finalized and the pot's number read from its PotCreated event | lid drops, lock pops onto the pot, invites fly out to each city. Until then the lid sits open beside the pot, there is no lock, and the screen says "Draft, not made yet" (`app/src/lib/createStage.ts`) | about 1.8s |
 | Someone chips in | their deposit event | coin flies from their city to the pot, a layer in their colour rises, the counter ticks up | 0.9s flight, then 0.75s fill |
 | Payment asked | proposal event | the vendor's route marches (dotted) and the vendor ring pulses until it is decided | loop |
 | Payment approved and paid | payout event | pot tilts, a stream runs down the vendor route, every layer drops by the same share, vendor fills with a check | about 2.2s |

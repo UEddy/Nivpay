@@ -4,6 +4,7 @@ import { copy, ERROR_CODES } from "../copy.ts";
 import { POTS_ABI } from "../lib/abi.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
 import { liveWriteChain, waitForFinalized } from "../lib/chain.ts";
+import { createView, type Phase } from "../lib/createStage.ts";
 import { DEPLOYMENT, POTS } from "../lib/deployment.ts";
 import { PotStore, type StoredPot } from "../lib/potstore.ts";
 import {
@@ -46,14 +47,6 @@ import { andList, formatDay, Icon, NoticeLine, phoneTimeZone, shareLink, Sheet, 
 
 type SheetKind = "name" | "deciders" | "payees" | "closes" | "leftover" | "confirm";
 
-const STEP_LABEL: Record<Step | "landing", string> = {
-  preparing: copy.stepPreparing,
-  "getting-ready": copy.stepGettingReady,
-  confirm: copy.stepConfirm,
-  sending: copy.lockingTheRules,
-  landing: copy.lockingTheRules,
-};
-
 const MISSING_LABEL: Record<Missing, string> = {
   name: copy.missingName,
   city: copy.missingCity,
@@ -89,11 +82,13 @@ export function CreateScreen(props: {
   const [step, setStep] = useState<Step | "landing" | null>(null);
   const [result, setResult] = useState<Notice | null>(props.notice);
   const [stuck, setStuck] = useState(false);
+  // Sent, but checking on it failed. The draft stays a draft until a check finds it final.
+  const [unconfirmed, setUnconfirmed] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
   // The map's motion when the pot is made (docs/MOTION.md, "Pot created",
   // about 1.8s): the lid drops and the lock pops, then an invite flies out to
   // each city, then each ring lights up. Only ever after the finalized receipt.
-  const [phase, setPhase] = useState<"draft" | "locked" | "flying" | "landed">(() => (drafts.get(draftId)?.made ? "landed" : "draft"));
+  const [phase, setPhase] = useState<Phase>(() => (drafts.get(draftId)?.made ? "landed" : "draft"));
   useEffect(() => {
     if (!celebrate) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -166,6 +161,7 @@ export function CreateScreen(props: {
       if (!alive.current) return;
       setStep(null);
       setStuck(false);
+      setUnconfirmed(false);
       setResult(null);
       setCelebrate(true);
       const d = drafts.get(draftId);
@@ -180,6 +176,7 @@ export function CreateScreen(props: {
       if (!alive.current) return;
       setStep(null);
       setStuck(false);
+      setUnconfirmed(false);
       setResult(notice);
     },
     [update],
@@ -207,20 +204,23 @@ export function CreateScreen(props: {
           );
         }
       } catch (e) {
-        // It was sent; only following it failed. Opening the pot again resumes.
+        // It was sent; only following it failed. Check again, or opening the pot again, resumes.
         if (!alive.current) return;
         setStep(null);
+        setUnconfirmed(true);
         setResult({ tone: "bad", ...describeFailure(new SendFailure("confirming", true, e)) });
       }
     },
     [finish, failed],
   );
 
-  // Resume a pot that was being made when the app was closed.
-  useEffect(() => {
+  /** Picks up a pot that was being made: when the app was closed, or after checking on it failed. */
+  const checkOnIt = useCallback(() => {
     const d = drafts.get(draftId);
     if (!d?.sending || d.made) return;
     const sending = normalizeSending(d.sending);
+    setUnconfirmed(false);
+    setResult(null);
     void (async () => {
       const w = await idbWriteStore.get(account.address).catch(() => undefined);
       if (w && w.label === writeLabel(d)) {
@@ -252,10 +252,12 @@ export function CreateScreen(props: {
       } catch (e) {
         if (!alive.current) return;
         setStep(null);
+        setUnconfirmed(true);
         setResult({ tone: "bad", ...describeFailure(new SendFailure("confirming", true, e)) });
       }
     })();
   }, [account.address, draftId, drafts, failed, finish, land]);
+  useEffect(checkOnIt, [checkOnIt]);
 
   const people = useMemo(() => (draft ? allDeciders(draft, account.name) : []), [draft, account.name]);
 
@@ -272,9 +274,10 @@ export function CreateScreen(props: {
 
   const decimals = terms?.decimals ?? null;
   const amount = (cap: string) => (decimals === null ? "…" : formatAmount(BigInt(cap), decimals, "auto"));
-  const made = draft.made;
-  const locked = Boolean(made || draft.sending || step);
   const check = terms ? checkDraft(draft, terms, nowSeconds(), POTS) : null;
+  const view = createView({ draft, step, stuck, unconfirmed, ready: Boolean(check?.args), phase });
+  const made = view.made ? draft.made : undefined;
+  const locked = !view.editable;
   const recipients = made && !made.unsigned ? potRecipients(draft) : [];
 
   const make = async (retry: boolean) => {
@@ -284,6 +287,7 @@ export function CreateScreen(props: {
     setSheet(null);
     setResult(null);
     setShareNote(null);
+    setStuck(false);
     const signedPeople = allDeciders(draft, account.name);
     const shares = signedShares(draft);
     const call = {
@@ -312,6 +316,8 @@ export function CreateScreen(props: {
       setStep(null);
       // Nothing was broadcast: forget the labels signed for a transaction that never left.
       if (!(e instanceof SendFailure && e.broadcast) && !retry) update((d) => ({ ...d, sending: undefined }));
+      // A retry that never left keeps the stuck one on record, to try again on its nonce.
+      if (retry) setStuck(true);
       setResult({ tone: "bad", ...describeFailure(e) });
     }
   };
@@ -367,7 +373,7 @@ export function CreateScreen(props: {
 
   const potUrl = made ? `${location.origin}/#${made.fragment}` : "";
 
-  const live = phase !== "draft";
+  const live = view.lock;
   const mapPeople: MapPerson[] = people.map((p, i) => {
     const you = i === 0;
     return {
@@ -400,15 +406,20 @@ export function CreateScreen(props: {
           people={mapPeople}
           payees={mapPayees}
           payeeRoutes={live ? "dotted" : "pencil"}
-          lid={live ? "shut" : "open"}
-          lock={live}
+          lid={view.lid}
+          lock={view.lock}
           coins={coins}
           potText={decimals === null ? "$0" : formatAmount(0n, decimals, "auto")}
-          badge={live ? "live" : "draft"}
+          badge={view.badge}
           label={mapLabel}
         />
 
         <div className="intro enter" style={{ animationDelay: "150ms" }}>
+          {view.status && (
+            <p className="draft-status" role="status">
+              {view.status}
+            </p>
+          )}
           {locked ? (
             <h1>{copy.potTitle(draft.name)}</h1>
           ) : (
@@ -459,7 +470,7 @@ export function CreateScreen(props: {
         </div>
 
         <div className={`lock-note enter${made ? " locked" : ""}`} style={{ animationDelay: "360ms" }}>
-          <Icon name="lock" />
+          {made && <Icon name="lock" />}
           <span>{made ? copy.lockAfter : copy.lockBefore}</span>
         </div>
 
@@ -496,8 +507,8 @@ export function CreateScreen(props: {
           <>
             <p className="foot-line">{copy.namesNeedSigning}</p>
             {result && <NoticeLine notice={result} />}
-            <button type="button" className={`pill-btn${step ? " busy" : ""}`} disabled={step !== null} onClick={signNames}>
-              {step ? copy.stepConfirm : copy.signTheNames}
+            <button type="button" className={`pill-btn${view.primary.busy ? " busy" : ""}`} disabled={!view.primary.enabled} onClick={signNames}>
+              {view.primary.label}
             </button>
           </>
         ) : made ? (
@@ -509,28 +520,28 @@ export function CreateScreen(props: {
               {recipients.length ? copy.shareWithSomeoneElse : copy.shareInviteLink}
             </button>
             <button type="button" className="pill-btn" onClick={() => props.onOpenPot(rememberPot(made.potId, made.block, made.fragment))}>
-              {copy.addYourShare}
+              {view.primary.label}
             </button>
           </>
         ) : (
           <>
+            {view.progress && <p className="foot-line">{view.progress}</p>}
+            {view.line && <p className="foot-hint">{view.line}</p>}
             {result && <NoticeLine notice={result} />}
-            {stuck && step === null ? (
-              <button type="button" className="pill-btn" onClick={() => make(true)}>
-                {copy.tryAgain}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className={`pill-btn${step ? " busy" : ""}`}
-                disabled={step !== null || !check?.args || Boolean(draft.sending)}
-                aria-busy={step !== null}
-                onClick={() => setSheet("confirm")}
-              >
-                {step ? STEP_LABEL[step] : copy.makeThePot}
-              </button>
-            )}
-            {!step && !draft.sending && check && check.missing.length > 0 && (
+            <button
+              type="button"
+              className={`pill-btn${view.primary.busy ? " busy" : ""}`}
+              disabled={!view.primary.enabled}
+              aria-busy={view.primary.busy}
+              onClick={() => {
+                if (view.primary.action === "try-again") void make(true);
+                else if (view.primary.action === "check-again") checkOnIt();
+                else setSheet("confirm");
+              }}
+            >
+              {view.primary.label}
+            </button>
+            {view.editable && check && check.missing.length > 0 && (
               <p className="foot-hint">{copy.stillNeeded(andList(check.missing.map((m) => MISSING_LABEL[m])))}</p>
             )}
             {!terms && <p className="foot-hint">{termsFailed ? copy.errSetupUnreachable : copy.readingPotRules}</p>}
@@ -617,7 +628,7 @@ export function CreateScreen(props: {
           </div>
           <p className="hint">{copy.ruleLine(draft.threshold, people.length)}</p>
           <p className="hint">{copy.closesOn(formatDay(draft.closes))}</p>
-          <button type="button" className="pill-btn" onClick={() => make(false)}>
+          <button type="button" className="pill-btn" disabled={!view.editable || !check?.args} onClick={() => make(false)}>
             {copy.makeThePot}
           </button>
           <button type="button" className="btn ghost" onClick={() => setSheet(null)}>

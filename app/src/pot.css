@@ -160,6 +160,18 @@
   color: var(--muted);
 }
 
+/* Until the pot is made and final, the screen says so in words, above its name. */
+.intro .draft-status {
+  align-self: flex-start;
+  margin: 0 0 6px;
+  padding: 3px 10px;
+  border: 1.5px dashed var(--muted);
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
 /* The rules card: four tappable rows. */
 .rules {
   background: var(--card);
@@ -542,7 +554,11 @@
   opacity: 0.3;
 }
 
+/* A draft's lid sits off to one side, plainly open. It drops shut only once the pot is made and final. */
 .pot-lid {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: translate(34px, -26px) rotate(18deg);
   transition: transform 380ms var(--ease-pop);
 }
 
