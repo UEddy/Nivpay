@@ -56,6 +56,14 @@ export const copy = {
   stepSending: "Adding test dollars…",
   added: (amount: string, seconds: string) => `Added ${amount} test dollars. Settled in ${seconds}s.`,
   tryAgain: "Try again",
+  claimAmountHint: (amount: string, ceiling: string) =>
+    `Adds ${amount} each time, once a minute at most. You can hold up to ${ceiling} this way.`,
+  errClaimCooldown: (seconds: number) =>
+    `Test dollars can be added once a minute, and someone just did. Try again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`,
+  claimCooldownOver: "You can try again now.",
+  errClaimCeiling:(ceiling: string) => `You already hold ${ceiling} or more, the most you can add this way.`,
+  errClaimRefused: "Test dollars can't be added right now. Try again in a minute.",
+  claimDidNotGoThrough: "That didn't go through. No test dollars moved. Try again in a minute.",
 
   // Connection. "Nothing has moved" only when no request of ours is in flight.
   offlineNothingInFlight: "Can't connect right now. Nothing has moved. Trying again.",
@@ -141,6 +149,9 @@ export const ERROR_CODES = {
   SUPERSEDED: 53,
   MAY_STILL_GO_THROUGH: 54,
   NOTHING_STUCK: 55,
+  CLAIM_COOLDOWN: 60,
+  CLAIM_CEILING: 61,
+  CLAIM_REVERTED: 62,
   UNKNOWN: 99,
 } as const;
 

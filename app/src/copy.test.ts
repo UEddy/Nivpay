@@ -73,6 +73,9 @@ function allCopy(): [string, string][] {
     onlyAtHome: ["nivpay.vercel.app"],
     code: [12],
     accountEnding: [SAMPLE_ID],
+    claimAmountHint: ["$10,000", "$100,000"],
+    errClaimCooldown: [42],
+    errClaimCeiling: ["$100,000"],
   };
   return Object.entries(copy).map(([key, value]) => {
     if (typeof value === "string") return [key, value];

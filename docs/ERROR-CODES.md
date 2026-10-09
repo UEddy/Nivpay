@@ -56,6 +56,17 @@ means it was, and the app is still tracking it.
 | 54 | A retry was refused because the earlier attempt may still go through. Wait. | The pending write |
 | 55 | Try again was pressed but there was nothing stuck to retry. | |
 
+## Adding test dollars on the AUSD deployment (Agora's faucet)
+
+60 and 61 are found before anything is sent: the app runs the claim as a call
+first, so no gas grant or passkey prompt is spent on them.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 60 | Cooldown: someone claimed from the faucet less than 60 seconds ago. It is one cooldown for everyone, not per account. Nothing was sent. The phone counts down the seconds left and enables Try again when they reach 0; it never claims without a tap. | `lastDripTimestamp()` on the faucet |
+| 61 | Ceiling: the account already holds 100,000 AUSD or more (`maxAmountToOwn()`). Nothing was sent. | The account's AUSD balance |
+| 62 | The faucet refused for another reason before sending (out of stock, `0x356680b7`, or an unknown error), or the claim was included and reverted, usually because someone else claimed first. No AUSD moved. | The faucet's AUSD balance; the transaction receipt |
+
 ## Other
 
 | Code | What happened | Where to look |

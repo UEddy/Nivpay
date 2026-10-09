@@ -4,8 +4,10 @@ import { copy, ERROR_CODES, offlineMessage } from "./copy.ts";
 import { AccountStore, type StoredAccount } from "./lib/accounts.ts";
 import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
-import { AUSD, TESTUSD } from "./lib/config.ts";
+import { AUSD, AUSD_FAUCET, TESTUSD } from "./lib/config.ts";
+import { DEPLOYMENT } from "./lib/deployment.ts";
 import { describeFailure, SendFailure } from "./lib/errors.ts";
+import { checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
 import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
 import { formatAmount, parseAmount } from "./lib/money.ts";
 import { hostCheck, signIn, signUp } from "./lib/passkey.ts";
@@ -240,7 +242,16 @@ function AccountSheet(props: { account: StoredAccount; onSwitch: () => void; onC
 }
 
 type Holding = { decimals: number; balance: bigint };
-type Balances = { testDollars: Holding; dollars: Holding; maxMint: bigint };
+/**
+ * On the AUSD deployment, "Add test dollars" claims test AUSD from Agora's
+ * faucet and only Dollars are shown. On TESTUSD it mints test dollars.
+ */
+type Balances =
+  | { kind: "ausd"; dollars: Holding; faucet: FaucetTerms }
+  | { kind: "testusd"; dollars: Holding; testDollars: Holding; maxMint: bigint };
+
+/** Claims are told apart from mints by their label, which survives a reload. */
+const CLAIM_LABEL = "claim";
 
 async function readBalances(address: Address): Promise<Balances> {
   const block = await readClient.getBlock({ blockTag: "finalized" });
@@ -252,12 +263,16 @@ async function readBalances(address: Address): Promise<Balances> {
     ]);
     return { decimals, balance };
   };
+  if (DEPLOYMENT === "ausd") {
+    const [dollars, faucet] = await Promise.all([holding(AUSD), readFaucetTerms(block.number)]);
+    return { kind: "ausd", dollars, faucet };
+  }
   const [testDollars, dollars, maxMint] = await Promise.all([
     holding(TESTUSD),
     holding(AUSD),
     readClient.readContract({ address: TESTUSD, abi: TEST_DOLLAR_ABI, functionName: "MAX_MINT", ...at }),
   ]);
-  return { testDollars, dollars, maxMint };
+  return { kind: "testusd", testDollars, dollars, maxMint };
 }
 
 const STEP_LABEL: Record<Step, string> = {
@@ -279,7 +294,22 @@ function Home(props: {
   const [result, setResult] = useState<Notice | null>(null);
   const [stuck, setStuck] = useState(false);
   const [details, setDetails] = useState(false);
+  // The faucet's shared cooldown: when, on this phone's clock, a claim is
+  // allowed again. Nothing is claimed when it ends; the person taps again.
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const alive = useRef(true);
+
+  useEffect(() => {
+    if (cooldownUntil === null) return;
+    setNow(Date.now());
+    const t = setInterval(() => {
+      setNow(Date.now());
+      if (Date.now() >= cooldownUntil) clearInterval(t);
+    }, 250);
+    return () => clearInterval(t);
+  }, [cooldownUntil]);
+  const cooldownLeft = cooldownUntil === null ? 0 : secondsUntil(cooldownUntil, now);
 
   const refresh = useCallback(() => {
     connection
@@ -323,7 +353,11 @@ function Home(props: {
         setResult({ tone: "bad", text: copy.stuck, code: ERROR_CODES.STUCK });
       } else if (outcome.kind === "reverted") {
         setStuck(false);
-        setResult({ tone: "bad", text: copy.didNotGoThrough, code: ERROR_CODES.REVERTED });
+        setResult(
+          write.label.startsWith(CLAIM_LABEL)
+            ? { tone: "bad", text: copy.claimDidNotGoThrough, code: ERROR_CODES.CLAIM_REVERTED }
+            : { tone: "bad", text: copy.didNotGoThrough, code: ERROR_CODES.REVERTED },
+        );
       } else {
         setStuck(false);
         setResult({ tone: "bad", text: copy.didNotGoThrough, code: ERROR_CODES.SUPERSEDED });
@@ -344,16 +378,44 @@ function Home(props: {
     });
   }, [account.address, land]);
 
-  const decimals = balances?.testDollars.decimals ?? 6;
-  const amount = parseAmount(amountText, decimals);
-  const tooMuch = amount !== null && balances !== null && amount > balances.maxMint;
+  const decimals = balances?.kind === "testusd" ? balances.testDollars.decimals : (balances?.dollars.decimals ?? 6);
+  const amount = balances?.kind === "ausd" ? balances.faucet.drip : parseAmount(amountText, decimals);
+  const tooMuch = amount !== null && balances?.kind === "testusd" && amount > balances.maxMint;
   const valid = amount !== null && amount > 0n && !tooMuch;
 
-  const mint = async (retry: boolean) => {
-    if (!valid || amount === null) return;
+  const add = async (retry: boolean) => {
+    if (!valid || amount === null || !balances) return;
     setResult(null);
+    setCooldownUntil(null);
     const label = formatAmount(amount, decimals, "auto");
     try {
+      if (balances.kind === "ausd") {
+        const { faucet } = balances;
+        const call = {
+          from: account.address,
+          to: AUSD_FAUCET,
+          data: claimData(account.address),
+          label: `${CLAIM_LABEL} ${label} AUSD`,
+          onStep: setStep,
+        };
+        if (retry) {
+          await land(await retryStuckWrite(call), label);
+          return;
+        }
+        // Ask the faucet first, so a cooldown or the ceiling costs no grant
+        // and no passkey prompt.
+        setStep("preparing");
+        await checkClaim(account.address, faucet, decimals);
+        const write = await sendWrite(call).catch(async (e: unknown) => {
+          // Someone else may have claimed since the check: say so precisely.
+          if (e instanceof SendFailure && !e.broadcast && e.stage === "preparing") {
+            await checkClaim(account.address, faucet, decimals);
+          }
+          throw e;
+        });
+        await land(write, label);
+        return;
+      }
       const call = {
         from: account.address,
         to: TESTUSD,
@@ -365,7 +427,9 @@ function Home(props: {
       await land(write, label);
     } catch (e) {
       setStep(null);
-      setResult({ tone: "bad", ...describeFailure(e) });
+      const cooldown = cooldownIn(e);
+      if (cooldown) setCooldownUntil(cooldown.until);
+      else setResult({ tone: "bad", ...describeFailure(e) });
     }
   };
 
@@ -395,14 +459,16 @@ function Home(props: {
               </span>
               <span className="value amount">{formatAmount(balances.dollars.balance, balances.dollars.decimals, "cents")}</span>
             </div>
-            <div className="row">
-              <span className="label">
-                {copy.testDollars}
-                <br />
-                <small>{copy.testDollarsLine}</small>
-              </span>
-              <span className="value amount">{formatAmount(balances.testDollars.balance, balances.testDollars.decimals, "cents")}</span>
-            </div>
+            {balances.kind === "testusd" && (
+              <div className="row">
+                <span className="label">
+                  {copy.testDollars}
+                  <br />
+                  <small>{copy.testDollarsLine}</small>
+                </span>
+                <span className="value amount">{formatAmount(balances.testDollars.balance, balances.testDollars.decimals, "cents")}</span>
+              </div>
+            )}
           </>
         )}
       </section>
@@ -410,16 +476,39 @@ function Home(props: {
       <section className="card">
         <p className="eyebrow">{copy.addTestDollars}</p>
         <p className="hint">{copy.addTestDollarsHint}</p>
-        <label className="field">
-          <span>{copy.howMany}</span>
-          <input inputMode="decimal" value={amountText} onChange={(e) => setAmountText(e.target.value)} />
-        </label>
-        {tooMuch && balances && <p className="error">{copy.upToAtATime(formatAmount(balances.maxMint, decimals, "auto"))}</p>}
-        <button className="btn primary" disabled={!valid || step !== null || !balances} onClick={() => mint(false)}>
-          {step === "landing" ? copy.stepSending : step ? STEP_LABEL[step] : copy.addTestDollars}
-        </button>
+        {balances?.kind === "ausd" ? (
+          <p className="hint">
+            {copy.claimAmountHint(formatAmount(balances.faucet.drip, decimals, "auto"), formatAmount(balances.faucet.ceiling, decimals, "auto"))}
+          </p>
+        ) : (
+          <label className="field">
+            <span>{copy.howMany}</span>
+            <input inputMode="decimal" value={amountText} onChange={(e) => setAmountText(e.target.value)} />
+          </label>
+        )}
+        {tooMuch && balances?.kind === "testusd" && (
+          <p className="error">{copy.upToAtATime(formatAmount(balances.maxMint, decimals, "auto"))}</p>
+        )}
+        {cooldownUntil === null ? (
+          <button className="btn primary" disabled={!valid || step !== null || !balances} onClick={() => add(false)}>
+            {step === "landing" ? copy.stepSending : step ? STEP_LABEL[step] : copy.addTestDollars}
+          </button>
+        ) : (
+          <>
+            <button className="btn primary" disabled={cooldownLeft > 0 || step !== null} onClick={() => add(false)}>
+              {copy.tryAgain}
+            </button>
+            <NoticeLine
+              notice={
+                cooldownLeft > 0
+                  ? { tone: "bad", text: `${copy.errClaimCooldown(cooldownLeft)} ${copy.nothingWasSent}`, code: ERROR_CODES.CLAIM_COOLDOWN }
+                  : { tone: "ok", text: copy.claimCooldownOver }
+              }
+            />
+          </>
+        )}
         {stuck && step === null && (
-          <button className="btn" onClick={() => mint(true)}>
+          <button className="btn" onClick={() => add(true)}>
             {copy.tryAgain}
           </button>
         )}
