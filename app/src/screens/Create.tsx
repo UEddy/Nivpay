@@ -17,7 +17,7 @@ import {
   deciderShare,
   newSlot,
   parseAccountId,
-  potRecipients,
+  namedPeople,
   signedShares,
   withDeciderShare,
   withInvited,
@@ -25,10 +25,8 @@ import {
   withoutInvited,
   withPayeeAccount,
   withPayeeShare,
-  withSentTo,
   type Draft,
   type DraftStore,
-  type Recipient,
   type Missing,
 } from "../lib/draft.ts";
 import { describeFailure, SendFailure } from "../lib/errors.ts";
@@ -278,7 +276,8 @@ export function CreateScreen(props: {
   const view = createView({ draft, step, stuck, unconfirmed, ready: Boolean(check?.args), phase });
   const made = view.made ? draft.made : undefined;
   const locked = !view.editable;
-  const recipients = made && !made.unsigned ? potRecipients(draft) : [];
+  // Named people see the pot on their Home with no link (lib/invited.ts); one group link is for everyone else.
+  const named = made && !made.unsigned ? namedPeople(draft) : [];
 
   const make = async (retry: boolean) => {
     if (!terms) return;
@@ -328,15 +327,6 @@ export function CreateScreen(props: {
     if (how === "copied") setShareNote(copy.linkCopied);
     if (how === "failed") setShareNote(copy.copyFailed);
     return how;
-  };
-
-  /** Sends one person their pot link through the share sheet, and remembers it once it has left this phone. */
-  const sendTo = async (person: Recipient) => {
-    setShareNote(null);
-    const how = await shareLink(potUrl, copy.potLinkFor(person.name, draft.name));
-    if (how === "shared" || how === "copied") update((d) => withSentTo(d, person.account));
-    if (how === "copied") setShareNote(copy.linkCopiedFor(person.name));
-    if (how === "failed") setShareNote(copy.copyFailed);
   };
 
   const addReply = async (reply: Reply) => {
@@ -474,27 +464,11 @@ export function CreateScreen(props: {
           <span>{made ? copy.lockAfter : copy.lockBefore}</span>
         </div>
 
-        {recipients.length > 0 && (
+        {made && !made.unsigned && named.length > 0 && (
           <section className="send-out enter" aria-labelledby="send-out-title">
-            <h2 id="send-out-title">{copy.sendToEveryone}</h2>
-            <p className="hint">{copy.sendToEveryoneHint}</p>
-            {recipients.map((r) => (
-              <div className="send-row" key={r.account}>
-                <span className="grow">
-                  <span className="name">{r.name}</span>
-                  <span className="meta">{r.sent ? copy.sentTo : r.role === "decider" ? copy.sendRoleDecides : copy.sendRoleGetsPaid}</span>
-                </span>
-                <button
-                  type="button"
-                  className={`send-btn${r.sent ? " sent" : ""}`}
-                  aria-label={r.sent ? copy.sendAgainTo(r.name) : copy.sendToPerson(r.name)}
-                  onClick={() => sendTo(r)}
-                >
-                  <Icon name="share" />
-                  {r.sent ? copy.sendAgain : copy.send}
-                </button>
-              </div>
-            ))}
+            <h2 id="send-out-title">{copy.namedSeeItTitle}</h2>
+            <p className="lede">{copy.namedSeeIt(andList(named.map((n) => n.name)))}</p>
+            <p className="hint">{copy.shareThePotHint}</p>
           </section>
         )}
       </div>
@@ -513,11 +487,11 @@ export function CreateScreen(props: {
           </>
         ) : made ? (
           <>
-            {recipients.length === 0 && <p className="foot-line">{copy.potMadeAlone}</p>}
+            {named.length === 0 && <p className="foot-line">{copy.potMadeAlone}</p>}
             {shareNote && <p className="foot-hint">{shareNote}</p>}
             <button type="button" className="pill-btn outline" onClick={() => share(potUrl, copy.shareText(draft.name))}>
               <Icon name="share" />
-              {recipients.length ? copy.shareWithSomeoneElse : copy.shareInviteLink}
+              {copy.shareThePot}
             </button>
             <button type="button" className="pill-btn" onClick={() => props.onOpenPot(rememberPot(made.potId, made.block, made.fragment))}>
               {view.primary.label}

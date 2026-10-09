@@ -95,8 +95,6 @@ function allCopy(): [string, string][] {
     personDecides: ["Ubong"],
     morePeople: [2],
     stillNeeded: ["a name, a closing date"],
-    sendToPerson: ["Ubong"],
-    potRowSendToMore: [2],
     sendingTo: ["Ubong"],
     otherCurrencyHint: ["CTK"],
     atLeast: ["10.00 CTK"],
@@ -116,9 +114,6 @@ function allCopy(): [string, string][] {
     paymentFrom: ["account ending 7bC1"],
     receivedAnnounce: ["$25", "account ending 7bC1"],
     foundMeta: [["you decide on payments", "you've put money in"], "$900"],
-    sendAgainTo: ["Ubong"],
-    potLinkFor: ["Ubong", "Mama’s 60th"],
-    linkCopiedFor: ["Ubong"],
     potMadeAnnounce: ["Mama’s 60th", "Caterer and Event hall"],
     shareText: ["Mama’s 60th"],
     map: ["Idara in London, Ubong in Houston", "Caterer and Event hall"],
@@ -150,6 +145,7 @@ function allCopy(): [string, string][] {
     invitedWaiting: ["Mama\u2019s 60th", "Idara"],
     invitedShare: ["$600"],
     invitedBy: ["Idara"],
+    namedSeeIt: ["Ubong, Aniekan and Caterer"],
     alsoInIt: [["account ending 7bC1", "account ending 4e2a"]],
     replyShareText: ["Idara"],
     replyAdded: ["Ubong"],
@@ -171,6 +167,15 @@ test("a pot found from the chain says what the person does in it, as one sentenc
   assert.equal(copy.foundMeta([copy.foundRoleDecides], "$900"), "You decide on payments. Holds $900.");
   assert.equal(copy.foundMeta([copy.foundRoleDecides, copy.foundRolePutIn], "$900"), "You decide on payments and you've put money in. Holds $900.");
   assert.equal(copy.foundMeta([copy.foundRolePaid], "$0"), "It can pay you. Holds $0.");
+});
+
+test("after a pot is made, the screen says named people already have it, and offers one link for the group", () => {
+  assert.equal(copy.namedSeeIt("Ubong, Aniekan and Caterer"), "Ubong, Aniekan and Caterer already have this pot on their Home. They don't need a link.");
+  assert.equal(copy.shareThePot, "Share the pot");
+  assert.match(copy.shareThePotHint, /one link for the whole group/);
+  const create = readFileSync(new URL("./screens/Create.tsx", import.meta.url), "utf8");
+  assert.equal(create.match(/copy\.shareThePot\b/g)?.length, 1, "one Share the pot button");
+  assert.doesNotMatch(create, /send-btn|sendTo\(/, "no button per person");
 });
 
 test("vendors and people are shown as 'account ending', never a 0x form", () => {

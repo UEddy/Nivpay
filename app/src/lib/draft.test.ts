@@ -11,7 +11,7 @@ import {
   newDraft,
   normalizeSending,
   parseAccountId,
-  potRecipients,
+  namedPeople,
   replyProgress,
   signedShares,
   withAttempt,
@@ -22,7 +22,6 @@ import {
   withoutDecider,
   withoutInvited,
   withPayeeAccount,
-  withSentTo,
   type Draft,
 } from "./draft.ts";
 import { fromText32, toText32, utf8Length } from "./text32.ts";
@@ -219,15 +218,15 @@ test("drafts are stored per creator and found by id from any account", () => {
   assert.deepEqual(store.all(), []);
 });
 
-test("after the pot is made, every other decider and every payee is someone to send the link to", () => {
+test("after the pot is made, every other decider and every payee is named on it, and needs no link", () => {
   const made: Draft = { ...mamas60th(), made: { potId: "3", block: "100", fragment: "abc" } };
   assert.deepEqual(
-    potRecipients(made).map((r) => [r.name, r.role, r.sent]),
+    namedPeople(made).map((r) => [r.name, r.role]),
     [
-      ["Ubong", "decider", false],
-      ["Aniekan", "decider", false],
-      ["Caterer", "payee", false],
-      ["Event hall", "payee", false],
+      ["Ubong", "decider"],
+      ["Aniekan", "decider"],
+      ["Caterer", "payee"],
+      ["Event hall", "payee"],
     ],
   );
 });
@@ -239,24 +238,14 @@ test("the creator is never listed, and someone both deciding and paid is listed 
     payees: [...d.payees, { slot: "0x0303030303030303", name: "Ubong's shop", cap: "1", account: UBONG, via: "pasted" }, { slot: "0x0404040404040404", name: "Me", cap: "1", account: IDARA, via: "pasted" }],
     made: { potId: "3", block: "100", fragment: "abc" },
   };
-  const names = potRecipients(both).map((r) => r.name);
+  const names = namedPeople(both).map((r) => r.name);
   assert.deepEqual(names, ["Ubong", "Aniekan", "Caterer", "Event hall"]);
 });
 
-test("a payee with no account yet has no link to send", () => {
+test("a payee with no account yet is not named", () => {
   const d = mamas60th();
   const open: Draft = { ...d, payees: [d.payees[0]!, { slot: "0x0505050505050505", name: "Florist", cap: "1" }], made: { potId: "3", block: "100", fragment: "abc" } };
-  assert.ok(!potRecipients(open).some((r) => r.name === "Florist"));
-});
-
-test("sending is remembered per person, whatever the casing, and only on a made pot", () => {
-  const made: Draft = { ...mamas60th(), made: { potId: "3", block: "100", fragment: "abc" } };
-  let d = withSentTo(made, UBONG.toLowerCase() as Address);
-  d = withSentTo(d, UBONG);
-  d = withSentTo(d, CATERER);
-  assert.deepEqual(d.made?.sentTo, [UBONG.toLowerCase(), CATERER.toLowerCase()]);
-  assert.deepEqual(potRecipients(d).filter((r) => r.sent).map((r) => r.name), ["Ubong", "Caterer"]);
-  assert.equal(withSentTo(mamas60th(), UBONG).made, undefined);
+  assert.ok(!namedPeople(open).some((r) => r.name === "Florist"));
 });
 
 test("an unanswered invite to decide holds the pot back until it is answered or removed", () => {

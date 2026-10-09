@@ -98,40 +98,29 @@ export type Made = {
    * phone. The creator signs them again, over this hash, before sharing.
    */
   unsigned?: { createdIn: Hex; people: Person[]; shares: Sending["shares"] };
-  /** Lowercase accounts the creator has sent the pot link to from this phone. */
-  sentTo?: string[];
 };
 
-/** Someone named on a made pot who needs its link: every other decider, and every payee with an account. */
-export type Recipient = { account: Address; name: string; role: "decider" | "payee"; sent: boolean };
+/** Someone named on a made pot: every other decider, and every payee with an account. */
+export type Named = { account: Address; name: string; role: "decider" | "payee" };
 
 /**
- * Everyone the creator should send the pot link to, in the order they appear
- * on the pot. An account named twice (a decider who is also paid) is listed
- * once, as a decider. The creator is never listed.
+ * Everyone named on the pot besides the creator, in the order they appear on
+ * it. They need no link: Home finds the pot from the chain on their phones,
+ * and matches it to the invite they answered (invited.ts). An account named
+ * twice (a decider who is also paid) is listed once, as a decider.
  */
-export function potRecipients(draft: Draft): Recipient[] {
-  const sent = new Set(draft.made?.sentTo ?? []);
+export function namedPeople(draft: Draft): Named[] {
   const seen = new Set([draft.owner.toLowerCase()]);
-  const out: Recipient[] = [];
-  const add = (account: Address, name: string, role: Recipient["role"]) => {
+  const out: Named[] = [];
+  const add = (account: Address, name: string, role: Named["role"]) => {
     const key = account.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ account, name, role, sent: sent.has(key) });
+    out.push({ account, name, role });
   };
   for (const d of draft.deciders) add(d.account, d.name, "decider");
   for (const p of draft.payees) if (p.account) add(p.account, p.name, "payee");
   return out;
-}
-
-/** Marks the pot link as sent to `account`. Only a made pot has anyone to send to. */
-export function withSentTo(draft: Draft, account: Address): Draft {
-  if (!draft.made) return draft;
-  const key = account.toLowerCase();
-  const sentTo = draft.made.sentTo ?? [];
-  if (sentTo.includes(key)) return draft;
-  return { ...draft, made: { ...draft.made, sentTo: [...sentTo, key] } };
 }
 
 /** Someone asked to decide who hasn't replied yet. The slot ties their reply to this name. */
