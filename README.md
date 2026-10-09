@@ -14,7 +14,9 @@ form.] The repository has two parts:
 * **The contracts.** [`src/NivPayPots.sol`](./src/NivPayPots.sol) is the whole
   pot product, deployed and verified on Monad testnet.
 * **The app.** [`app/`](./app) is a mobile first web app (a PWA) with passkey
-  accounts, live at [nivpay.vercel.app](https://nivpay.vercel.app). It reads
+  accounts, live at [nivpay.vercel.app](https://nivpay.vercel.app). Besides
+  pots, it sends dollars to another person, receives them, and can deliver a
+  payment in another currency through Agora's Instant Settlement. It reads
   like a fintech app: people see dollars and names, never gas, keys or
   addresses.
 
@@ -156,6 +158,9 @@ Oct 2026.
 | NivPayTestDollar (TESTUSD) | [`0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7`](https://testnet.monadvision.com/address/0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7) | A worthless test token anyone can mint, 100,000 per call. Testnet only. |
 | AUSD (Agora) | [`0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC`](https://testnet.monadvision.com/address/0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC) | not on Monad's Sourcify (see below) | Agora's six decimal dollar. Not ours. |
 | Agora AUSD faucet | [`0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C`](https://testnet.monadvision.com/address/0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C) | not on Monad's Sourcify (see below) | Dispenses test AUSD. Not ours. |
+| Agora Instant Settlement pair, AUSD and CTK | [`0x1Aa8958Aa34cEC8096EF4381cb335effe977b0ae`](https://testnet.monadvision.com/address/0x1Aa8958Aa34cEC8096EF4381cb335effe977b0ae) | proxy; its implementation `0x1a5d115a87e39fd8d8c9e53b91dbe5e0ec309dd2` is a [Sourcify match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0x1a5d115a87e39fd8d8c9e53b91dbe5e0ec309dd2) | Delivers a payment in another currency at a fixed price. Not ours. |
+| Agora whitelister | [`0x7c10F56d6f04a51376393a1C3670e966863F6BD5`](https://testnet.monadvision.com/address/0x7c10F56d6f04a51376393a1C3670e966863F6BD5) | proxy; implementation not verified | Grants an account permission to send through the pair. Not ours. |
+| CTK (ConstantToken) | [`0x7BEb5D9DB0d85cBEa543C04f0dE8c23c2176cd9D`](https://testnet.monadvision.com/address/0x7BEb5D9DB0d85cBEa543C04f0dE8c23c2176cd9D) | not on Monad's Sourcify | Agora's 18 decimal test currency on the other side of the pair. Not ours. |
 
 AUSD and the faucet are Agora's contracts. Both are EIP-1967 proxies: AUSD's
 implementation is `0xc1e3C7D486d6A92fBE920232E439EeC2cEb112dA` and the
@@ -213,7 +218,54 @@ from its comments.
 * **Tokens sent straight to the contract are stuck for good.** There is no
   rescue function, by design; they do not change any pot's share price.
 
-Outside this contract: AUSD itself is Agora's upgradeable token with asset
+### Outside this contract: Agora's Instant Settlement
+
+Sending in another currency goes through Agora's pair
+`0x1Aa8958Aa34cEC8096EF4381cb335effe977b0ae`, which NivPay does not control.
+Read from its verified source and its live state on 9 Oct 2026:
+
+* **One address holds every role on the pair:**
+  `0x99B0E95Fa8F5C3b86e4d78ED715B475cFCcf6E97`, as `ACCESS_CONTROL_MANAGER_ROLE`,
+  `PRICE_SETTER_ROLE`, `FEE_SETTER_ROLE`, `PAUSER_ROLE`, `TOKEN_REMOVER_ROLE` and
+  `WHITELISTER_ROLE` (with the whitelister contract). It is also CTK's owner.
+  With those roles it can:
+  * pause and unpause the pair (`setPaused`),
+  * set the price within bounds (`configureOraclePrice`): today 0.9 to 1.1
+    CTK per AUSD, with an interest rate bounded to 0,
+  * set the purchase fee within bounds (`setTokenPurchaseFees`): today 0 to
+    0.05 percent, currently 0,
+  * change those bounds themselves (`setOraclePriceBounds`, `setFeeBounds`),
+  * take the pair's reserves out (`removeTokens`) and its fees (`collectFees`),
+  * grant or revoke anyone's permission to send through the pair, and set
+    where removed tokens and fees go.
+* **The pair and the whitelister are upgradeable.** Both are EIP-1967
+  proxies whose admin is `0x85f263d91f2706b32c85f22c681c0fe175eb48f2`, and
+  that admin's only manager is the same
+  `0x99B0E95Fa8F5C3b86e4d78ED715B475cFCcf6E97`. It can replace either
+  contract's code (`upgradeAndCall`).
+* **On testnet anyone may send through the pair**: the whitelister's
+  `setApprovedSwapper` has no caller check, so the app's one-time setup grants
+  the permission to the person's own account.
+
+What that means for a NivPay payment, and how the app limits it:
+
+* **The rate can't be changed against the sender.** The app quotes fresh
+  before the confirm sheet and again right before signing, and sets the
+  exchange's minimum amount out to the lower of the quote now and at the
+  deadline. A price or fee change after that makes the exchange revert;
+  nothing is exchanged below the minimum. The deadline is 5 minutes.
+* **The pair is allowed exactly the amount being sent**, never an open
+  allowance, so even an upgraded pair could take no more than one payment's
+  dollars. If a payment fails after that step, the allowance for that one
+  amount stays until the next payment in another currency uses it.
+* **A pause, a revoked permission or emptied reserves** make the payment
+  fail before anything moves: the app checks pause and reserves first (codes
+  90 and 92), and the exchange reverts as a whole if anything changes in
+  between.
+* **What the recipient receives is CTK, Agora's test currency**, not
+  dollars, and only worth what Agora's pair says it is.
+
+AUSD itself is Agora's upgradeable token with asset
 freezing controls. Agora can freeze an address, which would block that
 address's own payout or exit and nothing else (see
 [Token and security](#token-and-security)). `NivPayTestDollar` has no owner
@@ -240,8 +292,12 @@ chain but Monad testnet and local test chains.
    |-- POST /api/fund (Vercel function): a small grant of testnet MON
    |   before an account's first transactions, so nobody sees fees.
    |
-   |-- Links shared in chats: invites, signed replies and pot links,
-   |   packed binary in the URL fragment, checked by signature.
+   |-- Links shared in chats: invites, signed replies, pot links and
+   |   requests to be paid, packed binary in the URL fragment.
+   |
+   |-- Send and receive: a plain AUSD transfer to a person's account, or,
+   |   in another currency, Agora's Instant Settlement pair delivering CTK
+   |   to them, up to three requests behind one fingerprint.
    v
   NivPayPots (AUSD or TESTUSD instance)  ->  AUSD / TESTUSD token
 ```
@@ -268,7 +324,7 @@ The documents behind the design:
 | --- | --- |
 | Chain | Monad testnet, chain id 10143 |
 | Contracts | Solidity 0.8.28, OpenZeppelin Contracts 5.1.0, Foundry 1.8.3 with `network = "monad"`, forge-std 1.16.2 |
-| Money | AUSD (Agora) by default, TESTUSD as the test fallback |
+| Money | AUSD (Agora) by default, TESTUSD as the test fallback; CTK through Agora's Instant Settlement for payments in another currency |
 | Accounts | Mera 0.2.0 passkeys (WebAuthn PRF), `@scure/bip39` and `@scure/bip32` for the key path `m/44'/60'/0'/0/0` |
 | App | React 19, TypeScript 7, Vite 8, viem 2.56, self hosted fonts, a service worker that caches the app shell only |
 | Hosting | Vercel: static app plus two functions, `/api/fund` and `/api/fund/status` |
@@ -395,6 +451,13 @@ other websites from using a visitor's browser; a script can send any Origin
 header it likes. Two requests for the same address that reach different
 server instances at the same moment can both be granted. None of this can
 touch anyone's pot: the funder only ever holds testnet MON for gas.
+
+**A gap for requests with several steps.** A grant is sent only to accounts
+holding under 0.05 MON. A first payment in another currency signs three
+requests whose gas limits add up to about 0.06 MON at today's price, so an
+account holding between those two can neither afford it nor be topped up.
+The app says so with code 93 before anything is signed; the account gets
+back under the threshold by doing anything smaller first.
 
 ## Getting test AUSD
 
@@ -1215,6 +1278,9 @@ their parent packages.
 ### Services and contracts used, not included
 
 * **AUSD and its faucet**, by Agora, on Monad testnet. Called, not copied.
+* **Agora's Instant Settlement pair, its whitelister and CTK**, on Monad
+  testnet. Called, not copied. Agora's pair source is BUSL-1.1 and is not in
+  this repository; the app holds only the ABI fragments it calls.
 * **Monad testnet** and its public RPC, `https://testnet-rpc.monad.xyz`.
 * **Sourcify** for contract verification, as used by MonadVision.
 * **Vercel** for hosting the app and its functions.
