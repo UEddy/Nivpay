@@ -150,6 +150,8 @@ function allCopy(): [string, string][] {
     replyShareText: ["Idara"],
     replyAdded: ["Ubong"],
     payeeReplyAdded: ["Chidi", "Caterer"],
+    errOverLimit: ["$100", "Caterer"],
+    errPotShort: ["$397.00"],
   };
   return Object.entries(copy).map(([key, value]) => {
     if (typeof value === "string") return [key, value];

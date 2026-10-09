@@ -32,6 +32,29 @@ means it was, and the app is still tracking it.
 | 21 | The grant was included but reverted. | The grant transaction |
 | 93 | The account holds more than the grant threshold (0.075 MON), so `/api/fund` won't top it up (`this account already has enough`), but less than this request needs. The threshold sits above the largest single action, the first payment in another currency (about 0.059 MON at 102 gwei), so this happens only if the network price rises above about 130 gwei. Nothing was sent. | The account's balance against the request's gas x max fee |
 
+## Paying from a pot
+
+A decider asks for a payment to one of the pot's payees; asking counts as
+their own yes, and the yes that reaches the pot's rule pays in that same
+request (`app/src/lib/payout.ts`). The contract checks the payee's limit and
+what the pot holds only when it pays, so the phone checks both before anyone
+asks or says yes, then runs the request as a call before anything is signed.
+All of 22 to 29 are found that way: nothing was sent, and no gas grant or
+passkey prompt was spent. A request, a yes or a take back that reverts or is
+replaced shows 52 or 53; one the node turns down twice shows 56; one that
+stalls shows 51 and can be retried on the same nonce.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 22 | This account doesn't decide on this pot (`NotApprover`). | `getApprovers(potId)` |
+| 23 | No amount, or zero (`ZeroAmount`). | |
+| 24 | More than the payee can still be paid: `spent + amount > cap` (`CapExceeded`). The fee doesn't count against the limit. | `getDestinations(potId)` |
+| 25 | The pot can't cover the amount plus its fee (`InsufficientPotAssets`). | `getPot(potId).totalAssets`, `feeOn(amount)` |
+| 26 | The pot is closed or paused (`PotClosed`, `PotFrozen`). | `getPot(potId).closed`, `.frozen` |
+| 27 | The request is past its 7 days (`ProposalExpired`), judged at the finalized block's time. | `proposalInfo(id).expiresAt` |
+| 28 | The request isn't waiting for that any more: paid, withdrawn, a yes already given, or no yes to take back (`ProposalNotPending`, `AlreadyApproved`, `NotApproved`). | `proposalInfo(id)`, `hasApproved(id, account)` |
+| 29 | The contract refused the call for any other reason, such as the dollar refusing the transfer to the payee. | `eth_call` of the request from the account |
+
 ## Passkey
 
 | Code | What happened | Where to look |
@@ -56,7 +79,7 @@ means it was, and the app is still tracking it.
 | 53 | Its nonce was used by a different transaction. Nothing of this request moved. | The account's transactions |
 | 54 | A retry was refused because the earlier attempt may still go through. Wait. | The pending write |
 | 55 | Try again was pressed but there was nothing stuck to retry. | |
-| 56 | The node answered the broadcast and turned it down twice in a row (a JSON-RPC error other than a rate limit, an internal error, "already known" or "nonce too low"), and its nonce is still unused at finalized. Nothing moved; it can be retried on the same nonce. Shown when making a pot; elsewhere it shows as 51. | The pending write; the RPC's error for its raw bytes |
+| 56 | The node answered the broadcast and turned it down twice in a row (a JSON-RPC error other than a rate limit, an internal error, "already known" or "nonce too low"), and its nonce is still unused at finalized. Nothing moved; it can be retried on the same nonce. Shown when making a pot and when paying from a pot; elsewhere it shows as 51. | The pending write; the RPC's error for its raw bytes |
 
 ## Adding test dollars on the AUSD deployment (Agora's faucet)
 
@@ -80,7 +103,7 @@ and no passkey prompt. A pot whose transaction reverts or is replaced shows
 
 | Code | What happened | Where to look |
 | --- | --- | --- |
-| 70 | A link from a chat couldn't be read: cut short, edited, an unknown version, or text over the length limits. | The link as received |
+| 70 | A link from a chat couldn't be read: cut short, edited, an unknown version, or text over the length limits. Also a payment request link naming a request that doesn't exist, or belongs to another pot. | The link as received; `proposalInfo(id).potId` |
 | 71 | A reply link names a draft that isn't on this phone (opened on another phone, or the draft was deleted), or a payee slot that is no longer in the draft. | The creator's drafts in localStorage, `nivpay.drafts.v1` |
 | 72 | A reply's signature doesn't recover to the account it names, for this chain and this pots contract. It was not added. | The reply link |
 | 73 | `createPot` would revert with these arguments, usually `EndTimeInPast`. Nothing was sent. | The draft's closing date and time zone |
@@ -93,7 +116,7 @@ through. Nothing moved."
 
 | Code | What happened | Where to look |
 | --- | --- | --- |
-| 75 | A pot link made for the other deployment (AUSD or TESTUSD) was opened on this one. | The link's deployment byte and `VITE_NIVPAY_POTS` |
+| 75 | A pot link or payment request link made for the other deployment (AUSD or TESTUSD) was opened on this one. | The link's deployment byte and `VITE_NIVPAY_POTS` |
 | 76 | No `PotCreated` for that pot id in the block the link names. The link is wrong or for another contract. | `eth_getLogs` at the link's block, topic 1 the pot id |
 
 ## Finding pots on Home
