@@ -465,6 +465,53 @@ contracts, if you want one in the demo. I have not planned it in.
   cannot spell MON in capitals. Base32 is about 20% longer than base64url,
   which is the price of the guarantee. A test builds links from realistic
   data and fails if one contains "0x" or any banned word.
+* **Named people need no pot link.** Invite links (version 2) carry the
+  inviting account. When someone answers, their phone keeps the pot name,
+  the inviter's name and account, any suggested share, and the finalized
+  block and `potCount()` read at that moment. Home shows "Invited to <name>
+  by <inviter>. Waiting for the pot to be made." Discovery already finds
+  every pot that names the account (`getApprovers`, `getDestinations`); a
+  found pot is matched to the invite only if it names the account in the
+  invited role, its number is at least the recorded `potCount()`, and its
+  `PotCreated.creator` is the inviter's account. Never on a name. To read
+  `PotCreated` without a creation block, the app bisects `potCount()` over
+  past state between the answer and the finalized block (about 25 reads),
+  then reads that one block's log. If the node keeps no past state there,
+  it reads the inviter's `PotCreated` events forward from the answer, 30
+  pages of 101 blocks per poll. A matched pot opens on the pot screen with
+  no link: names are unsigned there, so people show as "account ending"
+  until a pot link is opened. Rows still waiting after 14 days are dropped.
+  Not measured yet: how far back the public RPC serves `eth_call` state,
+  which decides whether the quick or the slow path runs.
+* **One group link.** After the pot is made, the creator's screen names the
+  people who already have the pot on their Home and offers one "Share the
+  pot" link for everyone else and for anyone who wants names. There is no
+  per-person "Sent" status: with one link, who received it is unknowable
+  without a server.
+* **Links per person, from invite to an open pot:**
+
+  | Who | Before | After |
+  |---|---|---|
+  | Decider who answered an invite | 3: invite in, reply out, their own pot link in | 2: invite in, reply out. No pot link |
+  | Payee who answered an invite | 3: the same | 2: the same |
+  | Payee whose Account ID was pasted | 1: their own pot link | 0 to see the pot (discovery, no names). 1 group link for names |
+  | Contributor, not named | 1: the pot link | 1: the group link |
+  | Named via an invite from before version 2 | 3 | 3: the invite has no inviter account, so it is never matched, and chipping in needs the group link |
+  | The creator, sharing | 2 per named person (invite, then pot link), plus 1 for everyone else | 1 per named person (invite), plus 1 group link |
+
+* **A suggested share in the invite.** It can travel: version 2 invites
+  carry it as an unsigned amount, and only a payee's share is ever known at
+  invite time, since a decider's share is keyed by an account the creator
+  learns from the reply. Unsigned costs nothing, but anyone who edits the
+  link can change it, so Home shows it as "not checked yet" and the pot
+  screen never starts from it. Signing it (EIP-712 over draft id, slot, role
+  and share, on the same domain) would cost one passkey prompt per invite,
+  where invites need none today, and before the pot exists the signature
+  only matches the account written in the same link. It becomes proof at
+  matching, when that account is checked against `PotCreated.creator`. Either
+  way it is a snapshot: the creator can change the share before making the
+  pot, and the share signed into the pot link over the creating transaction
+  stays the one that counts. No contract change is needed for either.
 * **Switch account.** One phone can hold more than one account for testing.
   The app stores a list of addresses, one per passkey, and "Switch account"
   asks for that account's passkey. Keys are still never stored; only
