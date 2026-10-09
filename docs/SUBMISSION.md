@@ -40,8 +40,8 @@ the author's notes are in `docs/BOUNTIES.md`.
 | --- | --- | --- |
 | Passkey onboarding | Done | Mera passkey accounts (`app/src/lib/passkey.ts`, `app/src/lib/keys.ts`). |
 | An AUSD balance | Done | The home screen reads the AUSD balance at the finalized block; Add test dollars claims from Agora's faucet. |
-| A completed send and receive of AUSD, settled instantly | In progress | Putting money into a pot and a payout to a destination already settle in AUSD and report the measured time to Finalized. A direct "Send dollars" and "Receive" flow is the next piece of work. |
-| Agora Instant Settlement on Monad testnet | Under investigation | Whether a NivPay account may use the pair depends on its whitelist. The finding goes in `docs/BOUNTIES.md`; nothing will be faked. |
+| A completed send and receive of AUSD, settled instantly | Built, needs the phone test | Send dollars (`app/src/screens/Send.tsx`): to a request link or a confirmed Account ID, a confirm sheet, one fingerprint, success only at Finalized with the measured "Settled in" time and a receipt link. Receive (`app/src/screens/Receive.tsx`): a request link to share and each incoming payment shown once final. Checked on a local fork and with live read-only tests; the two-phone run is for the author. |
+| Agora Instant Settlement on Monad testnet | Next | Checked read only: any account can give itself the swap permission on testnet with one request, and the AUSD to CTK pair quotes 1:1 with no fee. "Send in another currency" is the next piece of work. |
 | Mobile application | **Owner**, optional | `docs/BOUNTIES.md` plans an Android wrap of the web app with Bubblewrap before submission. |
 | Business viability shown | Done | The payout fee is the revenue, shown on every payment. |
 
