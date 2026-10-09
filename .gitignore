@@ -30,3 +30,18 @@ docs/*
 .env
 .env.*
 !.env.example
+
+# Keys and credentials. None belong in this repository: the deployer key lives
+# in an encrypted keystore under ~/.foundry/keystores, and the funder key only
+# in the Vercel project's environment variables.
+keystore/
+keystores/
+*.keystore
+UTC--*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+.vercel/
