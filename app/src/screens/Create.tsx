@@ -35,6 +35,7 @@ import { acceptReply } from "../lib/replies.ts";
 import { withSigner } from "../lib/passkey.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { fitsText32 } from "../lib/text32.ts";
+import { rememberReceipt } from "../lib/receipts.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { PotMap, type Coin, type MapPerson } from "./PotMap.tsx";
 import { andList, formatDay, Icon, NoticeLine, phoneTimeZone, shareLink, Sheet, type Notice } from "./ui.tsx";
@@ -185,7 +186,10 @@ export function CreateScreen(props: {
       setStep("landing");
       try {
         const outcome = await followToFinality(idbWriteStore, liveWriteChain, write);
-        if (outcome.kind === "final") await finish(write.hash);
+        if (outcome.kind === "final") {
+          rememberReceipt(write.address, write.hash);
+          await finish(write.hash);
+        }
         else if (outcome.kind === "reverted") failed({ tone: "bad", text: copy.createDidNotGoThrough, code: ERROR_CODES.REVERTED });
         else if (outcome.kind === "superseded") failed({ tone: "bad", text: copy.createDidNotGoThrough, code: ERROR_CODES.SUPERSEDED });
         else if (alive.current) {

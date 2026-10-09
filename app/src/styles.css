@@ -222,6 +222,13 @@ h1 {
   margin: 8px 0 0;
 }
 
+.receipt-link {
+  color: var(--primary-text);
+  font-size: 15px;
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+
 .error {
   color: var(--primary-text);
   font-size: 14px;

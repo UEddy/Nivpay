@@ -18,6 +18,7 @@ import { readClient } from "./lib/rpc.ts";
 import { PotStore, type StoredPot } from "./lib/potstore.ts";
 import { retryStuckWrite, sendWrite, type Step } from "./lib/send.ts";
 import { acceptReply } from "./lib/replies.ts";
+import { latestReceipt, receiptUrl, rememberReceipt } from "./lib/receipts.ts";
 import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
 import { ChipInScreen } from "./screens/ChipIn.tsx";
 import { CreateScreen } from "./screens/Create.tsx";
@@ -347,6 +348,7 @@ function Welcome(props: {
 /** Account details: the only place the Account ID appears, for support. */
 function AccountSheet(props: { account: StoredAccount; onSwitch: () => void; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
+  const receipt = latestReceipt(props.account.address);
   const copyId = () => {
     navigator.clipboard
       .writeText(props.account.address)
@@ -366,6 +368,15 @@ function AccountSheet(props: { account: StoredAccount; onSwitch: () => void; onC
           {copied ? copy.copied : copy.copyAction}
         </button>
         <p className="hint">{copy.accountIdHint}</p>
+        {receipt && (
+          <p className="hint">
+            <a className="receipt-link" href={receiptUrl(receipt)} target="_blank" rel="noopener noreferrer">
+              {copy.viewReceipt}
+            </a>
+            <br />
+            {copy.viewReceiptHint}
+          </p>
+        )}
         <button className="btn" onClick={props.onSwitch}>
           {copy.switchAccount}
         </button>
@@ -486,6 +497,7 @@ function Home(props: {
       if (!alive.current) return;
       setStep(null);
       if (outcome.kind === "final") {
+        rememberReceipt(write.address, write.hash);
         setStuck(false);
         setResult({ tone: "ok", text: copy.added(amountLabel, (outcome.settledMs / 1000).toFixed(1)) });
       } else if (outcome.kind === "stuck") {

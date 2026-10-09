@@ -15,6 +15,7 @@ import { NO_DATA, POUR_GAS_HINT, POUR_LABEL, pourData, readPermitTerms } from ".
 import type { StoredPot } from "../lib/potstore.ts";
 import { openPot, potFeed, putIn, readPotState, type PotInfo, type PotState } from "../lib/potview.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
+import { rememberReceipt } from "../lib/receipts.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { PotMap, type Coin, type Layer, type MapPerson } from "./PotMap.tsx";
 import { andList, Icon, NoticeLine, shareLink, Sheet, type Notice } from "./ui.tsx";
@@ -216,6 +217,7 @@ export function ChipInScreen(props: {
       try {
         const outcome = await followToFinality(idbWriteStore, liveWriteChain, write);
         if (outcome.kind === "final") {
+          rememberReceipt(write.address, write.hash);
           const next = await read();
           if (!alive.current) return;
           setMyCoin("end");

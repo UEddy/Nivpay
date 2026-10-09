@@ -35,6 +35,8 @@ export const copy = {
   accountDetails: "Account details",
   accountId: "Account ID",
   accountIdHint: "Only needed if NivPay support asks for it.",
+  viewReceipt: "View receipt",
+  viewReceiptHint: "Your latest payment or claim, on a public record anyone can check.",
   copyAction: "Copy",
   copied: "Copied",
   close: "Close",
