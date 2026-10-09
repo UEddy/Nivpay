@@ -1,6 +1,7 @@
-import { getAddress, type Address, type PublicClient } from "viem";
+import { getAddress, numberToHex, pad, parseEventLogs, toEventSelector, type Address, type Log, type PublicClient } from "viem";
 import { ERC20_READ_ABI, POTS_ABI, POTS_READ_ABI } from "./abi.ts";
 import type { PotsReader } from "./discover.ts";
+import type { CreatorReader } from "./invited.ts";
 import { fromText32 } from "./text32.ts";
 
 /** Calls per Multicall3 batch, so one slow or oversized request never holds up the rest. */
@@ -70,4 +71,35 @@ export async function readSince(readClient: Pick<PublicClient, "getBlock" | "rea
   const block = (await readClient.getBlock({ blockTag: "finalized" })).number;
   const potCount = Number(await readClient.readContract({ address: pots, abi: POTS_ABI, functionName: "potCount", blockNumber: block }));
   return { block, potCount };
+}
+
+const POT_CREATED = toEventSelector(POTS_ABI.find((e) => e.type === "event" && e.name === "PotCreated")!);
+
+/** Matching's reads against a pots contract (invited.ts). */
+export function creatorReader(readClient: Pick<PublicClient, "getBlock" | "readContract" | "multicall" | "request">, pots: Address): CreatorReader {
+  const members = potsReader(readClient, pots).members;
+  return {
+    finalized: async () => (await readClient.getBlock({ blockTag: "finalized" })).number,
+
+    potCountAt: async (at) => Number(await readClient.readContract({ address: pots, abi: POTS_ABI, functionName: "potCount", blockNumber: at })),
+
+    async created(from, to, creator, potId) {
+      const raw = (await readClient.request({
+        method: "eth_getLogs",
+        params: [
+          {
+            address: pots,
+            fromBlock: numberToHex(from),
+            toBlock: numberToHex(to),
+            topics: [POT_CREATED, potId === undefined ? null : pad(numberToHex(potId), { size: 32 }), pad(creator.toLowerCase() as Address, { size: 32 })],
+          },
+        ],
+      })) as Log[];
+      return parseEventLogs({ abi: POTS_ABI, eventName: "PotCreated", logs: raw })
+        .filter((l) => getAddress(l.args.creator) === getAddress(creator) && (potId === undefined || l.args.potId === potId))
+        .map((l) => ({ potId: l.args.potId, block: l.blockNumber }));
+    },
+
+    members: async (potId, at) => (await members([Number(potId)], at))[0]!,
+  };
 }

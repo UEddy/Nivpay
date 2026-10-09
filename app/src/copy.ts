@@ -376,6 +376,8 @@ export const copy = {
   replyThenHome: (from: string) => `Once ${from} makes the pot, it shows on your Home by itself. You won't need a link.`,
   invitedWaiting: (pot: string, from: string) => `Invited to ${pot} by ${from}. Waiting for the pot to be made.`,
   invitedTag: "Invited",
+  invitedBy: (from: string) => `Invited by ${from}. Open it here, no link needed.`,
+  alsoInIt: (people: string[]) => `Also in it: ${new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" }).format(people)}.`,
   invitedShare: (amount: string) => `Suggested share ${amount}, not checked yet.`,
   replyAdded: (name: string) => `${name} joined as a decider.`,
   payeeReplyAdded: (name: string, as: string) => `${name} will be paid as ${as}.`,

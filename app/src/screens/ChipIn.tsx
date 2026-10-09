@@ -8,11 +8,11 @@ import type { Person } from "../lib/draft.ts";
 import { AppError, describeFailure, SendFailure } from "../lib/errors.ts";
 import type { PotEvent } from "../lib/feed.ts";
 import { idbWriteStore } from "../lib/idb.ts";
-import { decodeLink, type PotLink } from "../lib/invites.ts";
+import type { PotLink } from "../lib/invites.ts";
 import { formatAmount, parseAmount } from "../lib/money.ts";
 import { MAX_DRAWN_PEOPLE } from "../lib/potmap.ts";
 import { NO_DATA, POUR_GAS_HINT, POUR_LABEL, pourData, readPermitTerms } from "../lib/pour.ts";
-import type { StoredPot } from "../lib/potstore.ts";
+import { linkFor, type StoredPot } from "../lib/potstore.ts";
 import { openPot, potFeed, putIn, readPotState, type PotInfo, type PotState } from "../lib/potview.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { rememberReceipt } from "../lib/receipts.ts";
@@ -62,14 +62,7 @@ export function ChipInScreen(props: {
 }) {
   const { account } = props;
   const me = account.address;
-  const link = useMemo(() => {
-    try {
-      const l = decodeLink(props.pot.fragment);
-      return l.kind === "pot" ? l : null;
-    } catch {
-      return null;
-    }
-  }, [props.pot.fragment]);
+  const link = useMemo(() => linkFor(props.pot), [props.pot]);
   const potId = BigInt(props.pot.potId);
 
   const [info, setInfo] = useState<PotInfo | null>(null);
@@ -299,7 +292,7 @@ export function ChipInScreen(props: {
         <Icon name="close" size={22} />
       </button>
       <div className="bar-title">{state?.name ?? props.pot.name}</div>
-      {link && info ? (
+      {props.pot.fragment && link && info ? (
         <button
           type="button"
           className="icon-btn"

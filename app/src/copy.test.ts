@@ -149,6 +149,8 @@ function allCopy(): [string, string][] {
     replyThenHome: ["Idara"],
     invitedWaiting: ["Mama\u2019s 60th", "Idara"],
     invitedShare: ["$600"],
+    invitedBy: ["Idara"],
+    alsoInIt: [["account ending 7bC1", "account ending 4e2a"]],
     replyShareText: ["Idara"],
     replyAdded: ["Ubong"],
     payeeReplyAdded: ["Chidi", "Caterer"],

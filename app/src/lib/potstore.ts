@@ -1,10 +1,12 @@
 import type { Deployment } from "./config.ts";
-import type { PotLink } from "./invites.ts";
+import { decodeLink, type PotLink } from "./invites.ts";
 
 /**
  * The pots this phone has opened or made, so Home can list them. Only the
  * pot's number, creation block and link fragment are kept: everything shown
  * is read again from the chain, and the names again from the signed link.
+ * A pot matched to an answered invite (invited.ts) opens with an empty
+ * fragment: no names, so people show as "account ending".
  */
 export type StoredPot = { deployment: Deployment; potId: string; block: string; fragment: string; name: string; addedAt: number };
 
@@ -60,4 +62,23 @@ export function rememberPotLink(store: PotStore, link: PotLink, fragment: string
   const known = store.get(link.deployment, pot.potId);
   store.put({ ...pot, name: known?.name ?? "" });
   return store.get(link.deployment, pot.potId) ?? pot;
+}
+
+/**
+ * The link a pot opens with. A pot opened with no link (matched to an
+ * answered invite) gets one with no names and no signature, which never
+ * verifies, so the pot screen reads everything from the chain and shows
+ * people by the end of their account. Null if a stored link is damaged.
+ */
+export function linkFor(pot: StoredPot): PotLink | null {
+  if (!pot.fragment) {
+    if (!/^\d+$/.test(pot.block)) return null;
+    return { kind: "pot", version: 2, deployment: pot.deployment, potId: BigInt(pot.potId), block: BigInt(pot.block), people: [], shares: [], signature: "0x" };
+  }
+  try {
+    const l = decodeLink(pot.fragment);
+    return l.kind === "pot" ? l : null;
+  } catch {
+    return null;
+  }
 }

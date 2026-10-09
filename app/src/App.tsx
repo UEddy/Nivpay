@@ -6,14 +6,14 @@ import { AccountStore, type StoredAccount } from "./lib/accounts.ts";
 import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
 import { AUSD, AUSD_FAUCET, TESTUSD } from "./lib/config.ts";
-import { DEPLOYMENT, POTS } from "./lib/deployment.ts";
+import { DEPLOYMENT, POTS, POTS_DEPLOY_BLOCK } from "./lib/deployment.ts";
 import { DraftStore, newDraft, potRecipients, type Draft } from "./lib/draft.ts";
 import { findPots, ScanStore, type FoundPot, type Role, type ScanState } from "./lib/discover.ts";
-import { potsReader } from "./lib/discoverLive.ts";
+import { creatorReader, potsReader } from "./lib/discoverLive.ts";
 import { AppError, describeFailure, SendFailure } from "./lib/errors.ts";
 import { checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
 import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
-import { InvitedStore, type AnsweredInvite } from "./lib/invited.ts";
+import { InvitedStore, matchInvites, type AnsweredInvite } from "./lib/invited.ts";
 import { decodeLink, type Invite, type PayLink, type PotLink } from "./lib/invites.ts";
 import { formatAmount, parseAmount } from "./lib/money.ts";
 import { hostCheck, signIn, signUp } from "./lib/passkey.ts";
@@ -233,7 +233,8 @@ export function App() {
         account={active}
         pot={screen.pot}
         banner={banner}
-        onName={(name) => pots.put({ ...screen.pot, name })}
+        // A pot opened with no link is not kept: Home shows it from the invite it was matched to.
+        onName={(name) => screen.pot.fragment && pots.put({ ...screen.pot, name })}
         onClose={() => go({ kind: "home" })}
       />
     );
@@ -741,18 +742,21 @@ function Home(props: {
 
 const FIND_POTS_EVERY_MS = 10_000;
 const livePots = potsReader(readClient, POTS);
+const liveCreators = creatorReader(readClient, POTS);
 
 /**
  * Pots this account is named on, found from the chain (lib/discover.ts), so
  * a pot appears on every phone of everyone in it even if its link never
  * arrived. Read when Home opens, which is also when the app opens, when the
  * app comes back to the front, and every few seconds while Home stays open. What was found is remembered, so it shows
- * at once next time.
+ * at once next time. After each read, answered invites still waiting are
+ * matched against what was found (lib/invited.ts).
  */
 function useFoundPots(account: Address, connection: ReturnType<typeof useConnection>) {
   const store = useMemo(() => new ScanStore(localStorage, DEPLOYMENT, account), [account]);
   const [scan, setScan] = useState<ScanState>(() => store.load());
   const [failed, setFailed] = useState(false);
+  const [answeredInvites, setAnswered] = useState<AnsweredInvite[]>(() => invited.forAccount(DEPLOYMENT, account, Date.now()));
   const { track } = connection;
   useEffect(() => {
     let live = true;
@@ -769,6 +773,12 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
         store.save(next);
         setScan(next);
         setFailed(false);
+        const rows = invited.forAccount(DEPLOYMENT, account, Date.now());
+        setAnswered(rows);
+        const matched = await track(matchInvites(rows, next.found, liveCreators, POTS_DEPLOY_BLOCK));
+        if (!live) return;
+        for (const row of matched) invited.put(row);
+        setAnswered(invited.forAccount(DEPLOYMENT, account, Date.now()));
       } catch {
         if (live) setFailed(true);
       } finally {
@@ -786,7 +796,7 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [account, store, track]);
-  return { scan, failed };
+  return { scan, failed, answered: answeredInvites };
 }
 
 const ROLE_TEXT: Record<Role, string> = {
@@ -831,6 +841,32 @@ function WaitingRow(props: { row: AnsweredInvite; decimals: number | null }) {
   );
 }
 
+/**
+ * A pot matched to an invite this account answered: its name and live numbers
+ * from the chain, the inviter's name from the invite, and everyone else by
+ * the end of their account until a pot link with names is opened. Opens with
+ * no link.
+ */
+function MatchedRow(props: { row: AnsweredInvite; pot: FoundPot | undefined; decimals: number | null; me: Address; onOpen: () => void }) {
+  const { row, pot } = props;
+  const match = row.match!;
+  const holds = !pot || props.decimals === null ? "…" : formatAmount(BigInt(pot.totalAssets), props.decimals, "auto");
+  const others = [...new Set([...match.deciders, ...match.payees].map((a) => a.toLowerCase()))]
+    .filter((a) => a !== props.me.toLowerCase())
+    .map((a) => copy.accountEnding(a));
+  return (
+    <button type="button" className="home-pot" onClick={props.onOpen}>
+      <span className="grow">
+        <span className="name">{pot?.name || row.potName || copy.unnamedPot}</span>
+        <span className="meta">{copy.invitedBy(row.from)}</span>
+        {pot && <span className="meta">{copy.foundMeta(pot.roles.map((r) => ROLE_TEXT[r]), holds)}</span>}
+        {others.length > 0 && <span className="meta">{copy.alsoInIt(others)}</span>}
+      </span>
+      <span className={`tag${pot?.closed ? "" : " live"}`}>{pot?.closed ? copy.closedTag : copy.live}</span>
+    </button>
+  );
+}
+
 /** Pots this account is making, pots made or opened on this phone, invites it answered, and pots it is named on. */
 function YourPots(props: {
   account: StoredAccount;
@@ -838,8 +874,7 @@ function YourPots(props: {
   onOpen: (draftId: Hex) => void;
   onOpenPot: (pot: StoredPot) => void;
 }) {
-  const { scan, failed } = useFoundPots(props.account.address, props.connection);
-  const waiting = invited.forAccount(DEPLOYMENT, props.account.address, Date.now());
+  const { scan, failed, answered } = useFoundPots(props.account.address, props.connection);
   const mine = drafts.forOwner(props.account.address).filter((d) => !d.made?.fragment);
   // Pots made before the pot list existed are added to it once.
   for (const d of drafts.forOwner(props.account.address)) {
@@ -850,7 +885,10 @@ function YourPots(props: {
   const opened = pots.all(DEPLOYMENT);
   // Pots whose link is open on this phone show with their names; the rest of what was found shows here.
   const linked = new Set(opened.map((p) => p.potId));
-  const found = scan.found.filter((p) => !linked.has(p.potId));
+  const waiting = answered.filter((r) => !r.match);
+  const matched = answered.filter((r) => r.match && !linked.has(r.match.potId));
+  const matchedIds = new Set(matched.map((r) => r.match!.potId));
+  const found = scan.found.filter((p) => !linked.has(p.potId) && !matchedIds.has(p.potId));
   // A pot this account made but hasn't sent to everyone yet opens on its send step.
   const toSend = new Map<string, { draft: Draft; left: number }>();
   for (const d of drafts.forOwner(props.account.address)) {
@@ -865,7 +903,17 @@ function YourPots(props: {
   return (
     <section className="card">
       <p className="eyebrow">{copy.yourPots}</p>
-      {mine.length + opened.length + found.length + waiting.length === 0 && <p className="hint">{copy.noPotsYet}</p>}
+      {mine.length + opened.length + found.length + answered.length === 0 && <p className="hint">{copy.noPotsYet}</p>}
+      {matched.map((r) => (
+        <MatchedRow
+          key={`matched-${r.match!.potId}`}
+          row={r}
+          pot={scan.found.find((p) => p.potId === r.match!.potId)}
+          decimals={scan.decimals}
+          me={props.account.address}
+          onOpen={() => props.onOpenPot({ deployment: DEPLOYMENT, potId: r.match!.potId, block: r.match!.block, fragment: "", name: "", addedAt: r.answeredAt })}
+        />
+      ))}
       {waiting.map((r) => (
         <WaitingRow key={`invited-${r.draftId}-${r.role}-${r.slot}`} row={r} decimals={scan.decimals} />
       ))}
