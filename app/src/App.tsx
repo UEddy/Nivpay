@@ -8,6 +8,8 @@ import { liveWriteChain } from "./lib/chain.ts";
 import { AUSD, AUSD_FAUCET, TESTUSD } from "./lib/config.ts";
 import { DEPLOYMENT, POTS } from "./lib/deployment.ts";
 import { DraftStore, newDraft, potRecipients, type Draft } from "./lib/draft.ts";
+import { findPots, ScanStore, type FoundPot, type Role, type ScanState } from "./lib/discover.ts";
+import { potsReader } from "./lib/discoverLive.ts";
 import { AppError, describeFailure, SendFailure } from "./lib/errors.ts";
 import { checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
 import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
@@ -625,7 +627,7 @@ function Home(props: {
         )}
       </section>
 
-      <YourPots account={account} onOpen={props.onOpenDraft} onOpenPot={props.onOpenPot} />
+      <YourPots account={account} connection={props.connection} onOpen={props.onOpenDraft} onOpenPot={props.onOpenPot} />
 
       <section className="card">
         <p className="eyebrow">{copy.addTestDollars}</p>
@@ -683,8 +685,90 @@ function Home(props: {
   );
 }
 
-/** Pots this account is making, and pots made or opened on this phone. */
-function YourPots(props: { account: StoredAccount; onOpen: (draftId: Hex) => void; onOpenPot: (pot: StoredPot) => void }) {
+const FIND_POTS_EVERY_MS = 10_000;
+const livePots = potsReader(readClient, POTS);
+
+/**
+ * Pots this account is named on, found from the chain (lib/discover.ts), so
+ * a pot appears on every phone of everyone in it even if its link never
+ * arrived. Read when Home opens, which is also when the app opens, when the
+ * app comes back to the front, and every few seconds while Home stays open. What was found is remembered, so it shows
+ * at once next time.
+ */
+function useFoundPots(account: Address, connection: ReturnType<typeof useConnection>) {
+  const store = useMemo(() => new ScanStore(localStorage, DEPLOYMENT, account), [account]);
+  const [scan, setScan] = useState<ScanState>(() => store.load());
+  const [failed, setFailed] = useState(false);
+  const { track } = connection;
+  useEffect(() => {
+    let live = true;
+    let state = store.load();
+    setScan(state);
+    let running = false;
+    const poll = async () => {
+      if (running) return;
+      running = true;
+      try {
+        const next = await track(findPots(livePots, state, account));
+        if (!live) return;
+        state = next;
+        store.save(next);
+        setScan(next);
+        setFailed(false);
+      } catch {
+        if (live) setFailed(true);
+      } finally {
+        running = false;
+      }
+    };
+    void poll();
+    const t = setInterval(poll, FIND_POTS_EVERY_MS);
+    // A phone brings the app back from the background without reopening Home.
+    const onVisible = () => document.visibilityState === "visible" && void poll();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      live = false;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [account, store, track]);
+  return { scan, failed };
+}
+
+const ROLE_TEXT: Record<Role, string> = {
+  decides: copy.foundRoleDecides,
+  paid: copy.foundRolePaid,
+  putIn: copy.foundRolePutIn,
+};
+
+/** A pot found from the chain whose link hasn't been opened on this phone: live numbers, no names yet. */
+function FoundPotRow(props: { pot: FoundPot; decimals: number | null }) {
+  const [open, setOpen] = useState(false);
+  const { pot } = props;
+  const holds = props.decimals === null ? "…" : formatAmount(BigInt(pot.totalAssets), props.decimals, "auto");
+  return (
+    <>
+      <button type="button" className="home-pot" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <span className="grow">
+          <span className="name">{pot.name || copy.unnamedPot}</span>
+          <span className="meta">{copy.addedToAPot}</span>
+          <span className="meta">{copy.foundMeta(pot.roles.map((r) => ROLE_TEXT[r]), holds)}</span>
+        </span>
+        <span className={`tag${pot.closed ? "" : " live"}`}>{pot.closed ? copy.closedTag : copy.live}</span>
+      </button>
+      {open && <p className="hint found-note">{copy.foundNeedsLink}</p>}
+    </>
+  );
+}
+
+/** Pots this account is making, pots made or opened on this phone, and pots it is named on. */
+function YourPots(props: {
+  account: StoredAccount;
+  connection: ReturnType<typeof useConnection>;
+  onOpen: (draftId: Hex) => void;
+  onOpenPot: (pot: StoredPot) => void;
+}) {
+  const { scan, failed } = useFoundPots(props.account.address, props.connection);
   const mine = drafts.forOwner(props.account.address).filter((d) => !d.made?.fragment);
   // Pots made before the pot list existed are added to it once.
   for (const d of drafts.forOwner(props.account.address)) {
@@ -693,6 +777,9 @@ function YourPots(props: { account: StoredAccount; onOpen: (draftId: Hex) => voi
     }
   }
   const opened = pots.all(DEPLOYMENT);
+  // Pots whose link is open on this phone show with their names; the rest of what was found shows here.
+  const linked = new Set(opened.map((p) => p.potId));
+  const found = scan.found.filter((p) => !linked.has(p.potId));
   // A pot this account made but hasn't sent to everyone yet opens on its send step.
   const toSend = new Map<string, { draft: Draft; left: number }>();
   for (const d of drafts.forOwner(props.account.address)) {
@@ -707,7 +794,10 @@ function YourPots(props: { account: StoredAccount; onOpen: (draftId: Hex) => voi
   return (
     <section className="card">
       <p className="eyebrow">{copy.yourPots}</p>
-      {mine.length + opened.length === 0 && <p className="hint">{copy.noPotsYet}</p>}
+      {mine.length + opened.length + found.length === 0 && <p className="hint">{copy.noPotsYet}</p>}
+      {found.map((p) => (
+        <FoundPotRow key={`found-${p.potId}`} pot={p} decimals={scan.decimals} />
+      ))}
       {opened.map((p) => (
         <button
           type="button"
@@ -735,6 +825,7 @@ function YourPots(props: { account: StoredAccount; onOpen: (draftId: Hex) => voi
           <span className={`tag${d.made ? " live" : ""}`}>{d.made ? copy.live : copy.draft}</span>
         </button>
       ))}
+      {failed && <NoticeLine notice={{ tone: "bad", text: copy.errFindPots, code: ERROR_CODES.FIND_POTS_FAILED }} />}
       <button type="button" className="btn primary" onClick={start}>
         {copy.makeAPot}
       </button>

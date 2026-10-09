@@ -88,6 +88,7 @@ function allCopy(): [string, string][] {
     stillNeeded: ["a name, a closing date"],
     sendToPerson: ["Ubong"],
     potRowSendToMore: [2],
+    foundMeta: [["you decide on payments", "you've put money in"], "$900"],
     sendAgainTo: ["Ubong"],
     potLinkFor: ["Ubong", "Mama’s 60th"],
     linkCopiedFor: ["Ubong"],
@@ -132,6 +133,12 @@ function allCopy(): [string, string][] {
 
 test("no banned word in any copy, including generated messages", () => {
   for (const [key, text] of allCopy()) assert.deepEqual(bannedIn(text), [], `copy.${key}: ${text}`);
+});
+
+test("a pot found from the chain says what the person does in it, as one sentence", () => {
+  assert.equal(copy.foundMeta([copy.foundRoleDecides], "$900"), "You decide on payments. Holds $900.");
+  assert.equal(copy.foundMeta([copy.foundRoleDecides, copy.foundRolePutIn], "$900"), "You decide on payments and you've put money in. Holds $900.");
+  assert.equal(copy.foundMeta([copy.foundRolePaid], "$0"), "It can pay you. Holds $0.");
 });
 
 test("vendors and people are shown as 'account ending', never a 0x form", () => {

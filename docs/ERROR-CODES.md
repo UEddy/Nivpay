@@ -94,6 +94,18 @@ through. Nothing moved."
 | 75 | A pot link made for the other deployment (AUSD or TESTUSD) was opened on this one. | The link's deployment byte and `VITE_NIVPAY_POTS` |
 | 76 | No `PotCreated` for that pot id in the block the link names. The link is wrong or for another contract. | `eth_getLogs` at the link's block, topic 1 the pot id |
 
+## Finding pots on Home
+
+Home reads, from the chain, every pot this account decides on, can be paid
+from, or has put money in (`app/src/lib/discover.ts`): `potCount`, then
+`getApprovers`, `getDestinations`, `sharesOf` and `getPot` through Multicall3
+at the finalized block. It runs when Home opens and every 10 seconds while it
+stays open. Nothing is sent.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 77 | One of those reads failed, so pots this account was added to may be missing for now. Pots already found stay listed, and the next read is 10 seconds later. | RPC reachability; Multicall3 at `0xcA11bde05977b3631167028862bE2a173976CA11` |
+
 ## Other
 
 | Code | What happened | Where to look |

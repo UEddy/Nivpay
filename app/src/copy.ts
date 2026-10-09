@@ -259,6 +259,17 @@ export const copy = {
   errPotOtherVersion: "This pot belongs to a different version of NivPay and can't be opened here.",
   errPotNotFound: "This pot couldn't be found. Ask for the link again.",
   potRowJoined: "Open to chip in and follow it.",
+  addedToAPot: "Added to a pot",
+  foundRoleDecides: "you decide on payments",
+  foundRolePaid: "it can pay you",
+  foundRolePutIn: "you've put money in",
+  foundMeta: (roles: string[], holds: string) => {
+    const who = new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" }).format(roles);
+    return `${who.charAt(0).toUpperCase()}${who.slice(1)}. Holds ${holds}.`;
+  },
+  foundNeedsLink: "Ask whoever made this pot to send you its link. Then you'll see everyone's names and can add your share.",
+  closedTag: "Closed",
+  errFindPots: "Couldn't check for pots you've been added to. Trying again.",
   potRowSendToMore: (people: number) => `Made. Send it to ${people} more ${people === 1 ? "person" : "people"}.`,
 
   // Joining from an invite
@@ -334,6 +345,7 @@ export const ERROR_CODES = {
   REPLY_TOO_LATE: 74,
   POT_OTHER_VERSION: 75,
   POT_NOT_FOUND: 76,
+  FIND_POTS_FAILED: 77,
   UNKNOWN: 99,
 } as const;
 
