@@ -15,7 +15,7 @@ import { decodeLink, type Invite, type PotLink } from "./lib/invites.ts";
 import { formatAmount, parseAmount } from "./lib/money.ts";
 import { hostCheck, signIn, signUp } from "./lib/passkey.ts";
 import { readClient } from "./lib/rpc.ts";
-import { PotStore, type StoredPot } from "./lib/potstore.ts";
+import { PotStore, rememberPotLink, type StoredPot } from "./lib/potstore.ts";
 import { retryStuckWrite, sendWrite, type Step } from "./lib/send.ts";
 import { acceptReply } from "./lib/replies.ts";
 import { latestReceipt, receiptUrl, rememberReceipt } from "./lib/receipts.ts";
@@ -32,10 +32,7 @@ const pots = new PotStore(localStorage);
 type Screen = { kind: "home" } | { kind: "create"; draftId: Hex } | { kind: "join"; invite: Invite } | { kind: "pot"; pot: StoredPot };
 
 function storedFromLink(link: PotLink, fragment: string): StoredPot {
-  const pot: StoredPot = { deployment: link.deployment, potId: link.potId.toString(), block: link.block.toString(), fragment, name: "", addedAt: Date.now() };
-  const known = pots.get(link.deployment, pot.potId);
-  pots.put({ ...pot, name: known?.name ?? "" });
-  return pots.get(link.deployment, pot.potId) ?? pot;
+  return rememberPotLink(pots, link, fragment, Date.now());
 }
 
 /**

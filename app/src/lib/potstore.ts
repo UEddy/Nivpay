@@ -1,4 +1,5 @@
 import type { Deployment } from "./config.ts";
+import type { PotLink } from "./invites.ts";
 
 /**
  * The pots this phone has opened or made, so Home can list them. Only the
@@ -46,4 +47,17 @@ export class PotStore {
     const others = all.filter((p) => p !== old);
     this.kv.setItem(POTS_KEY, JSON.stringify([...others, { ...pot, addedAt: old?.addedAt ?? pot.addedAt }]));
   }
+}
+
+/**
+ * What happens on an invitee's phone when they open a pot link: the pot is
+ * added to this phone's list, so Home shows it from then on. Opening the same
+ * pot again keeps the name it was shown under and when it was first added,
+ * and takes the newer link.
+ */
+export function rememberPotLink(store: PotStore, link: PotLink, fragment: string, now: number): StoredPot {
+  const pot: StoredPot = { deployment: link.deployment, potId: link.potId.toString(), block: link.block.toString(), fragment, name: "", addedAt: now };
+  const known = store.get(link.deployment, pot.potId);
+  store.put({ ...pot, name: known?.name ?? "" });
+  return store.get(link.deployment, pot.potId) ?? pot;
 }
