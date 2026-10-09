@@ -56,6 +56,7 @@ means it was, and the app is still tracking it.
 | 53 | Its nonce was used by a different transaction. Nothing of this request moved. | The account's transactions |
 | 54 | A retry was refused because the earlier attempt may still go through. Wait. | The pending write |
 | 55 | Try again was pressed but there was nothing stuck to retry. | |
+| 56 | The node answered the broadcast and turned it down twice in a row (a JSON-RPC error other than a rate limit, an internal error, "already known" or "nonce too low"), and its nonce is still unused at finalized. Nothing moved; it can be retried on the same nonce. Shown when making a pot; elsewhere it shows as 51. | The pending write; the RPC's error for its raw bytes |
 
 ## Adding test dollars on the AUSD deployment (Agora's faucet)
 

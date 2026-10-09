@@ -19,6 +19,8 @@ import { AppError } from "./errors.ts";
  *     transaction is in a block, so the nonce, not mempool visibility, is what
  *     makes this safe.
  *
+ *     A request the node turns down twice in a row ends the same way, sooner,
+ *     once its nonce is confirmed unused: it is stuck, and says it was refused.
  *  5. Several requests signed with one fingerprint (a sequence) sit on
  *     consecutive nonces. Only the first is broadcast; each next one is
  *     broadcast only once the one before it is final and succeeded. If any
@@ -50,8 +52,16 @@ export interface WriteStore {
   delete(address: Address): Promise<void>;
 }
 
+/** The node answered a broadcast and turned it down, as opposed to not being reached. */
+export class BroadcastRefused extends Error {
+  constructor(cause: unknown) {
+    super("the request was refused", { cause });
+    this.name = "BroadcastRefused";
+  }
+}
+
 export interface WriteChain {
-  /** Broadcasts raw bytes. May throw; the caller tracks by hash regardless. */
+  /** Broadcasts raw bytes. May throw, BroadcastRefused when turned down; the caller tracks by hash regardless. */
   sendRawTransaction(raw: Hex): Promise<unknown>;
   getReceipt(hash: Hex): Promise<{ blockNumber: bigint; status: "success" | "reverted" } | null>;
   getFinalizedBlockNumber(): Promise<bigint>;
@@ -65,8 +75,11 @@ export type Outcome =
   | { kind: "reverted"; blockNumber: bigint }
   /** The nonce was used at finalized by a different transaction. Nothing of ours moved. */
   | { kind: "superseded" }
-  /** Not included and the nonce is unused at finalized. May be replaced, same nonce only. */
-  | { kind: "stuck" };
+  /**
+   * Not included and the nonce is unused at finalized. May be replaced, same
+   * nonce only. `refused` when the last answer to a broadcast was a refusal.
+   */
+  | { kind: "stuck"; refused: boolean };
 
 export class WriteInFlightError extends AppError {
   constructor() {
@@ -89,6 +102,9 @@ export const DEFAULT_TIMING: Timing = {
   rebroadcastEveryMs: 4_000,
   stuckAfterMs: 45_000,
 };
+
+/** Refusals in a row after which a request is given up on early, if its nonce is unused. */
+export const REFUSALS_BEFORE_STUCK = 2;
 
 /** Refuses to start a write while this account has one pending. */
 export async function assertNoWriteInFlight(store: WriteStore, address: Address): Promise<void> {
@@ -116,6 +132,8 @@ export async function followToFinality(
 ): Promise<Outcome> {
   const started = timing.now();
   let lastBroadcast = started;
+  // Refusals in a row. A broadcast that gets no answer neither adds nor resets.
+  let refusals = 0;
   for (;;) {
     const receipt = await chain.getReceipt(write.hash).catch(() => null);
     if (receipt) {
@@ -130,9 +148,14 @@ export async function followToFinality(
       const now = timing.now();
       if (now - lastBroadcast >= timing.rebroadcastEveryMs) {
         lastBroadcast = now;
-        await chain.sendRawTransaction(write.raw).catch(() => undefined);
+        const answer = await chain.sendRawTransaction(write.raw).then(
+          () => "taken" as const,
+          (e: unknown) => (e instanceof BroadcastRefused ? ("refused" as const) : ("unanswered" as const)),
+        );
+        if (answer === "refused") refusals += 1;
+        if (answer === "taken") refusals = 0;
       }
-      if (now - started >= timing.stuckAfterMs) {
+      if (now - started >= timing.stuckAfterMs || refusals >= REFUSALS_BEFORE_STUCK) {
         const verdict = await nonceVerdict(chain, write);
         if (verdict === "superseded") {
           await store.delete(write.address);
@@ -140,7 +163,7 @@ export async function followToFinality(
         }
         if (verdict === "unused") {
           await store.put({ ...write, replaceable: true });
-          return { kind: "stuck" };
+          return { kind: "stuck", refused: refusals > 0 };
         }
       }
     }

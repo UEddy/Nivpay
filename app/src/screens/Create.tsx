@@ -200,7 +200,11 @@ export function CreateScreen(props: {
         else if (alive.current) {
           setStep(null);
           setStuck(true);
-          setResult({ tone: "bad", text: copy.stuck, code: ERROR_CODES.STUCK });
+          setResult(
+            outcome.refused
+              ? { tone: "bad", text: copy.createTurnedDown, code: ERROR_CODES.REFUSED }
+              : { tone: "bad", text: copy.createDropped, code: ERROR_CODES.STUCK },
+          );
         }
       } catch (e) {
         // It was sent; only following it failed. Opening the pot again resumes.
@@ -224,7 +228,7 @@ export function CreateScreen(props: {
         // signed but never sent: finish() finds the names for its hash.
         if (w.replaceable) {
           setStuck(true);
-          setResult({ tone: "bad", text: copy.earlierStuck, code: ERROR_CODES.STUCK });
+          setResult({ tone: "bad", text: copy.createDropped, code: ERROR_CODES.STUCK });
         } else {
           await land(w);
         }

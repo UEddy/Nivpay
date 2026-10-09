@@ -1,9 +1,12 @@
 import {
+  BaseError,
   createPublicClient,
   createTransport,
   HttpRequestError,
   http,
   LimitExceededRpcError,
+  RpcError,
+  RpcRequestError,
   TimeoutError,
   type EIP1193RequestFn,
   type Transport,
@@ -28,6 +31,23 @@ export function isRetryableReadError(error: unknown): boolean {
     return status === undefined || status === 408 || status === 429 || status >= 500;
   }
   return false;
+}
+
+/**
+ * The node answered a broadcast and turned it down, with a JSON-RPC error
+ * such as too little to cover the fee or a bad signature. Not a refusal: no
+ * answer at all, "later" (rate limits and internal errors), and answers that
+ * say the request is already known or its nonce already used, which tell
+ * nothing about whether it lands.
+ */
+export function isBroadcastRefusal(error: unknown): boolean {
+  const answered = (e: unknown) => e instanceof RpcError || e instanceof RpcRequestError;
+  const found = error instanceof BaseError ? error.walk(answered) : answered(error) ? error : null;
+  if (!found) return false;
+  const code = (found as RpcError | RpcRequestError).code;
+  if (code === LimitExceededRpcError.code || code === -32603) return false;
+  const text = error instanceof Error ? error.message : "";
+  return !/already known|known transaction|already imported|nonce too low/i.test(text);
 }
 
 export const READ_RETRY: Omit<RetryOptions, "isRetryable"> = {

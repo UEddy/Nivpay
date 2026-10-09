@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { HttpRequestError, LimitExceededRpcError, RpcRequestError, TimeoutError } from "viem";
+import { HttpRequestError, InternalRpcError, InvalidInputRpcError, LimitExceededRpcError, RpcRequestError, TimeoutError, TransactionRejectedRpcError } from "viem";
 import { backoffDelay, withRetry } from "./retry.ts";
-import { isRetryableReadError } from "./rpc.ts";
+import { isBroadcastRefusal, isRetryableReadError } from "./rpc.ts";
 
 test("backoff is full jitter under an exponential ceiling with a cap", () => {
   assert.equal(backoffDelay(0, 300, 4000, () => 0.999), 299);
@@ -77,4 +77,19 @@ test("which read errors are retried", () => {
   const revert = new RpcRequestError({ body: {}, url, error: { code: 3, message: "execution reverted" } });
   assert.equal(isRetryableReadError(revert), false);
   assert.equal(isRetryableReadError(new Error("anything else")), false);
+});
+
+test("which broadcast errors are refusals", () => {
+  const url = "https://testnet-rpc.monad.xyz";
+  const answer = (code: number, message: string) => new RpcRequestError({ body: {}, url, error: { code, message } });
+  assert.equal(isBroadcastRefusal(new InvalidInputRpcError(answer(-32000, "insufficient balance for fee"))), true);
+  assert.equal(isBroadcastRefusal(new TransactionRejectedRpcError(answer(-32003, "rejected"))), true);
+  assert.equal(isBroadcastRefusal(answer(-32000, "invalid sender")), true);
+  assert.equal(isBroadcastRefusal(new InvalidInputRpcError(answer(-32000, "already known"))), false, "already known says nothing");
+  assert.equal(isBroadcastRefusal(new InvalidInputRpcError(answer(-32000, "nonce too low"))), false, "its nonce may be our own");
+  assert.equal(isBroadcastRefusal(new LimitExceededRpcError(answer(-32005, "rate limited"))), false, "later");
+  assert.equal(isBroadcastRefusal(new InternalRpcError(answer(-32603, "internal"))), false, "later");
+  assert.equal(isBroadcastRefusal(new TimeoutError({ body: {}, url })), false, "no answer");
+  assert.equal(isBroadcastRefusal(new HttpRequestError({ url, status: 502 })), false, "no answer");
+  assert.equal(isBroadcastRefusal(new Error("anything else")), false);
 });

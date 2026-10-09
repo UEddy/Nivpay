@@ -8,6 +8,7 @@ import {
   nonceForReplacement,
   replace,
   submit,
+  BroadcastRefused,
   WriteInFlightError,
   type PendingWrite,
   type Timing,
@@ -266,4 +267,40 @@ test("a sequence on nonces that aren't consecutive is refused before the next st
   await submit(store, chain, bad);
   await assert.rejects(followSequence(store, chain, bad, undefined, clock()), /consecutive/);
   assert.ok(!broadcasts.includes("0xa001"));
+});
+
+test("a request the node turns down twice ends early as stuck and refused, and stays replaceable", async () => {
+  const store = memoryStore();
+  const { chain, broadcasts } = fakeChain({ finalizedNonce: 5 });
+  chain.sendRawTransaction = async (raw) => {
+    broadcasts.push(raw);
+    throw new BroadcastRefused(new Error("insufficient balance"));
+  };
+  const w = write();
+  await submit(store, chain, w);
+  const t = clock();
+  const outcome = await followToFinality(store, chain, w, t);
+  assert.deepEqual(outcome, { kind: "stuck", refused: true });
+  assert.ok(t.now() < 20_000, "before the stuck timeout");
+  assert.equal(store.map.get(ME)?.replaceable, true);
+});
+
+test("a refusal is not given up on while the nonce may still be used, and a dropped request is not called refused", async () => {
+  const store = memoryStore();
+  const { chain } = fakeChain({ finalizedNonce: 5, inBlock: true });
+  let n = 0;
+  chain.sendRawTransaction = async () => {
+    n++;
+    throw new BroadcastRefused(new Error("refused"));
+  };
+  chain.isInBlock = async () => n < 4;
+  const w = write();
+  await submit(store, chain, w);
+  assert.deepEqual(await followToFinality(store, chain, w, clock()), { kind: "stuck", refused: true });
+  assert.ok(n >= 4, "kept going while it was in a block");
+
+  const quiet = fakeChain({ finalizedNonce: 5, failBroadcasts: 100 });
+  const s2 = memoryStore();
+  await submit(s2, quiet.chain, w);
+  assert.deepEqual(await followToFinality(s2, quiet.chain, w, clock()), { kind: "stuck", refused: false }, "no answer is not a refusal");
 });
