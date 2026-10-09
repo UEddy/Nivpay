@@ -7,7 +7,7 @@ import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
 import { AUSD, AUSD_FAUCET, TESTUSD } from "./lib/config.ts";
 import { DEPLOYMENT, POTS } from "./lib/deployment.ts";
-import { DraftStore, newDraft } from "./lib/draft.ts";
+import { DraftStore, newDraft, potRecipients, type Draft } from "./lib/draft.ts";
 import { AppError, describeFailure, SendFailure } from "./lib/errors.ts";
 import { checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
 import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
@@ -696,6 +696,12 @@ function YourPots(props: { account: StoredAccount; onOpen: (draftId: Hex) => voi
     }
   }
   const opened = pots.all(DEPLOYMENT);
+  // A pot this account made but hasn't sent to everyone yet opens on its send step.
+  const toSend = new Map<string, { draft: Draft; left: number }>();
+  for (const d of drafts.forOwner(props.account.address)) {
+    const left = d.made?.fragment ? potRecipients(d).filter((r) => !r.sent).length : 0;
+    if (d.made && left > 0) toSend.set(d.made.potId, { draft: d, left });
+  }
   const start = () => {
     const draft = newDraft(props.account.address, phoneTimeZone(), Date.now(), (n) => crypto.getRandomValues(new Uint8Array(n)));
     drafts.put(draft);
@@ -706,10 +712,19 @@ function YourPots(props: { account: StoredAccount; onOpen: (draftId: Hex) => voi
       <p className="eyebrow">{copy.yourPots}</p>
       {mine.length + opened.length === 0 && <p className="hint">{copy.noPotsYet}</p>}
       {opened.map((p) => (
-        <button type="button" className="home-pot" key={`pot-${p.potId}`} onClick={() => props.onOpenPot(p)}>
+        <button
+          type="button"
+          className="home-pot"
+          key={`pot-${p.potId}`}
+          onClick={() => {
+            const unsent = toSend.get(p.potId);
+            if (unsent) props.onOpen(unsent.draft.id);
+            else props.onOpenPot(p);
+          }}
+        >
           <span className="grow">
             <span className="name">{p.name || copy.unnamedPot}</span>
-            <span className="meta">{copy.potRowJoined}</span>
+            <span className="meta">{toSend.has(p.potId) ? copy.potRowSendToMore(toSend.get(p.potId)!.left) : copy.potRowJoined}</span>
           </span>
           <span className="tag live">{copy.live}</span>
         </button>

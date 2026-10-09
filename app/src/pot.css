@@ -909,6 +909,66 @@
   color: var(--bg);
 }
 
+.send-out {
+  margin-top: 22px;
+}
+
+.send-out h2 {
+  font: 600 19px var(--font-display);
+  margin: 0;
+}
+
+.send-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--divider);
+}
+
+.send-out .hint + .send-row {
+  margin-top: 8px;
+}
+
+.send-row .grow {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.send-row .name {
+  font: 600 16px var(--font-display);
+  overflow-wrap: anywhere;
+}
+
+.send-row .meta {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.send-btn {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font: 600 15px/1 var(--font-body);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.send-btn.sent {
+  border: 1.5px solid var(--primary);
+  background: transparent;
+  color: var(--primary-text);
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation-duration: var(--dur-swap);

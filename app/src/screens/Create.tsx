@@ -16,14 +16,17 @@ import {
   deciderShare,
   newSlot,
   parseAccountId,
+  potRecipients,
   signedShares,
   withDecider,
   withDeciderShare,
   withoutDecider,
   withPayeeAccount,
   withPayeeShare,
+  withSentTo,
   type Draft,
   type DraftStore,
+  type Recipient,
   type Missing,
 } from "../lib/draft.ts";
 import { describeFailure, SendFailure } from "../lib/errors.ts";
@@ -266,7 +269,7 @@ export function CreateScreen(props: {
   const made = draft.made;
   const locked = Boolean(made || draft.sending || step);
   const check = terms ? checkDraft(draft, terms, nowSeconds(), POTS) : null;
-  const others = people.slice(1).map((p) => p.name);
+  const recipients = made && !made.unsigned ? potRecipients(draft) : [];
 
   const make = async (retry: boolean) => {
     if (!terms) return;
@@ -311,6 +314,15 @@ export function CreateScreen(props: {
     setShareNote(null);
     const how = await shareLink(url, text);
     if (how === "copied") setShareNote(copy.linkCopied);
+    if (how === "failed") setShareNote(copy.copyFailed);
+  };
+
+  /** Sends one person their pot link through the share sheet, and remembers it once it has left this phone. */
+  const sendTo = async (person: Recipient) => {
+    setShareNote(null);
+    const how = await shareLink(potUrl, copy.potLinkFor(person.name, draft.name));
+    if (how === "shared" || how === "copied") update((d) => withSentTo(d, person.account));
+    if (how === "copied") setShareNote(copy.linkCopiedFor(person.name));
     if (how === "failed") setShareNote(copy.copyFailed);
   };
 
@@ -443,6 +455,30 @@ export function CreateScreen(props: {
           <Icon name="lock" />
           <span>{made ? copy.lockAfter : copy.lockBefore}</span>
         </div>
+
+        {recipients.length > 0 && (
+          <section className="send-out enter" aria-labelledby="send-out-title">
+            <h2 id="send-out-title">{copy.sendToEveryone}</h2>
+            <p className="hint">{copy.sendToEveryoneHint}</p>
+            {recipients.map((r) => (
+              <div className="send-row" key={r.account}>
+                <span className="grow">
+                  <span className="name">{r.name}</span>
+                  <span className="meta">{r.sent ? copy.sentTo : r.role === "decider" ? copy.sendRoleDecides : copy.sendRoleGetsPaid}</span>
+                </span>
+                <button
+                  type="button"
+                  className={`send-btn${r.sent ? " sent" : ""}`}
+                  aria-label={r.sent ? copy.sendAgainTo(r.name) : copy.sendToPerson(r.name)}
+                  onClick={() => sendTo(r)}
+                >
+                  <Icon name="share" />
+                  {r.sent ? copy.sendAgain : copy.send}
+                </button>
+              </div>
+            ))}
+          </section>
+        )}
       </div>
 
       <div className="screen-foot enter" style={{ animationDelay: "420ms" }}>
@@ -459,13 +495,13 @@ export function CreateScreen(props: {
           </>
         ) : made ? (
           <>
-            <p className="foot-line">{others.length ? copy.potMade(andList(others)) : copy.potMadeAlone}</p>
-            <button type="button" className="pill-btn" onClick={() => share(potUrl, copy.shareText(draft.name))}>
-              <Icon name="share" />
-              {copy.shareInviteLink}
-            </button>
+            {recipients.length === 0 && <p className="foot-line">{copy.potMadeAlone}</p>}
             {shareNote && <p className="foot-hint">{shareNote}</p>}
-            <button type="button" className="pill-btn outline" onClick={() => props.onOpenPot(rememberPot(made.potId, made.block, made.fragment))}>
+            <button type="button" className="pill-btn outline" onClick={() => share(potUrl, copy.shareText(draft.name))}>
+              <Icon name="share" />
+              {recipients.length ? copy.shareWithSomeoneElse : copy.shareInviteLink}
+            </button>
+            <button type="button" className="pill-btn" onClick={() => props.onOpenPot(rememberPot(made.potId, made.block, made.fragment))}>
               {copy.addYourShare}
             </button>
           </>

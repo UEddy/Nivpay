@@ -98,7 +98,41 @@ export type Made = {
    * phone. The creator signs them again, over this hash, before sharing.
    */
   unsigned?: { createdIn: Hex; people: Person[]; shares: Sending["shares"] };
+  /** Lowercase accounts the creator has sent the pot link to from this phone. */
+  sentTo?: string[];
 };
+
+/** Someone named on a made pot who needs its link: every other decider, and every payee with an account. */
+export type Recipient = { account: Address; name: string; role: "decider" | "payee"; sent: boolean };
+
+/**
+ * Everyone the creator should send the pot link to, in the order they appear
+ * on the pot. An account named twice (a decider who is also paid) is listed
+ * once, as a decider. The creator is never listed.
+ */
+export function potRecipients(draft: Draft): Recipient[] {
+  const sent = new Set(draft.made?.sentTo ?? []);
+  const seen = new Set([draft.owner.toLowerCase()]);
+  const out: Recipient[] = [];
+  const add = (account: Address, name: string, role: Recipient["role"]) => {
+    const key = account.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ account, name, role, sent: sent.has(key) });
+  };
+  for (const d of draft.deciders) add(d.account, d.name, "decider");
+  for (const p of draft.payees) if (p.account) add(p.account, p.name, "payee");
+  return out;
+}
+
+/** Marks the pot link as sent to `account`. Only a made pot has anyone to send to. */
+export function withSentTo(draft: Draft, account: Address): Draft {
+  if (!draft.made) return draft;
+  const key = account.toLowerCase();
+  const sentTo = draft.made.sentTo ?? [];
+  if (sentTo.includes(key)) return draft;
+  return { ...draft, made: { ...draft.made, sentTo: [...sentTo, key] } };
+}
 
 export type Draft = {
   id: Hex;
