@@ -8,7 +8,11 @@ import { LinkReader, LinkWriter } from "./links.ts";
  * docs/APP-CONTRACT-MAP.md section 9):
  *
  *  - invite: the creator asks someone to decide, or to be paid. Unsigned; it
- *    only says which draft and which role. Nothing is trusted from it.
+ *    says which draft and which role, and from version 2 the creator's
+ *    account and, if one was set, the invitee's suggested share. Nothing in
+ *    it is trusted: the account only ever narrows which pot an answered
+ *    invite can be matched to, and the match is checked against the
+ *    PotCreated event (invited.ts).
  *  - reply: the invitee's answer, signed with their account over the draft
  *    id, role, slot, account, name, city and time zone. The creator's app
  *    adds them only if the signature recovers to that account.
@@ -26,6 +30,8 @@ import { LinkReader, LinkWriter } from "./links.ts";
 export const LINK_VERSION = 1;
 /** Pot links carry suggested shares from version 2. */
 export const POT_LINK_VERSION = 2;
+/** Invites carry the creator's account and a suggested share from version 2. */
+export const INVITE_VERSION = 2;
 const KIND = { invite: 1, reply: 2, pot: 3, pay: 4 } as const;
 export const ROLE = { decider: 0, payee: 1 } as const;
 export type Role = (typeof ROLE)[keyof typeof ROLE];
@@ -42,6 +48,10 @@ export type Invite = {
   potName: string;
   /** For a payee: the name the pot will pay them under. */
   payeeName: string;
+  /** The account making the pot. Null on version 1 invites, made before it was carried. */
+  inviter: Address | null;
+  /** The invitee's suggested share in base units, unsigned. 0 means none. */
+  share: bigint;
 };
 
 export type Reply = {
@@ -116,10 +126,13 @@ function fixedHex(r: LinkReader, bytes: number): Hex {
 }
 
 export function encodeLink(link: Link): string {
-  const w = new LinkWriter().uint(link.kind === "pot" ? link.version : LINK_VERSION).uint(KIND[link.kind]);
+  const version = link.kind === "pot" ? link.version : link.kind === "invite" && link.inviter ? INVITE_VERSION : LINK_VERSION;
+  const w = new LinkWriter().uint(version).uint(KIND[link.kind]);
   switch (link.kind) {
     case "invite":
       w.hex(link.draftId).uint(link.role).hex(link.slot).text(link.from).text(link.potName).text(link.payeeName);
+      if (link.inviter) w.account(link.inviter).uint(link.share);
+      else if (link.share) throw new Error("version 1 invites carry no share");
       break;
     case "reply":
       w.hex(link.draftId).uint(link.role).hex(link.slot);
@@ -147,8 +160,9 @@ export function decodeLink(fragment: string): Link {
   const r = new LinkReader(fragment);
   const version = Number(r.uint());
   const kind = Number(r.uint());
-  // Version 2 exists only for pot links; invites and replies are version 1.
-  if (!(version === LINK_VERSION || (version === POT_LINK_VERSION && kind === KIND.pot))) throw new Error("link is damaged");
+  // Version 2 exists only for pot links and invites; replies and requests to be paid are version 1.
+  const v2 = version === POT_LINK_VERSION && (kind === KIND.pot || kind === KIND.invite);
+  if (!(version === LINK_VERSION || v2)) throw new Error("link is damaged");
   const role = (): Role => {
     const v = Number(r.uint());
     if (v !== ROLE.decider && v !== ROLE.payee) throw new Error("link is damaged");
@@ -164,7 +178,13 @@ export function decodeLink(fragment: string): Link {
       from: checkedText(r),
       potName: checkedText(r),
       payeeName: checkedText(r),
+      inviter: null,
+      share: 0n,
     };
+    if (version === INVITE_VERSION) {
+      link.inviter = getAddress(r.account());
+      link.share = r.uint();
+    }
   } else if (kind === KIND.reply) {
     link = {
       kind: "reply",

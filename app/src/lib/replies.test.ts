@@ -32,6 +32,8 @@ function setup() {
     from: "Idara",
     potName: draft.name,
     payeeName: role === ROLE.payee ? "Caterer" : "",
+    inviter: idara.address,
+    share: 0n,
   });
   return { store, draft, invite };
 }

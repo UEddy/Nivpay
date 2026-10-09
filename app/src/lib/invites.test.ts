@@ -33,6 +33,8 @@ const invite: Invite = {
   from: "Idara",
   potName: "Mama’s 60th",
   payeeName: "",
+  inviter: idara.address,
+  share: 0n,
 };
 const ubongLabel = { account: ubong.address, name: "Ubong", city: "Houston", timeZone: "America/Chicago" };
 
@@ -134,9 +136,31 @@ test("version 1 pot links, made before suggested shares, still open and verify",
   assert.equal(encodeLink(back), w.toFragment(), "re-encodes as it came");
 });
 
-test("only pot links come in version 2", () => {
-  const v2invite = new LinkWriter().uint(2).uint(1).hex(DRAFT).uint(0).hex(NO_SLOT).text("I").text("P").text("").toFragment();
-  assert.throws(() => decodeLink(v2invite), /damaged/);
+test("an invite carries its creator's account and, for a payee, a suggested share", () => {
+  const payee: Invite = { ...invite, role: ROLE.payee, slot: "0x0102030405060708", payeeName: "Caterer", share: 600_000_000n };
+  const back = decodeLink(encodeLink(payee));
+  assert.ok(back.kind === "invite");
+  assert.equal(back.inviter, idara.address);
+  assert.equal(back.share, 600_000_000n);
+  assertChatSafe(linkUrl("https://nivpay.vercel.app", payee));
+});
+
+test("version 1 invites, made before they carried the creator's account, still open", () => {
+  const v1 = new LinkWriter().uint(1).uint(1).hex(DRAFT).uint(0).hex(NO_SLOT).text("Idara").text("Mama’s 60th").text("").toFragment();
+  const back = decodeLink(v1);
+  assert.deepEqual(back, { ...invite, inviter: null, share: 0n });
+  assert.equal(encodeLink(back), v1, "re-encodes as it came");
+  assert.throws(() => encodeLink({ ...invite, inviter: null, share: 1n }), /no share/);
+});
+
+test("only pot links and invites come in version 2", () => {
+  const v2reply = new LinkWriter().uint(2).uint(2).hex(DRAFT).uint(0).hex(NO_SLOT).toFragment();
+  assert.throws(() => decodeLink(v2reply), /damaged/);
+  const v2pay = new LinkWriter().uint(2).uint(4).uint(0).account(idara.address).text("I").uint(0).toFragment();
+  assert.throws(() => decodeLink(v2pay), /damaged/);
+  // A version 2 invite cut short of the account it promises is refused.
+  const short = new LinkWriter().uint(2).uint(1).hex(DRAFT).uint(0).hex(NO_SLOT).text("I").text("P").text("").toFragment();
+  assert.throws(() => decodeLink(short), /damaged/);
 });
 
 test("links stay chat safe for many realistic people", async () => {

@@ -763,6 +763,9 @@ function DecidersSheet(props: {
         from: props.me.name,
         potName: draft.name || copy.unnamedPot,
         payeeName: "",
+        inviter: props.me.address,
+        // A decider's share is set once their account is known, after they answer.
+        share: 0n,
       }),
       copy.joinAsDecider(props.me.name, draft.name || copy.unnamedPot),
     );
@@ -911,7 +914,7 @@ function PayeesSheet(props: {
     setLimit("");
   };
 
-  const invite = (slot: Hex, payeeName: string) =>
+  const invite = (slot: Hex, payeeName: string, share: bigint) =>
     props.onShare(
       linkUrl(location.origin, {
         kind: "invite",
@@ -921,6 +924,8 @@ function PayeesSheet(props: {
         from: props.me.name,
         potName: draft.name || copy.unnamedPot,
         payeeName,
+        inviter: props.me.address,
+        share,
       }),
       copy.joinAsPayee(props.me.name, draft.name || copy.unnamedPot, payeeName),
     );
@@ -971,7 +976,7 @@ function PayeesSheet(props: {
             ) : (
               !p.account && (
                 <div className="field-row">
-                  <button type="button" className="btn small" onClick={() => invite(p.slot, p.name)}>
+                  <button type="button" className="btn small" onClick={() => invite(p.slot, p.name, BigInt(p.share ?? "0"))}>
                     {copy.sendThemALink}
                   </button>
                   <button type="button" className="btn small" onClick={() => { setPasting(p.slot); setIdText(""); setLast4(""); }}>
