@@ -2,7 +2,7 @@ import { BaseError, ContractFunctionRevertedError, parseEventLogs, type Address,
 import { copy, ERROR_CODES } from "../copy.ts";
 import { ERC20_READ_ABI, POTS_ABI, POTS_READ_ABI } from "./abi.ts";
 import { DEPLOYMENT, POTS } from "./deployment.ts";
-import type { CreateArgs, Person } from "./draft.ts";
+import type { CreateArgs, Person, Share } from "./draft.ts";
 import { AppError } from "./errors.ts";
 import { encodeLink } from "./invites.ts";
 import { readClient } from "./rpc.ts";
@@ -66,8 +66,8 @@ export async function potMadeBy(hash: Hex): Promise<{ potId: bigint; block: bigi
 }
 
 /** The `#` fragment of the link that opens a made pot. */
-export function potFragment(potId: bigint, block: bigint, people: Person[], signature: Hex): string {
-  return encodeLink({ kind: "pot", deployment: DEPLOYMENT, potId, block, people, signature });
+export function potFragment(potId: bigint, block: bigint, people: Person[], shares: Share[], signature: Hex): string {
+  return encodeLink({ kind: "pot", version: 2, deployment: DEPLOYMENT, potId, block, people, shares, signature });
 }
 
 /** Label for the pending write record, told apart from dollar claims on the home screen. */

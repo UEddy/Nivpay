@@ -30,7 +30,15 @@ export type Payee = {
   account?: Address;
   /** How the account was learned: a signed reply, or pasted and confirmed. */
   via?: "reply" | "pasted";
+  /** Suggested share in base units, optional. "0" or missing means none. */
+  share?: string;
 };
+
+/**
+ * A suggested share: where a person's stepper starts when they chip in. It
+ * is a suggestion, signed with the names; the contract takes any amount.
+ */
+export type Share = { account: Address; amount: bigint };
 
 /** The signed transaction that makes the pot, kept until it is final. */
 export type Sending = {
@@ -39,6 +47,8 @@ export type Sending = {
   labelsSignature: Hex;
   /** The labels exactly as signed. */
   people: Person[];
+  /** The suggested shares exactly as signed, amounts as decimal strings. */
+  shares: { account: Address; amount: string }[];
 };
 
 export type Made = {
@@ -57,6 +67,8 @@ export type Draft = {
   /** The other deciders. The creator always decides too, and comes first. */
   deciders: Person[];
   threshold: number;
+  /** Suggested shares for the deciders, the creator included, by lowercase account. */
+  shares?: Record<string, string>;
   payees: Payee[];
   /** The closing day as yyyy-mm-dd, in the creator's own time zone. */
   closes: string;
@@ -108,9 +120,46 @@ export function withDecider(draft: Draft, person: Person): Draft {
 
 export function withoutDecider(draft: Draft, account: Address): Draft {
   const deciders = draft.deciders.filter((d) => !isAddressEqual(d.account, account));
+  const { [account.toLowerCase()]: _dropped, ...shares } = draft.shares ?? {};
   const wasMajority = draft.threshold === majority(draft.deciders.length + 1);
   const threshold = wasMajority ? majority(deciders.length + 1) : Math.min(draft.threshold, deciders.length + 1);
-  return { ...draft, deciders, threshold };
+  return { ...draft, deciders, threshold, shares };
+}
+
+/** Sets or clears a decider's suggested share. Zero clears it. */
+export function withDeciderShare(draft: Draft, account: Address, amount: bigint): Draft {
+  const { [account.toLowerCase()]: _old, ...rest } = draft.shares ?? {};
+  return { ...draft, shares: amount > 0n ? { ...rest, [account.toLowerCase()]: amount.toString() } : rest };
+}
+
+/** Sets or clears a payee's suggested share. Zero clears it. */
+export function withPayeeShare(draft: Draft, slot: Hex, amount: bigint): Draft {
+  return {
+    ...draft,
+    payees: draft.payees.map((p) => (p.slot === slot ? { ...p, share: amount > 0n ? amount.toString() : undefined } : p)),
+  };
+}
+
+export function deciderShare(draft: Draft, account: Address): bigint {
+  return BigInt(draft.shares?.[account.toLowerCase()] ?? "0");
+}
+
+/**
+ * The suggested shares that get signed with the names: every decider and
+ * every payee with an account and a share above zero, deciders first, each
+ * account once. A decider who is also a payee keeps the decider's share.
+ */
+export function signedShares(draft: Draft): Share[] {
+  const out: Share[] = [];
+  const seen = new Set<string>();
+  const add = (account: Address, amount: bigint) => {
+    if (amount <= 0n || seen.has(account.toLowerCase())) return;
+    seen.add(account.toLowerCase());
+    out.push({ account: getAddress(account), amount });
+  };
+  for (const a of [draft.owner, ...draft.deciders.map((d) => d.account)]) add(a, deciderShare(draft, a));
+  for (const p of draft.payees) if (p.account) add(p.account, BigInt(p.share ?? "0"));
+  return out;
 }
 
 /** Fills a payee slot with an account, from a verified reply or a confirmed paste. */

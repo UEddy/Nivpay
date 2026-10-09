@@ -9,11 +9,15 @@ import {
   allDeciders,
   checkDraft,
   confirmsAccount,
+  deciderShare,
   newSlot,
   parseAccountId,
+  signedShares,
   withDecider,
+  withDeciderShare,
   withoutDecider,
   withPayeeAccount,
+  withPayeeShare,
   type Draft,
   type DraftStore,
   type Missing,
@@ -116,7 +120,8 @@ export function CreateScreen(props: {
       const sending = drafts.get(draftId)?.sending;
       if (!sending || sending.hash !== hash) return;
       const made = await potMadeBy(hash);
-      const fragment = potFragment(made.potId, made.block, sending.people, sending.labelsSignature);
+      const shares = sending.shares.map((s) => ({ account: s.account, amount: BigInt(s.amount) }));
+      const fragment = potFragment(made.potId, made.block, sending.people, shares, sending.labelsSignature);
       update((d) => ({ ...d, sending: undefined, made: { potId: made.potId.toString(), block: made.block.toString(), fragment } }));
       if (!alive.current) return;
       setStep(null);
@@ -227,6 +232,7 @@ export function CreateScreen(props: {
     setResult(null);
     setShareNote(null);
     const signedPeople = allDeciders(draft, account.name);
+    const shares = signedShares(draft);
     const call = {
       from: account.address,
       to: POTS,
@@ -235,8 +241,9 @@ export function CreateScreen(props: {
       onStep: setStep,
       // The pot's labels are signed with the pot, in the same passkey step.
       cosign: async (signer: Parameters<typeof signLabels>[0], hash: Hex) => {
-        const labelsSignature = await signLabels(signer, POTS, hash, signedPeople);
-        update((d) => ({ ...d, sending: { hash, labelsSignature, people: signedPeople } }));
+        const labelsSignature = await signLabels(signer, POTS, hash, signedPeople, shares);
+        const asText = shares.map((s) => ({ account: s.account, amount: s.amount.toString() }));
+        update((d) => ({ ...d, sending: { hash, labelsSignature, people: signedPeople, shares: asText } }));
       },
     };
     try {
@@ -404,6 +411,7 @@ export function CreateScreen(props: {
           onReply={addReply}
           onShare={share}
           shareNote={shareNote}
+          decimals={decimals}
           maxDeciders={terms?.maxDeciders ?? null}
           onClose={() => setSheet(null)}
         />
@@ -450,6 +458,7 @@ export function CreateScreen(props: {
                 <div className="grow">
                   <span className="name">{i === 0 ? `${p.name} (${copy.you})` : p.name}</span>
                   <span className="meta">{`${copy.decidesLine}, ${ending(p.account)}`}</span>
+                  {deciderShare(draft, p.account) > 0n && <span className="meta">{copy.suggestsLine(amount(deciderShare(draft, p.account).toString()))}</span>}
                 </div>
               </div>
             ))}
@@ -458,6 +467,7 @@ export function CreateScreen(props: {
                 <div className="grow">
                   <span className="name">{p.name}</span>
                   <span className="meta">{`${copy.paysLine(amount(p.cap))}, ${p.account ? ending(p.account) : ""}`}</span>
+                  {BigInt(p.share ?? "0") > 0n && <span className="meta">{copy.suggestsLine(amount(p.share!))}</span>}
                 </div>
               </div>
             ))}
@@ -511,6 +521,35 @@ function RuleRow(props: {
   );
 }
 
+/**
+ * A suggested share. Typed as text, saved as base units only when it reads
+ * as an amount; a blank field clears the suggestion.
+ */
+function ShareField(props: { decimals: number | null; value: bigint; optional?: boolean; onChange: (v: bigint) => void }) {
+  const { decimals } = props;
+  const [text, setText] = useState(() =>
+    decimals !== null && props.value > 0n ? formatAmount(props.value, decimals, "auto").replace(/^\$/, "") : "",
+  );
+  const parsed = decimals === null ? null : text.trim() === "" ? 0n : parseAmount(text, decimals);
+  return (
+    <label className="field">
+      <span>{props.optional ? copy.suggestedShareOptional : copy.suggestedShare}</span>
+      <input
+        value={text}
+        inputMode="decimal"
+        placeholder={copy.noSuggestion}
+        disabled={decimals === null}
+        onChange={(e) => {
+          setText(e.target.value);
+          const v = decimals === null ? null : e.target.value.trim() === "" ? 0n : parseAmount(e.target.value, decimals);
+          if (v !== null) props.onChange(v);
+        }}
+      />
+      {parsed === null && <span className="error">{copy.limitInvalid}</span>}
+    </label>
+  );
+}
+
 function tomorrow(): string {
   const d = new Date(Date.now() + 86_400_000);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -547,6 +586,7 @@ function DecidersSheet(props: {
   onReply: (reply: Reply) => Promise<string>;
   onShare: (url: string, text: string) => Promise<void>;
   shareNote: string | null;
+  decimals: number | null;
   maxDeciders: number | null;
   onClose: () => void;
 }) {
@@ -604,16 +644,22 @@ function DecidersSheet(props: {
             />
           </label>
           <span className="hint">{copy.timeZoneLine(draft.me.timeZone)}</span>
+          <ShareField decimals={props.decimals} value={deciderShare(draft, draft.owner)}
+            onChange={(v) => update((d) => withDeciderShare(d, d.owner, v))} />
         </div>
         {draft.deciders.map((p) => (
-          <div className="list-row" key={p.account}>
-            <div className="grow">
-              <span className="name">{p.name}</span>
-              <span className="meta">{`${p.city}, ${ending(p.account)}`}</span>
+          <div className="list-row stacked" key={p.account}>
+            <div className="list-row">
+              <div className="grow">
+                <span className="name">{p.name}</span>
+                <span className="meta">{`${p.city}, ${ending(p.account)}`}</span>
+              </div>
+              <button type="button" className="btn ghost small" onClick={() => update((d) => withoutDecider(d, p.account))}>
+                {copy.remove}
+              </button>
             </div>
-            <button type="button" className="btn ghost small" onClick={() => update((d) => withoutDecider(d, p.account))}>
-              {copy.remove}
-            </button>
+            <ShareField decimals={props.decimals} value={deciderShare(draft, p.account)}
+              onChange={(v) => update((d) => withDeciderShare(d, p.account, v))} />
           </div>
         ))}
       </div>
@@ -751,6 +797,8 @@ function PayeesSheet(props: {
                 </div>
               )
             )}
+            <ShareField decimals={decimals} value={BigInt(p.share ?? "0")} optional
+              onChange={(v) => update((d) => withPayeeShare(d, p.slot, v))} />
             <button type="button" className="btn ghost small" onClick={() => update((d) => ({ ...d, payees: d.payees.filter((x) => x.slot !== p.slot) }))}>
               {copy.remove}
             </button>

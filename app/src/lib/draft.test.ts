@@ -9,6 +9,9 @@ import {
   majority,
   newDraft,
   parseAccountId,
+  signedShares,
+  withDeciderShare,
+  withPayeeShare,
   withDecider,
   withoutDecider,
   withPayeeAccount,
@@ -128,6 +131,30 @@ test("what's missing is listed, and nothing the contract would refuse gets throu
   const past = BigInt(Date.UTC(2027, 0, 1) / 1000);
   assert.deepEqual(checkDraft(d, LIMITS, past, POTS).missing, ["closes-past"]);
   assert.deepEqual(checkDraft(d, LIMITS, past - 601n, POTS).missing, []);
+});
+
+test("suggested shares: per decider and per payee, signed once per account, zero means none", () => {
+  let d = mamas60th();
+  assert.deepEqual(signedShares(d), [], "none set");
+  d = withDeciderShare(d, IDARA, 500_000_000n);
+  d = withDeciderShare(d, UBONG, 400_000_000n);
+  d = withDeciderShare(d, ANIEKAN, 100_000_000n);
+  d = withPayeeShare(d, "0x0202020202020202", 20_000_000n);
+  assert.deepEqual(signedShares(d), [
+    { account: IDARA, amount: 500_000_000n },
+    { account: UBONG, amount: 400_000_000n },
+    { account: ANIEKAN, amount: 100_000_000n },
+    { account: HALL, amount: 20_000_000n },
+  ]);
+  // Cleared with zero; dropped with the decider; a payee with no account yet isn't signed.
+  d = withDeciderShare(d, ANIEKAN, 0n);
+  d = withoutDecider(d, UBONG);
+  assert.deepEqual(signedShares(d).map((s) => s.account), [IDARA, HALL]);
+  const noAccount = { ...d, payees: d.payees.map((p) => ({ ...p, account: undefined })) };
+  assert.deepEqual(signedShares(noAccount).map((s) => s.account), [IDARA]);
+  // A decider who is also a payee is signed once, with the decider's share.
+  const both = withPayeeShare(withPayeeAccount(d, "0x0101010101010101", IDARA, "pasted"), "0x0101010101010101", 9n);
+  assert.deepEqual(signedShares(both).filter((s) => s.account === IDARA), [{ account: IDARA, amount: 500_000_000n }]);
 });
 
 test("drafts are stored per creator and found by id from any account", () => {

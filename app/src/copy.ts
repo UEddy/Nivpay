@@ -205,6 +205,10 @@ export const copy = {
   noneCanChange: "None of this can ever change, not even by you.",
   decidesLine: "Decides",
   paysLine: (limit: string) => `Can be paid up to ${limit}`,
+  suggestsLine: (amount: string) => `Suggested share ${amount}`,
+  suggestedShare: "Suggested share",
+  suggestedShareOptional: "Suggested share, if they chip in too",
+  noSuggestion: "No suggestion",
   closesOn: (date: string) => `Closes at the end of ${date}`,
 
   // Joining from an invite

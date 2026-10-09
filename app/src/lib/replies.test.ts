@@ -68,7 +68,7 @@ test("replies are refused when tampered, unknown, or too late", async () => {
   const gone = await signReply(chidi, POTS, { ...invite(ROLE.payee), slot: "0x0909090909090909" }, { ...person, account: chidi.address });
   await assert.rejects(acceptReply(store, POTS, gone), code(ERROR_CODES.REPLY_NOT_HERE));
 
-  store.put({ ...draft, sending: { hash: `0x${"11".repeat(32)}`, labelsSignature: `0x${"22".repeat(65)}`, people: [] } });
+  store.put({ ...draft, sending: { hash: `0x${"11".repeat(32)}`, labelsSignature: `0x${"22".repeat(65)}`, people: [], shares: [] } });
   await assert.rejects(acceptReply(store, POTS, reply), code(ERROR_CODES.REPLY_TOO_LATE));
   assert.equal(store.get(draft.id)!.deciders.length, 0, "nothing was added");
 });

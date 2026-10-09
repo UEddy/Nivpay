@@ -73,13 +73,19 @@ test("the pot link's labels are accepted only from the pot's creator, for that p
     { account: idara.address, name: "Idara", city: "London", timeZone: "Europe/London" },
     ubongLabel,
   ];
+  const shares = [
+    { account: idara.address, amount: 500_000_000n },
+    { account: ubong.address, amount: 400_000_000n },
+  ];
   const link: PotLink = {
     kind: "pot",
+    version: 2,
     deployment: "ausd",
     potId: 7n,
     block: 47_123_456n,
     people,
-    signature: await signLabels(idara, POTS, createdIn, people),
+    shares,
+    signature: await signLabels(idara, POTS, createdIn, people, shares),
   };
   const url = linkUrl("https://nivpay.vercel.app", link);
   assertChatSafe(url);
@@ -90,6 +96,46 @@ test("the pot link's labels are accepted only from the pot's creator, for that p
   assert.ok(!(await verifyLabels(POTS, back, keccak256(toHex("another pot")), idara.address)), "labels from another pot");
   const renamed = { ...back, people: [people[0]!, { ...ubongLabel, name: "Mallory" }] };
   assert.ok(!(await verifyLabels(POTS, renamed, createdIn, idara.address)), "edited labels");
+  const greedy = { ...back, shares: [shares[0]!, { account: ubong.address, amount: 1n }] };
+  assert.ok(!(await verifyLabels(POTS, greedy, createdIn, idara.address)), "edited suggested shares");
+  const dropped = { ...back, shares: [shares[0]!] };
+  assert.ok(!(await verifyLabels(POTS, dropped, createdIn, idara.address)), "a dropped share");
+  assert.ok(!(await verifyLabels(POTS, { ...back, version: 1, shares: [] }, createdIn, idara.address)), "read as the other version");
+});
+
+test("version 1 pot links, made before suggested shares, still open and verify", async () => {
+  const createdIn = keccak256(toHex("an older createPot transaction"));
+  const people = [{ account: idara.address, name: "Idara", city: "London", timeZone: "Europe/London" }];
+  // Signed exactly as the first release signed labels: names, no shares.
+  const signature = await idara.signTypedData({
+    domain: { name: "NivPay", version: "1", chainId: 10143, verifyingContract: POTS },
+    types: {
+      Labels: [
+        { name: "createdIn", type: "bytes32" },
+        { name: "people", type: "Person[]" },
+      ],
+      Person: [
+        { name: "account", type: "address" },
+        { name: "name", type: "string" },
+        { name: "city", type: "string" },
+        { name: "timeZone", type: "string" },
+      ],
+    },
+    primaryType: "Labels",
+    message: { createdIn, people },
+  });
+  const w = new LinkWriter().uint(1).uint(3).uint(0).uint(4n).uint(47_000_000n).uint(1);
+  w.account(people[0]!.account).text("Idara").text("London").text("Europe/London").hex(signature);
+  const back = decodeLink(w.toFragment()) as PotLink;
+  assert.equal(back.version, 1);
+  assert.deepEqual(back.shares, []);
+  assert.ok(await verifyLabels(POTS, back, createdIn, idara.address));
+  assert.equal(encodeLink(back), w.toFragment(), "re-encodes as it came");
+});
+
+test("only pot links come in version 2", () => {
+  const v2invite = new LinkWriter().uint(2).uint(1).hex(DRAFT).uint(0).hex(NO_SLOT).text("I").text("P").text("").toFragment();
+  assert.throws(() => decodeLink(v2invite), /damaged/);
 });
 
 test("links stay chat safe for many realistic people", async () => {
@@ -102,7 +148,9 @@ test("links stay chat safe for many realistic people", async () => {
       city: cities[(i + j) % cities.length]!,
       timeZone: zones[(i * j) % zones.length]!,
     }));
-    const link: PotLink = { kind: "pot", deployment: i % 2 ? "ausd" : "testusd", potId: BigInt(i * 977), block: 47_000_000n + BigInt(i), people, signature: `0x${"ab".repeat(65)}` };
+    const shares = people.map((p, j) => ({ account: p.account, amount: BigInt(j + 1) * 123_450_000n }));
+    const link: PotLink = { kind: "pot", version: 2, deployment: i % 2 ? "ausd" : "testusd", potId: BigInt(i * 977), block: 47_000_000n + BigInt(i), people, shares, signature: `0x${"ab".repeat(65)}` };
+    assert.deepEqual(decodeLink(encodeLink(link)), link);
     assertChatSafe(linkUrl("https://nivpay.vercel.app", link));
   }
 });

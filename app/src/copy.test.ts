@@ -93,6 +93,7 @@ function allCopy(): [string, string][] {
     timeZoneLine: ["America/Chicago"],
     ruleLine: [2, 3],
     paysLine: ["$700"],
+    suggestsLine: ["$400"],
     closesOn: ["Thu 31 Dec 2026"],
     joinAsDecider: ["Idara", "Mama’s 60th"],
     joinAsPayee: ["Idara", "Mama’s 60th", "Caterer"],

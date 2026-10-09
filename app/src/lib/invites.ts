@@ -1,6 +1,6 @@
 import { getAddress, isAddressEqual, recoverTypedDataAddress, type Address, type Hex, type LocalAccount } from "viem";
 import { CHAIN_ID, type Deployment } from "./config.ts";
-import type { Person } from "./draft.ts";
+import type { Person, Share } from "./draft.ts";
 import { LinkReader, LinkWriter } from "./links.ts";
 
 /**
@@ -12,16 +12,20 @@ import { LinkReader, LinkWriter } from "./links.ts";
  *  - reply: the invitee's answer, signed with their account over the draft
  *    id, role, slot, account, name, city and time zone. The creator's app
  *    adds them only if the signature recovers to that account.
- *  - pot: the made pot, its creation block, and the people's labels, signed
- *    by the creator in the same passkey step as the pot itself, over the
- *    transaction that made it. A viewer accepts the labels only if the signer
- *    is the creator named in that transaction's PotCreated event.
+ *  - pot: the made pot, its creation block, the people's labels and their
+ *    suggested shares, signed by the creator in the same passkey step as the
+ *    pot itself, over the transaction that made it. A viewer accepts them
+ *    only if the signer is the creator named in that transaction's
+ *    PotCreated event. Pot links are version 2; version 1 pot links, made
+ *    before suggested shares, still open and verify against their own types.
  *
  * All of them are packed binary in lowercase base32 (links.ts), so no 0x and
  * no banned word can appear in a link.
  */
 
 export const LINK_VERSION = 1;
+/** Pot links carry suggested shares from version 2. */
+export const POT_LINK_VERSION = 2;
 const KIND = { invite: 1, reply: 2, pot: 3 } as const;
 export const ROLE = { decider: 0, payee: 1 } as const;
 export type Role = (typeof ROLE)[keyof typeof ROLE];
@@ -51,10 +55,13 @@ export type Reply = {
 
 export type PotLink = {
   kind: "pot";
+  /** 1: names only. 2: names and suggested shares. Each is signed with its own types. */
+  version: 1 | 2;
   deployment: Deployment;
   potId: bigint;
   block: bigint;
   people: Person[];
+  shares: Share[];
   signature: Hex;
 };
 
@@ -95,7 +102,7 @@ function fixedHex(r: LinkReader, bytes: number): Hex {
 }
 
 export function encodeLink(link: Link): string {
-  const w = new LinkWriter().uint(LINK_VERSION).uint(KIND[link.kind]);
+  const w = new LinkWriter().uint(link.kind === "pot" ? link.version : LINK_VERSION).uint(KIND[link.kind]);
   switch (link.kind) {
     case "invite":
       w.hex(link.draftId).uint(link.role).hex(link.slot).text(link.from).text(link.potName).text(link.payeeName);
@@ -108,6 +115,10 @@ export function encodeLink(link: Link): string {
     case "pot":
       w.uint(link.deployment === "ausd" ? 0 : 1).uint(link.potId).uint(link.block).uint(link.people.length);
       for (const p of link.people) writePerson(w, p);
+      if (link.version === 2) {
+        w.uint(link.shares.length);
+        for (const s of link.shares) w.account(s.account).uint(s.amount);
+      } else if (link.shares.length) throw new Error("version 1 pot links carry no shares");
       w.hex(link.signature);
       break;
   }
@@ -117,8 +128,10 @@ export function encodeLink(link: Link): string {
 /** Reads any NivPay link. Throws "link is damaged" on anything malformed or left over. */
 export function decodeLink(fragment: string): Link {
   const r = new LinkReader(fragment);
-  if (r.uint() !== BigInt(LINK_VERSION)) throw new Error("link is damaged");
+  const version = Number(r.uint());
   const kind = Number(r.uint());
+  // Version 2 exists only for pot links; invites and replies are version 1.
+  if (!(version === LINK_VERSION || (version === POT_LINK_VERSION && kind === KIND.pot))) throw new Error("link is damaged");
   const role = (): Role => {
     const v = Number(r.uint());
     if (v !== ROLE.decider && v !== ROLE.payee) throw new Error("link is damaged");
@@ -152,7 +165,22 @@ export function decodeLink(fragment: string): Link {
     const count = Number(r.uint());
     if (count < 1 || count > 20) throw new Error("link is damaged");
     const people = Array.from({ length: count }, () => readPerson(r));
-    link = { kind: "pot", deployment: d === 0 ? "ausd" : "testusd", potId, block, people, signature: fixedHex(r, 65) };
+    const shares: Share[] = [];
+    if (version === POT_LINK_VERSION) {
+      const n = Number(r.uint());
+      if (n > 40) throw new Error("link is damaged");
+      for (let i = 0; i < n; i++) shares.push({ account: getAddress(r.account()), amount: r.uint() });
+    }
+    link = {
+      kind: "pot",
+      version: version === POT_LINK_VERSION ? 2 : 1,
+      deployment: d === 0 ? "ausd" : "testusd",
+      potId,
+      block,
+      people,
+      shares,
+      signature: fixedHex(r, 65),
+    };
   } else {
     throw new Error("link is damaged");
   }
@@ -182,16 +210,32 @@ const JOIN_TYPES = {
   ],
 } as const;
 
-const LABELS_TYPES = {
+const PERSON_TYPE = [
+  { name: "account", type: "address" },
+  { name: "name", type: "string" },
+  { name: "city", type: "string" },
+  { name: "timeZone", type: "string" },
+] as const;
+
+/** Version 1 labels: names only. Kept so pots made before shares still verify. */
+const LABELS_V1_TYPES = {
   Labels: [
     { name: "createdIn", type: "bytes32" },
     { name: "people", type: "Person[]" },
   ],
-  Person: [
+  Person: PERSON_TYPE,
+} as const;
+
+const LABELS_TYPES = {
+  Labels: [
+    { name: "createdIn", type: "bytes32" },
+    { name: "people", type: "Person[]" },
+    { name: "shares", type: "Share[]" },
+  ],
+  Person: PERSON_TYPE,
+  Share: [
     { name: "account", type: "address" },
-    { name: "name", type: "string" },
-    { name: "city", type: "string" },
-    { name: "timeZone", type: "string" },
+    { name: "amount", type: "uint256" },
   ],
 } as const;
 
@@ -204,8 +248,12 @@ function joinData(pots: Address, draftId: Hex, role: Role, slot: Hex, person: Pe
   } as const;
 }
 
-function labelsData(pots: Address, createdIn: Hex, people: Person[]) {
-  return { domain: domain(pots), types: LABELS_TYPES, primaryType: "Labels", message: { createdIn, people } } as const;
+function labelsData(pots: Address, createdIn: Hex, people: Person[], shares: Share[]) {
+  return { domain: domain(pots), types: LABELS_TYPES, primaryType: "Labels", message: { createdIn, people, shares } } as const;
+}
+
+function labelsV1Data(pots: Address, createdIn: Hex, people: Person[]) {
+  return { domain: domain(pots), types: LABELS_V1_TYPES, primaryType: "Labels", message: { createdIn, people } } as const;
 }
 
 export async function signReply(account: LocalAccount, pots: Address, invite: Invite, person: Person): Promise<Reply> {
@@ -227,9 +275,9 @@ export async function verifyReply(pots: Address, reply: Reply): Promise<boolean>
   }
 }
 
-/** Signs the labels over the hash of the transaction that makes the pot. */
-export function signLabels(account: LocalAccount, pots: Address, createdIn: Hex, people: Person[]): Promise<Hex> {
-  return account.signTypedData(labelsData(pots, createdIn, people));
+/** Signs the labels and suggested shares over the hash of the transaction that makes the pot. */
+export function signLabels(account: LocalAccount, pots: Address, createdIn: Hex, people: Person[], shares: Share[]): Promise<Hex> {
+  return account.signTypedData(labelsData(pots, createdIn, people, shares));
 }
 
 /**
@@ -239,7 +287,11 @@ export function signLabels(account: LocalAccount, pots: Address, createdIn: Hex,
  */
 export async function verifyLabels(pots: Address, link: PotLink, createdIn: Hex, creator: Address): Promise<boolean> {
   try {
-    const signer = await recoverTypedDataAddress({ ...labelsData(pots, createdIn, link.people), signature: link.signature });
+    const signature = link.signature;
+    const signer =
+      link.version === 2
+        ? await recoverTypedDataAddress({ ...labelsData(pots, createdIn, link.people, link.shares), signature })
+        : await recoverTypedDataAddress({ ...labelsV1Data(pots, createdIn, link.people), signature });
     return isAddressEqual(signer, creator);
   } catch {
     return false;
