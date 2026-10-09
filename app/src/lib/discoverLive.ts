@@ -60,3 +60,14 @@ export function potsReader(readClient: Pick<PublicClient, "getBlock" | "readCont
       }),
   };
 }
+
+/**
+ * Where things stand as an invite is answered: the finalized block and how
+ * many pots exist there. The pot the invite is for is made later, so it is
+ * made after this block and numbered at least this count.
+ */
+export async function readSince(readClient: Pick<PublicClient, "getBlock" | "readContract">, pots: Address): Promise<{ block: bigint; potCount: number }> {
+  const block = (await readClient.getBlock({ blockTag: "finalized" })).number;
+  const potCount = Number(await readClient.readContract({ address: pots, abi: POTS_ABI, functionName: "potCount", blockNumber: block }));
+  return { block, potCount };
+}

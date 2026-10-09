@@ -13,6 +13,7 @@ import { potsReader } from "./lib/discoverLive.ts";
 import { AppError, describeFailure, SendFailure } from "./lib/errors.ts";
 import { checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
 import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
+import { InvitedStore, type AnsweredInvite } from "./lib/invited.ts";
 import { decodeLink, type Invite, type PayLink, type PotLink } from "./lib/invites.ts";
 import { formatAmount, parseAmount } from "./lib/money.ts";
 import { hostCheck, signIn, signUp } from "./lib/passkey.ts";
@@ -34,6 +35,7 @@ import { formatDay, NoticeLine, phoneTimeZone, type Notice } from "./screens/ui.
 const accounts = new AccountStore(localStorage);
 const drafts = new DraftStore(localStorage);
 const pots = new PotStore(localStorage);
+const invited = new InvitedStore(localStorage);
 
 type Screen =
   | { kind: "home" }
@@ -243,7 +245,9 @@ export function App() {
     return <ReceiveScreen key={active.address} account={active} banner={banner} onClose={() => go({ kind: "home" })} />;
   }
   if (active && !switching && screen.kind === "join") {
-    return <JoinScreen account={active} invite={screen.invite} banner={banner} onClose={() => go({ kind: "home" })} />;
+    return (
+      <JoinScreen account={active} invite={screen.invite} banner={banner} onAnswered={(row) => invited.put(row)} onClose={() => go({ kind: "home" })} />
+    );
   }
 
   return (
@@ -811,7 +815,23 @@ function FoundPotRow(props: { pot: FoundPot; decimals: number | null }) {
   );
 }
 
-/** Pots this account is making, pots made or opened on this phone, and pots it is named on. */
+/** An invite this account answered whose pot hasn't been made yet. */
+function WaitingRow(props: { row: AnsweredInvite; decimals: number | null }) {
+  const { row } = props;
+  const share = BigInt(row.share);
+  return (
+    <div className="home-pot">
+      <span className="grow">
+        <span className="name">{row.potName || copy.unnamedPot}</span>
+        <span className="meta">{copy.invitedWaiting(row.potName || copy.unnamedPot, row.from)}</span>
+        {share > 0n && props.decimals !== null && <span className="meta">{copy.invitedShare(formatAmount(share, props.decimals, "auto"))}</span>}
+      </span>
+      <span className="tag">{copy.invitedTag}</span>
+    </div>
+  );
+}
+
+/** Pots this account is making, pots made or opened on this phone, invites it answered, and pots it is named on. */
 function YourPots(props: {
   account: StoredAccount;
   connection: ReturnType<typeof useConnection>;
@@ -819,6 +839,7 @@ function YourPots(props: {
   onOpenPot: (pot: StoredPot) => void;
 }) {
   const { scan, failed } = useFoundPots(props.account.address, props.connection);
+  const waiting = invited.forAccount(DEPLOYMENT, props.account.address, Date.now());
   const mine = drafts.forOwner(props.account.address).filter((d) => !d.made?.fragment);
   // Pots made before the pot list existed are added to it once.
   for (const d of drafts.forOwner(props.account.address)) {
@@ -844,7 +865,10 @@ function YourPots(props: {
   return (
     <section className="card">
       <p className="eyebrow">{copy.yourPots}</p>
-      {mine.length + opened.length + found.length === 0 && <p className="hint">{copy.noPotsYet}</p>}
+      {mine.length + opened.length + found.length + waiting.length === 0 && <p className="hint">{copy.noPotsYet}</p>}
+      {waiting.map((r) => (
+        <WaitingRow key={`invited-${r.draftId}-${r.role}-${r.slot}`} row={r} decimals={scan.decimals} />
+      ))}
       {found.map((p) => (
         <FoundPotRow key={`found-${p.potId}`} pot={p} decimals={scan.decimals} />
       ))}

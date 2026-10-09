@@ -1,19 +1,29 @@
 import { useState, type ReactNode } from "react";
 import { copy } from "../copy.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
-import { POTS } from "../lib/deployment.ts";
+import { DEPLOYMENT, POTS } from "../lib/deployment.ts";
+import { readSince } from "../lib/discoverLive.ts";
 import { describeFailure } from "../lib/errors.ts";
+import { answered, type AnsweredInvite } from "../lib/invited.ts";
 import { linkUrl, ROLE, signReply, type Invite, type Reply } from "../lib/invites.ts";
 import { withSigner } from "../lib/passkey.ts";
+import { readClient } from "../lib/rpc.ts";
 import { Icon, NoticeLine, phoneTimeZone, shareLink, type Notice } from "./ui.tsx";
 
 /**
  * Joining a pot that is still being made. The invitee signs a reply with
  * their passkey, saying "this account is mine, use it", and sends the link
  * back to the creator over chat. Nothing is sent anywhere else and no money
- * moves.
+ * moves. The answered invite is remembered on this phone, so the pot shows on
+ * Home once it is made, without a link.
  */
-export function JoinScreen(props: { account: StoredAccount; invite: Invite; banner: ReactNode; onClose: () => void }) {
+export function JoinScreen(props: {
+  account: StoredAccount;
+  invite: Invite;
+  banner: ReactNode;
+  onAnswered: (row: AnsweredInvite) => void;
+  onClose: () => void;
+}) {
   const { account, invite } = props;
   const [name, setName] = useState(account.name);
   const [city, setCity] = useState("");
@@ -29,7 +39,11 @@ export function JoinScreen(props: { account: StoredAccount; invite: Invite; bann
     setBusy(true);
     try {
       const person = { account: account.address, name: name.trim(), city: city.trim(), timeZone };
-      setReply(await withSigner(account.address, (signer) => signReply(signer, POTS, invite, person)));
+      // Read alongside the passkey step. Without it the pot can still be matched, from further back.
+      const since = readSince(readClient, POTS).catch(() => undefined);
+      const signed = await withSigner(account.address, (signer) => signReply(signer, POTS, invite, person));
+      props.onAnswered(answered(invite, DEPLOYMENT, account.address, Date.now(), await since));
+      setReply(signed);
     } catch (e) {
       setError({ tone: "bad", ...describeFailure(e) });
     } finally {
@@ -80,6 +94,7 @@ export function JoinScreen(props: { account: StoredAccount; invite: Invite; bann
           <div className="card enter" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <p className="eyebrow">{copy.replyTitle}</p>
             <p className="lede">{copy.replyBody(invite.from)}</p>
+            {invite.inviter && <p className="hint">{copy.replyThenHome(invite.from)}</p>}
             <div className="link-box">{url}</div>
           </div>
         )}
