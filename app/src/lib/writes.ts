@@ -41,6 +41,9 @@ export type PendingWrite = {
 
 export type SignedNext = { nonce: number; raw: Hex; hash: Hex; label: string };
 
+/** One request in a sequence. `gas` is required when it can't be estimated before the steps before it have run. */
+export type SequenceCall = { to: Address; data: Hex; label: string; gas?: bigint };
+
 export interface WriteStore {
   get(address: Address): Promise<PendingWrite | undefined>;
   put(write: PendingWrite): Promise<void>;

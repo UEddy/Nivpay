@@ -126,6 +126,30 @@ that stalls shows 51 and can be retried on the same nonce.
 | 85 | A request link made for the other deployment (AUSD or TESTUSD) was opened on this one. Nothing was sent. | The link's deployment byte and `VITE_NIVPAY_POTS` |
 | 86 | Reading incoming payments for the Receive view failed. The balance is unaffected and the next read is a second later. | `eth_getLogs` on the dollar, topic 2 the account; RPC reachability |
 
+## Sending in another currency (Agora's Instant Settlement)
+
+On the AUSD deployment, Send dollars can deliver CTK, the currency on the
+other side of Agora's settlement pair `0x1Aa8958Aa34cEC8096EF4381cb335effe977b0ae`.
+The phone reads the pair's pause, price (now and at the deadline), fee and
+reserves at one block and quotes from them (`app/src/lib/settle.ts`). 90 and
+92 are found then; 91 is found by quoting again right before signing. None of
+them sends anything. If the account can't cover the processing for all the
+steps, that is 93 under Gas grant above.
+
+The first time, three requests are signed with one fingerprint: the one-time
+setup (`setApprovedSwapper` on Agora's whitelister), letting the pair take this
+amount, and the exchange. Each is sent only once the one before it is final.
+If one reverts, the ones after it are never sent: 52, and the steps already
+final stay done (a finished setup is not repeated; an unused allowance is
+used by the next attempt). If the exchange reverts because the pair's price
+fell below the minimum after the quote, nothing moved but its gas: also 52.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 90 | The pair is paused (`isPaused()`), by Agora's pauser. Nothing was sent. | `isPaused()` on the pair |
+| 91 | The quote taken right before signing differs from the one on the confirm sheet: amount out, minimum or fee. The sheet shows the new one. Nothing was sent. | `getPrice()`, `token0PurchaseFee()`, `getAmountsOut` on the pair |
+| 92 | The pair holds less CTK than this payment would deliver (`reserve0()`). Nothing was sent. | `reserve0()` on the pair |
+
 ## Other
 
 | Code | What happened | Where to look |

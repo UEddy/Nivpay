@@ -126,3 +126,62 @@ export const POTS_ABI = [
   { type: "error", name: "ZeroCap", inputs: [] },
   { type: "error", name: "ZeroShares", inputs: [] },
 ] as const;
+
+/** The parts of Agora's Instant Settlement pair the app reads and calls (verified source, Monad Sourcify). */
+export const SETTLEMENT_PAIR_ABI = [
+  { type: "function", name: "token0", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+  { type: "function", name: "token1", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+  { type: "function", name: "isPaused", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
+  { type: "function", name: "getPrice", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "getPrice", stateMutability: "view", inputs: [{ name: "_timestamp", type: "uint256" }], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "token0PurchaseFee", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "reserve0", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "hasRole", stateMutability: "view", inputs: [{ name: "_role", type: "string" }, { name: "_address", type: "address" }], outputs: [{ type: "bool" }] },
+  {
+    type: "function",
+    name: "getAmountsOut",
+    stateMutability: "view",
+    inputs: [{ name: "_amountIn", type: "uint256" }, { name: "_path", type: "address[]" }],
+    outputs: [{ name: "_amounts", type: "uint256[]" }],
+  },
+  {
+    type: "function",
+    name: "swapExactTokensForTokens",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "_amountIn", type: "uint256" },
+      { name: "_amountOutMin", type: "uint256" },
+      { name: "_path", type: "address[]" },
+      { name: "_to", type: "address" },
+      { name: "_deadline", type: "uint256" },
+    ],
+    outputs: [{ name: "_amounts", type: "uint256[]" }],
+  },
+  { type: "error", name: "AddressIsNotRole", inputs: [{ name: "role", type: "string" }] },
+  { type: "error", name: "PairIsPaused", inputs: [] },
+  { type: "error", name: "InsufficientOutputAmount", inputs: [] },
+  { type: "error", name: "InsufficientLiquidity", inputs: [] },
+  { type: "error", name: "Expired", inputs: [] },
+] as const;
+
+/** Agora's whitelister contract: unverified, five functions read from its bytecode. Only this one is used. */
+export const SETTLEMENT_WHITELISTER_ABI = [
+  { type: "function", name: "setApprovedSwapper", stateMutability: "nonpayable", inputs: [{ name: "_swapper", type: "address" }], outputs: [] },
+] as const;
+
+export const ERC20_ALLOWANCE_ABI = [
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "spender", type: "address" }, { name: "value", type: "uint256" }],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [{ name: "owner", type: "address" }, { name: "spender", type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+] as const;

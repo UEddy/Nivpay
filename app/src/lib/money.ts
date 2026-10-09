@@ -52,3 +52,12 @@ export function parseAmount(text: string, decimals: number): bigint | null {
   if (fraction.length > decimals) return null;
   return BigInt(whole) * 10n ** BigInt(decimals) + BigInt(fraction.padEnd(decimals, "0") || "0");
 }
+
+/**
+ * Formats an amount of a currency other than dollars, such as CTK, as
+ * "10.00 CTK": two decimals, truncated like dollar amounts, with its symbol.
+ */
+export function formatCurrency(value: bigint, decimals: number, symbol: string): string {
+  const shown = formatAmount(value, decimals, "cents").replace("$", "");
+  return `${shown} ${symbol}`;
+}

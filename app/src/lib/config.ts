@@ -27,6 +27,20 @@ export const AUSD: Address = getAddress("0xa9012a055bd4e0eDfF8Ce09f960291C09D532
 export const AUSD_FAUCET: Address = getAddress("0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C");
 
 /**
+ * Agora's Instant Settlement on Monad testnet (docs.agora.finance), used to
+ * send in another currency on the AUSD deployment: a fixed price pair of CTK
+ * (token0, 18 decimals) and AUSD (token1). Not ours; upgradeable, and run by
+ * an Agora admin who can pause it, set its price within bounds and its fee
+ * (README, "What the contract can and cannot do"). Its price, fee, reserves
+ * and pause are read fresh before every send.
+ */
+export const SETTLEMENT_PAIR: Address = getAddress("0x1Aa8958Aa34cEC8096EF4381cb335effe977b0ae");
+/** Grants the pair's sender permission. On testnet anyone may grant it to themselves; read in docs/BOUNTIES.md. */
+export const SETTLEMENT_WHITELISTER: Address = getAddress("0x7c10F56d6f04a51376393a1C3670e966863F6BD5");
+/** CTK, Agora's test currency on the other side of the pair. */
+export const CTK: Address = getAddress("0x7BEb5D9DB0d85cBEa543C04f0dE8c23c2176cd9D");
+
+/**
  * Which pots deployment the app runs on. AUSD unless VITE_NIVPAY_POTS is
  * "testusd" at build time, read in deployment.ts since only Vite has
  * import.meta.env. Either way it is the testnet: CHAIN is checked above. On

@@ -6,7 +6,7 @@ import { NotEnoughGasError, SendFailure, setupFailure, type SendStage } from "./
 import { idbWriteStore } from "./idb.ts";
 import { withSigner } from "./passkey.ts";
 import { readClient } from "./rpc.ts";
-import { nonceForNewWrite, nonceForReplacement, replace, submit, type PendingWrite, type SignedNext } from "./writes.ts";
+import { nonceForNewWrite, nonceForReplacement, replace, submit, type PendingWrite, type SequenceCall, type SignedNext } from "./writes.ts";
 
 export type Step = "preparing" | "getting-ready" | "confirm" | "sending";
 
@@ -165,9 +165,6 @@ export async function retryStuckWrite(call: Call): Promise<PendingWrite> {
   }
   return signAndSubmit(call, nonce, true);
 }
-
-/** One request in a sequence. `gas` is required when it can't be estimated before the steps before it have run. */
-export type SequenceCall = { to: Address; data: Hex; label: string; gas?: bigint };
 
 /**
  * Several requests behind one confirm and one fingerprint. The gas for all of

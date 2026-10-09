@@ -322,6 +322,9 @@ export const copy = {
   justArrived: "Just arrived",
   receivedAnnounce: (amount: string, from: string) => `${amount} received from ${from}.`,
   errReceiveRead: "Couldn't check for payments just now. Trying again.",
+  errPairPaused: "Agora has paused sending in other currencies for now. Nothing was sent. Try again later, or send dollars.",
+  errQuoteChanged: "The rate changed since you checked. Look over the new amounts before sending. Nothing was sent.",
+  errLowLiquidity: "Agora can't settle that much in this currency right now. Try a smaller amount. Nothing was sent.",
   errNotEnoughForFees: "Your account can't cover the processing for this yet, and can't be topped up while it holds what it has. Send a smaller payment first, or try again later. Nothing was sent.",
   potRowSendToMore: (people: number) => `Made. Send it to ${people} more ${people === 1 ? "person" : "people"}.`,
 
