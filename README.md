@@ -770,19 +770,45 @@ The terms it enforces, read from the live contract:
 | Getter | Value | Meaning |
 | --- | --- | --- |
 | `faucetDripAmount()` | `10000000000` | 10,000 AUSD per claim |
-| `maxDripFrequency()` | `60` | one claim per 60 seconds |
+| `maxDripFrequency()` | `60` | one claim per 60 seconds for the whole faucet, not per account (`lastDripTimestamp()` is a single value) |
 | `maxAmountToOwn()` | `100000000000` | refuses if you already hold 100,000 AUSD or more |
 | `token()` | `0xa901...22dC` | the same AUSD this contract uses |
 
 Check it has stock before trying, because it reverts with `InsufficientFunds()`
-once its balance is down to a single drip:
+(`0x356680b7`) once its balance is down to a single drip:
 
 ```powershell
 cast call 0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC "balanceOf(address)(uint256)" 0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C --rpc-url https://testnet-rpc.monad.xyz
 ```
 
-At the time of writing it holds exactly one drip and therefore refuses, which is
-why `test_fork_faucetDispensesAusd` skips rather than fails.
+It was dry in Phase 0 (one base unit), which is why
+`test_fork_faucetDispensesAusd` skips rather than fails when it is. It has
+since been restocked: on 9 October 2026 it held 996,345,050 AUSD, and the app's
+"Add test dollars" now claims from it on the AUSD deployment.
+
+Its refusals, recovered from the bytecode and confirmed on a fork of the live
+contract (the error names aren't published, so the app matches selectors):
+
+| Selector | When |
+| --- | --- |
+| `0x20e5bc67` | a claim inside 60 seconds of anyone's last claim |
+| `0x0949dab9` | the recipient already holds 100,000 AUSD or more |
+| `0x356680b7` | the faucet is down to a single drip (`InsufficientFunds()`) |
+
+### In the app
+
+The app runs on the AUSD pots unless it was built with
+`VITE_NIVPAY_POTS=testusd`. On AUSD, "Add test dollars" first gets a gas grant
+from `/api/fund` if the account needs one, then the person's own passkey
+account calls `requestFunds(its own address)` for one drip. Before anything is
+sent, the app runs the claim as a call against the latest block, so a cooldown
+or the ceiling is reported (codes 60 and 61 in `docs/ERROR-CODES.md`) without a
+grant or a passkey prompt. On a cooldown the screen counts down the seconds
+left and enables "Try again" at 0; it never claims again without a tap. A
+claim that is included but reverts, usually because someone else claimed
+first, is code 62. The new balance appears only once the claim is finalized.
+On TESTUSD, the button mints TESTUSD as before; both deployments are on the
+testnet only.
 
 ## Gas grants in the app, and their limits
 

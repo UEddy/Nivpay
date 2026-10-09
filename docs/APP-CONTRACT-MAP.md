@@ -133,6 +133,7 @@ The potId is not known until the receipt: read it from `PotCreated`.
 | Pour in | `fundWithPermit(uint256 potId, uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) returns (uint256 sharesMinted)` | anyone | pot exists, open (not closed, not past endTime), not frozen, amount > 0, balance >= amount, a valid permit or an existing allowance | token `Approval` (from the permit) and `Transfer`, `Funded(potId, funder, assets, sharesMinted)` | `NoSuchPot`, `PotClosed`, `PotFrozen`, `ZeroAmount`, `ZeroShares`, `TransferAmountMismatch`, the token's own balance or allowance error |
 | Fallback without permit | token `approve(pots, amount)` then `fund(potId, amount)` | anyone | same | `Approval`, then `Transfer` and `Funded` | same |
 | Add test dollars (TESTUSD mode) | TESTUSD `mint(address to, uint256 amount)` | anyone | amount <= `MAX_MINT` | `Transfer(0x0, to, amount)` | `MintAboveCap(amount, cap)` |
+| Add test dollars (AUSD mode) | faucet `requestFunds(address to)`, `to` = the person's own account | anyone | 60 s since anyone's last claim (`lastDripTimestamp()`), `to` holds under `maxAmountToOwn()`, faucet holds more than one drip | AUSD `Transfer(faucet, to, faucetDripAmount())` | `0x20e5bc67` (cooldown), `0x0949dab9` (ceiling), `0x356680b7` (out of stock) |
 
 ### Screen 3: Approve a pour (`Live-Approve`)
 
@@ -404,7 +405,7 @@ Notes:
 | An AUSD balance | AUSD `balanceOf` at the finalized block, shown on the chip-in screen and home |
 | A completed send and receive settled instantly | The Caterer's phone shows AUSD arriving on the finalized `PayoutExecuted`; each receipt shows measured submit to finalized time. Finalized is about 0.6 s behind latest (measured above); the full submit to finalized time will be measured in Phase 2 with a real transaction |
 | AUSD, not TESTUSD, in the demo | The demo uses the AUSD pot `0xB9E6...9EfB`. TESTUSD stays for testing |
-| Where test AUSD comes from | **Blocker.** Agora's faucet `0xd236...ee6C` is AUSD's faucet (`token()` = AUSD) and is called with `requestFunds(address)`: 10,000 AUSD per claim, one claim per 60 s, refused once you hold 100,000. It currently holds **1 base unit** (0.000001 AUSD), so it cannot pay out. Test AUSD must come from Agora directly |
+| Where test AUSD comes from | **Resolved.** Agora's faucet `0xd236...ee6C` is AUSD's faucet (`token()` = AUSD) and is called with `requestFunds(address)`: 10,000 AUSD per claim, one claim per 60 s across the whole faucet (not per account), refused once you hold 100,000. It was dry in Phase 0 and has been restocked (996,345,050 AUSD on 9 October 2026). On the AUSD deployment, "Add test dollars" claims from it with the person's own account, after a gas grant if needed. Refusals are codes 60 to 62 |
 | Agora's API, staging | Not built until you confirm staging access, as you said |
 | Business viability | The fee is shown on every payment (`proposalInfo.fee`) and in the close summary (sum of `PayoutExecuted.fee`) |
 | Implementation quality, real-world usability | Covered by the rest of BUILD-APP.md |
