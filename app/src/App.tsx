@@ -1,33 +1,51 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { encodeFunctionData, type Address } from "viem";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
+import { encodeFunctionData, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES, offlineMessage } from "./copy.ts";
 import { AccountStore, type StoredAccount } from "./lib/accounts.ts";
 import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
 import { AUSD, AUSD_FAUCET, TESTUSD } from "./lib/config.ts";
-import { DEPLOYMENT } from "./lib/deployment.ts";
-import { describeFailure, SendFailure } from "./lib/errors.ts";
+import { DEPLOYMENT, POTS } from "./lib/deployment.ts";
+import { DraftStore, newDraft } from "./lib/draft.ts";
+import { AppError, describeFailure, SendFailure } from "./lib/errors.ts";
 import { checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
 import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
+import { decodeLink, type Invite } from "./lib/invites.ts";
 import { formatAmount, parseAmount } from "./lib/money.ts";
 import { hostCheck, signIn, signUp } from "./lib/passkey.ts";
 import { readClient } from "./lib/rpc.ts";
+import { CREATE_LABEL } from "./lib/pots.ts";
 import { retryStuckWrite, sendWrite, type Step } from "./lib/send.ts";
+import { acceptReply } from "./lib/replies.ts";
 import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
-
-type Notice = { tone: "ok" | "bad"; text: string; code?: number };
-
-/** A result line. Failures end with a neutral code people can read out to support. */
-function NoticeLine({ notice }: { notice: Notice }) {
-  return (
-    <div role="status">
-      <p className={notice.tone === "ok" ? "success" : "error"}>{notice.text}</p>
-      {notice.code !== undefined && <p className="reason">{copy.code(notice.code)}</p>}
-    </div>
-  );
-}
+import { CreateScreen } from "./screens/Create.tsx";
+import { JoinScreen } from "./screens/Join.tsx";
+import { formatDay, NoticeLine, phoneTimeZone, type Notice } from "./screens/ui.tsx";
 
 const accounts = new AccountStore(localStorage);
+const drafts = new DraftStore(localStorage);
+
+type Screen = { kind: "home" } | { kind: "create"; draftId: Hex } | { kind: "join"; invite: Invite };
+
+/**
+ * Swaps screens inside a view transition where the browser has one, so the
+ * pot map can stay put while the rest changes. Elsewhere it swaps at once.
+ */
+function withTransition(change: () => void) {
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduced && typeof document.startViewTransition === "function") {
+    document.startViewTransition(() => flushSync(change));
+  } else change();
+}
+
+/** Reads a NivPay link from the page's fragment once, then clears it so a reload doesn't act on it twice. */
+function takeLinkFragment(): string | null {
+  const fragment = location.hash.replace(/^#/, "");
+  if (!fragment) return null;
+  history.replaceState(null, "", location.pathname + location.search);
+  return fragment;
+}
 
 /** Connection health comes from real read failures, not navigator.onLine. */
 function useConnection() {
@@ -67,6 +85,10 @@ function TestModeBadge() {
 export function App() {
   const [active, setActive] = useState<StoredAccount | undefined>(() => accounts.active());
   const [switching, setSwitching] = useState(false);
+  const [screen, setScreen] = useState<Screen>({ kind: "home" });
+  const [notice, setNotice] = useState<Notice | null>(null);
+  // An invite opened before this phone had an account: joined once there is one.
+  const [pendingInvite, setPendingInvite] = useState<Invite | null>(null);
   const connection = useConnection();
   // Requests from this phone still in flight. Unknown until checked, and
   // unknown is never read as "nothing moved".
@@ -85,37 +107,122 @@ export function App() {
     };
   }, [connection.down]);
 
+  const go = useCallback((next: Screen, message: Notice | null = null) => {
+    withTransition(() => {
+      setNotice(message);
+      setScreen(next);
+    });
+  }, []);
+
+  /** Acts on a link opened from a chat: an invite, a reply to one of our drafts, or a pot. */
+  const openLink = useCallback(
+    async (fragment: string) => {
+      let link;
+      try {
+        link = decodeLink(fragment);
+      } catch {
+        go({ kind: "home" }, { tone: "bad", text: copy.errLinkDamaged, code: ERROR_CODES.LINK_DAMAGED });
+        return;
+      }
+      if (link.kind === "invite") {
+        if (accounts.active()) go({ kind: "join", invite: link });
+        else setPendingInvite(link);
+        return;
+      }
+      if (link.kind === "reply") {
+        try {
+          const { draft, text } = await acceptReply(drafts, POTS, link);
+          // The reply belongs to whichever account on this phone is making that pot.
+          if (accounts.list().some((a) => a.address === draft.owner)) {
+            accounts.setActive(draft.owner);
+            setActive(accounts.active());
+          }
+          go({ kind: "create", draftId: draft.id }, { tone: "ok", text });
+        } catch (e) {
+          const failure = e instanceof AppError ? { text: e.message, code: e.code } : describeFailure(e);
+          go({ kind: "home" }, { tone: "bad", ...failure });
+        }
+        return;
+      }
+      const ours = drafts.all().find((d) => d.made?.fragment === fragment);
+      if (ours) go({ kind: "create", draftId: ours.id });
+      else go({ kind: "home" }, { tone: "ok", text: copy.potLinkSoon });
+    },
+    [go],
+  );
+
+  useEffect(() => {
+    const check = () => {
+      const fragment = takeLinkFragment();
+      if (fragment) void openLink(fragment);
+    };
+    check();
+    window.addEventListener("hashchange", check);
+    return () => window.removeEventListener("hashchange", check);
+  }, [openLink]);
+
   const choose = (address: Address, name: string) => {
     accounts.upsert({ address, name });
     accounts.setActive(address);
     setActive(accounts.active());
     setSwitching(false);
+    if (pendingInvite) {
+      go({ kind: "join", invite: pendingInvite });
+      setPendingInvite(null);
+    }
   };
 
+  const banner: ReactNode = connection.down && (
+    <div className="banner" role="status">
+      {offlineMessage(inFlight)}
+    </div>
+  );
+
+  if (active && !switching && screen.kind === "create") {
+    return (
+      <CreateScreen
+        key={screen.draftId}
+        account={active}
+        draftId={screen.draftId}
+        drafts={drafts}
+        banner={banner}
+        notice={notice}
+        onBack={() => go({ kind: "home" })}
+      />
+    );
+  }
+  if (active && !switching && screen.kind === "join") {
+    return <JoinScreen account={active} invite={screen.invite} banner={banner} onClose={() => go({ kind: "home" })} />;
+  }
+
   return (
-    <>
-      {connection.down && (
-        <div className="banner" role="status">
-          {offlineMessage(inFlight)}
-        </div>
-      )}
+    <div className="page">
+      {banner}
       {active && !switching ? (
-        <Home account={active} connection={connection} onSwitch={() => setSwitching(true)} />
+        <Home
+          account={active}
+          connection={connection}
+          notice={notice}
+          onSwitch={() => setSwitching(true)}
+          onOpenDraft={(draftId) => go({ kind: "create", draftId })}
+        />
       ) : (
         <Welcome
           known={accounts.list()}
           current={active}
+          invitedBy={pendingInvite?.from}
           onReady={choose}
           onCancel={active ? () => setSwitching(false) : undefined}
         />
       )}
-    </>
+    </div>
   );
 }
 
 function Welcome(props: {
   known: StoredAccount[];
   current?: StoredAccount;
+  invitedBy?: string;
   onReady: (address: Address, name: string) => void;
   onCancel?: () => void;
 }) {
@@ -148,6 +255,7 @@ function Welcome(props: {
       </header>
       <h1>{props.current ? copy.switchAccount : copy.appName}</h1>
       <p className="lede">{copy.tagline}</p>
+      {props.invitedBy !== undefined && <div className="banner">{copy.joinNeedsAccount(props.invitedBy)}</div>}
 
       {!host.ok ? (
         <div className="card">
@@ -285,7 +393,9 @@ const STEP_LABEL: Record<Step, string> = {
 function Home(props: {
   account: StoredAccount;
   connection: ReturnType<typeof useConnection>;
+  notice: Notice | null;
   onSwitch: () => void;
+  onOpenDraft: (draftId: Hex) => void;
 }) {
   const { account, connection } = props;
   const [balances, setBalances] = useState<Balances | null>(null);
@@ -370,7 +480,8 @@ function Home(props: {
   // Resume a request that was in flight when the page was closed or reloaded.
   useEffect(() => {
     idbWriteStore.get(account.address).then((w) => {
-      if (!w) return;
+      // Only dollar claims and mints are followed here; a pot's screen follows its own.
+      if (!w || w.label.startsWith(CREATE_LABEL)) return;
       if (w.replaceable) {
         setStuck(true);
         setResult({ tone: "bad", text: copy.earlierStuck, code: ERROR_CODES.STUCK });
@@ -445,6 +556,8 @@ function Home(props: {
         </button>
       </header>
 
+      {props.notice && <NoticeLine notice={props.notice} />}
+
       <section className="card balances" aria-live="polite">
         <p className="eyebrow">{copy.yourBalance}</p>
         {!balances ? (
@@ -472,6 +585,8 @@ function Home(props: {
           </>
         )}
       </section>
+
+      <YourPots account={account} onOpen={props.onOpenDraft} />
 
       <section className="card">
         <p className="eyebrow">{copy.addTestDollars}</p>
@@ -526,5 +641,33 @@ function Home(props: {
         />
       )}
     </>
+  );
+}
+
+/** The pots this account is making or has made on this phone. */
+function YourPots(props: { account: StoredAccount; onOpen: (draftId: Hex) => void }) {
+  const mine = drafts.forOwner(props.account.address);
+  const start = () => {
+    const draft = newDraft(props.account.address, phoneTimeZone(), Date.now(), (n) => crypto.getRandomValues(new Uint8Array(n)));
+    drafts.put(draft);
+    props.onOpen(draft.id);
+  };
+  return (
+    <section className="card">
+      <p className="eyebrow">{copy.yourPots}</p>
+      {mine.length === 0 && <p className="hint">{copy.noPotsYet}</p>}
+      {mine.map((d) => (
+        <button type="button" className="home-pot" key={d.id} onClick={() => props.onOpen(d.id)}>
+          <span className="grow">
+            <span className="name">{d.name || copy.unnamedPot}</span>
+            <span className="meta">{d.made ? copy.potRowMade(formatDay(d.closes)) : copy.potRowDraft(d.deciders.length + 1)}</span>
+          </span>
+          <span className={`tag${d.made ? " live" : ""}`}>{d.made ? copy.live : copy.draft}</span>
+        </button>
+      ))}
+      <button type="button" className="btn primary" onClick={start}>
+        {copy.makeAPot}
+      </button>
+    </section>
   );
 }

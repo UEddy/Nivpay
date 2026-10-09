@@ -1,4 +1,4 @@
-import { keccak256, type Address, type Hex } from "viem";
+import { keccak256, type Address, type Hex, type LocalAccount } from "viem";
 import { CHAIN_ID } from "./config.ts";
 import { waitForFinalized, liveWriteChain } from "./chain.ts";
 import { copy, ERROR_CODES } from "../copy.ts";
@@ -10,7 +10,19 @@ import { nonceForNewWrite, nonceForReplacement, replace, submit, type PendingWri
 
 export type Step = "preparing" | "getting-ready" | "confirm" | "sending";
 
-type Call = { from: Address; to: Address; data: Hex; label: string; onStep?: (step: Step) => void };
+type Call = {
+  from: Address;
+  to: Address;
+  data: Hex;
+  label: string;
+  onStep?: (step: Step) => void;
+  /**
+   * Signs something more in the same passkey step, over the transaction's
+   * hash, before the session ends and before anything is broadcast. Making a
+   * pot uses it to sign the pot's labels, so it takes one fingerprint.
+   */
+  cosign?: (account: LocalAccount, hash: Hex) => Promise<void>;
+};
 
 async function fees() {
   const [price, tip] = await Promise.all([readClient.getGasPrice(), readClient.estimateMaxPriorityFeePerGas()]);
@@ -79,9 +91,11 @@ async function signAndSubmit(call: Call, nonce: number, replacing: boolean): Pro
 
     stage = "passkey";
     call.onStep?.("confirm");
-    const raw = await withSigner(call.from, (account) => {
+    const raw = await withSigner(call.from, async (account) => {
       stage = "signing";
-      return account.signTransaction({ chainId: CHAIN_ID, type: "eip1559", to: call.to, data: call.data, value: 0n, nonce, gas, ...f });
+      const signed = await account.signTransaction({ chainId: CHAIN_ID, type: "eip1559", to: call.to, data: call.data, value: 0n, nonce, gas, ...f });
+      await call.cosign?.(account, keccak256(signed));
+      return signed;
     });
 
     stage = "broadcast";

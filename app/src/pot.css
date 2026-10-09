@@ -1,0 +1,800 @@
+/*
+ * Pot screens (docs/design): a 56 px bar, content at 24 px, a footer button,
+ * and the pot map. Colours and motion come from the tokens in styles.css.
+ * Only transform, opacity and stroke-dashoffset ever animate (docs/MOTION.md).
+ */
+
+@keyframes lv-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lv-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes lv-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes lv-march {
+  to {
+    stroke-dashoffset: -14px;
+  }
+}
+
+@keyframes lv-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  75%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.screen {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top);
+}
+
+.screen .banner {
+  margin: 8px 24px 0;
+}
+
+.bar {
+  height: 56px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.bar-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.bar-spacer {
+  width: 44px;
+  height: 44px;
+}
+
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.ico {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.screen-body {
+  flex-grow: 1;
+  padding: 4px 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.enter {
+  animation: lv-up var(--dur-enter) var(--ease-swap) both;
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.intro h1,
+.title-btn {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 28px;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.title-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.title-btn.empty {
+  color: var(--primary-text);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+}
+
+.intro p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* The rules card: four tappable rows. */
+.rules {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.row-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 6px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--divider);
+  background: transparent;
+  text-align: left;
+  font-family: var(--font-body);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color var(--dur-press) ease-out;
+}
+
+.row-btn:last-child {
+  border-bottom: 0;
+}
+
+.row-btn:active:not(:disabled) {
+  background: var(--chip);
+}
+
+.row-btn:disabled {
+  cursor: default;
+}
+
+.row-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: var(--chip);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.row-text {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.row-text .k {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.row-text .v {
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.row-text .v.unset {
+  color: var(--primary-text);
+}
+
+.row-chevron {
+  color: var(--muted);
+}
+
+.rule-chip {
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: 10px;
+  padding: 3px 9px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.row-side {
+  font-size: 12.5px;
+  color: var(--muted);
+  flex-shrink: 0;
+  text-align: right;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.lock-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13.5px;
+  line-height: 1.45;
+  border-radius: 12px;
+  padding: 8px 10px;
+  margin: 0 -10px;
+  background: transparent;
+  transition: background-color 400ms ease-out;
+}
+
+.lock-note.locked {
+  background: var(--request-bubble);
+}
+
+.lock-note .ico {
+  color: var(--primary);
+  stroke-width: 2;
+  margin-top: 1px;
+}
+
+.screen-foot {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 24px max(26px, env(safe-area-inset-bottom));
+  background: var(--bg);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pill-btn {
+  width: 100%;
+  min-height: 56px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 28px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font: 600 17px/1.2 var(--font-body);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: background-color 200ms ease-out;
+}
+
+.pill-btn:active:not(:disabled),
+.pill-btn.busy {
+  background: var(--primary-pressed);
+}
+
+.pill-btn:disabled:not(.busy) {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.pill-btn.busy {
+  cursor: default;
+}
+
+.pill-btn.outline {
+  min-height: 52px;
+  border: 1.5px solid var(--primary);
+  background: transparent;
+  color: var(--primary-text);
+  font-size: 15.5px;
+}
+
+.foot-line {
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: center;
+  margin: 0;
+}
+
+.foot-hint {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------------
+ * The pot map
+ * --------------------------------------------------------------------- */
+
+.map-card {
+  position: relative;
+  border-radius: 22px;
+  background: var(--map-paper);
+  overflow: hidden;
+  flex-shrink: 0;
+  view-transition-name: pot-map;
+  animation: lv-fade 400ms ease-out both;
+}
+
+.map-card[data-paused] * {
+  animation-play-state: paused !important;
+}
+
+.map {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.map-grid path {
+  stroke: var(--map-grid);
+  stroke-width: 1;
+}
+
+.map-fade {
+  animation: lv-fade var(--dur-enter) ease-out 450ms both;
+}
+
+.routes-pencil path {
+  fill: none;
+  stroke: var(--route-empty);
+  stroke-width: 1.6;
+  stroke-dasharray: 3px 5px;
+  transition: opacity 400ms ease-out;
+}
+
+.routes-pencil.gone path {
+  opacity: 0;
+}
+
+.routes-live path {
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-dasharray: 1px 6px;
+  opacity: 0;
+  transition: opacity 400ms ease-out;
+}
+
+.routes-live.shown path {
+  opacity: 1;
+}
+
+.routes-live path.payee-route {
+  stroke: var(--ink);
+}
+
+.routes-live.shown path.payee-route {
+  opacity: 0.5;
+}
+
+.routes-live.shown path.march {
+  animation: lv-march 1.4s linear infinite;
+}
+
+.coin {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 0.1px 400px;
+  transition-duration: var(--dur-flight);
+  transition-timing-function: var(--ease-flight);
+}
+
+.pot-in,
+.pop-in {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: lv-pop 520ms var(--ease-swap) 100ms both;
+}
+
+.pot-body {
+  fill: var(--pot-clay);
+  stroke: var(--ink);
+  stroke-width: 5.5;
+  stroke-linejoin: round;
+}
+
+.pot-band {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  opacity: 0.3;
+}
+
+.pot-lid {
+  transition: transform 380ms var(--ease-pop);
+}
+
+.pot-lid.shut {
+  transform: translateY(3px);
+}
+
+.pot-lid rect {
+  fill: var(--pot-lid);
+  stroke: var(--ink);
+  stroke-width: 5.5;
+}
+
+.pot-lock {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  transform: scale(0.2);
+  transition:
+    transform var(--dur-pop) var(--ease-pop),
+    opacity 200ms ease-out;
+}
+
+.pot-lock.on {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.pot-lock circle {
+  fill: var(--ink);
+}
+
+.pot-lock svg {
+  fill: none;
+  stroke: var(--bg);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.city-ring {
+  fill: var(--bg);
+  stroke-width: 2.5;
+  transition: stroke 300ms ease-out;
+}
+
+.city-ring.dashed {
+  stroke-dasharray: 3px 3px;
+}
+
+.city-dot {
+  fill: var(--ink);
+}
+
+.ping-ring {
+  fill: none;
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+}
+
+/* Two pings, not a loop: the map keeps to two loops at most. */
+.ping-ring.pinging {
+  animation: lv-ping 2.4s cubic-bezier(0, 0, 0.2, 1) 2;
+}
+
+.payee-ring {
+  fill: var(--card);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.payee-icon {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.map-labels {
+  animation: lv-fade var(--dur-enter) ease-out 500ms both;
+}
+
+.map-city {
+  font: 600 11.5px var(--font-body);
+  fill: var(--ink);
+}
+
+.map-payee {
+  font: 600 11px var(--font-body);
+  fill: var(--ink);
+}
+
+.map-sub {
+  font: 400 10px var(--font-body);
+  fill: var(--muted);
+}
+
+.map-amount {
+  font: 600 15px var(--font-display);
+  fill: var(--ink);
+}
+
+.map-badge {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px 0 8px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.map-badge .dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+
+.map-badge .dot span {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  background: var(--route-empty);
+  transition: background-color 300ms;
+}
+
+.map-badge.live .dot span {
+  background: var(--primary);
+}
+
+.map-badge.live .dot .ping {
+  animation: lv-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* ------------------------------------------------------------------------
+ * Sheets and lists on the pot screens
+ * --------------------------------------------------------------------- */
+
+.sheet.tall {
+  max-height: 88dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: lv-up var(--dur-swap) var(--ease-swap) both;
+}
+
+.sheet.tall h2 {
+  margin: 0;
+}
+
+.sheet .lede {
+  font-size: 14px;
+}
+
+.sheet .btn {
+  margin-top: 0;
+}
+
+.sheet .error,
+.sheet .hint {
+  margin: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--divider);
+  font-size: 14px;
+}
+
+.list-row:first-child {
+  border-top: 0;
+}
+
+.list-row .grow {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.list-row .name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.list-row .meta {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.list-row .side {
+  font: 600 15px var(--font-display);
+  white-space: nowrap;
+}
+
+.list-row.stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stepper .count {
+  font: 600 22px var(--font-display);
+  white-space: nowrap;
+}
+
+.round-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  border: 1.5px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font: 600 20px/1 var(--font-body);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.round-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.field-row {
+  display: flex;
+  gap: 10px;
+}
+
+.field-row .field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.field input {
+  width: 100%;
+  min-width: 0;
+}
+
+.link-box {
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--chip);
+  border-radius: 10px;
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+  user-select: all;
+  max-height: 96px;
+  overflow-y: auto;
+}
+
+.home-pot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--divider);
+  background: transparent;
+  text-align: left;
+  font-family: var(--font-body);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.home-pot:first-of-type {
+  border-top: 0;
+}
+
+.home-pot .grow {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-pot .name {
+  font: 600 17px var(--font-display);
+  overflow-wrap: anywhere;
+}
+
+.home-pot .meta {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.tag {
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 3px 8px;
+  background: var(--chip);
+  color: var(--primary-text);
+  flex-shrink: 0;
+}
+
+.tag.live {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--dur-swap);
+  animation-timing-function: var(--ease-swap);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.list-row.stacked > .btn.small {
+  align-self: flex-start;
+  padding-left: 0;
+}

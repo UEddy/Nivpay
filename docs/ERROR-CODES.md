@@ -67,6 +67,23 @@ first, so no gas grant or passkey prompt is spent on them.
 | 61 | Ceiling: the account already holds 100,000 AUSD or more (`maxAmountToOwn()`). Nothing was sent. | The account's AUSD balance |
 | 62 | The faucet refused for another reason before sending (out of stock, `0x356680b7`, or an unknown error), or the claim was included and reverted, usually because someone else claimed first. No AUSD moved. | The faucet's AUSD balance; the transaction receipt |
 
+## Making a pot and joining one
+
+Invite case B (`docs/APP-CONTRACT-MAP.md` section 9): the pot is a draft on
+the creator's phone until every decider and payee has sent a signed reply.
+70 to 72 and 74 happen on the phone and send nothing. 73 is found by running
+`createPot` as a call before anything is signed, so it costs no gas grant
+and no passkey prompt. A pot whose transaction reverts or is replaced shows
+52 or 53 as above.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 70 | A link from a chat couldn't be read: cut short, edited, an unknown version, or text over the length limits. | The link as received |
+| 71 | A reply link names a draft that isn't on this phone (opened on another phone, or the draft was deleted), or a payee slot that is no longer in the draft. | The creator's drafts in localStorage, `nivpay.drafts.v1` |
+| 72 | A reply's signature doesn't recover to the account it names, for this chain and this pots contract. It was not added. | The reply link |
+| 73 | `createPot` would revert with these arguments, usually `EndTimeInPast`. Nothing was sent. | The draft's closing date and time zone |
+| 74 | A reply arrived for a pot that is already made or being made. Deciders and payees can't change after that. | The draft's `made` or `sending` field |
+
 ## Other
 
 | Code | What happened | Where to look |

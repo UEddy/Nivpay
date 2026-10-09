@@ -18,14 +18,26 @@
   --person-1: #a5451f;
   --person-2: #245c5a;
   --person-3: #d99a2b;
+  --person-3-route: #b07a1e;
+  --person-3-text: #8a5a0e;
+  /* More people: the same earthy family, differing in lightness. */
+  --person-4: #5f6f2e;
+  --person-5: #7a4a63;
+  --request-bubble: #f3dfc6;
+  --on-primary: #ffffff;
 
   --font-display: "Besley", Georgia, serif;
   --font-body: "Work Sans", system-ui, sans-serif;
 
   /* Motion tokens from docs/MOTION.md. */
   --ease-swap: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-flight: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
   --dur-press: 120ms;
   --dur-swap: 240ms;
+  --dur-enter: 500ms;
+  --dur-flight: 900ms;
+  --dur-pop: 420ms;
 }
 
 * {
@@ -47,6 +59,11 @@ body {
   min-height: 100dvh;
   max-width: 480px;
   margin: 0 auto;
+}
+
+/* Account screens: welcome, home. */
+.page {
+  min-height: 100dvh;
   padding: max(20px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
