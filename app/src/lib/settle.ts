@@ -1,6 +1,6 @@
-import { encodeFunctionData, type Address, type Hex } from "viem";
+import { encodeFunctionData, isAddressEqual, parseEventLogs, type Address, type Hex, type Log } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
-import { ERC20_ALLOWANCE_ABI, SETTLEMENT_PAIR_ABI, SETTLEMENT_WHITELISTER_ABI } from "./abi.ts";
+import { ERC20_ALLOWANCE_ABI, ERC20_TRANSFER_ABI, SETTLEMENT_PAIR_ABI, SETTLEMENT_WHITELISTER_ABI } from "./abi.ts";
 import { AppError } from "./errors.ts";
 import type { SequenceCall } from "./writes.ts";
 
@@ -149,4 +149,17 @@ export function exchangeData(s: Settlement, q: Pick<Quote, "amountIn" | "minOut"
     functionName: "swapExactTokensForTokens",
     args: [q.amountIn, q.minOut, [s.dollar, s.other], to, q.deadline],
   });
+}
+
+/** What the recipient actually received, from the exchange's own receipt: at least the minimum, usually exactly the quote. */
+export function received(logs: Log[], currency: Address, to: Address): bigint {
+  return parseEventLogs({ abi: ERC20_TRANSFER_ABI, eventName: "Transfer", logs })
+    .filter((l) => isAddressEqual(l.address, currency) && isAddressEqual(l.args.to, to))
+    .reduce((sum, l) => sum + l.args.value, 0n);
+}
+
+/** Which step a label belongs to, for the progress line. */
+export function stepOf(label: string): "setup" | "allow" | "send" | null {
+  const last = label.split(" ").pop();
+  return last === "setup" || last === "allow" || last === "send" ? last : null;
 }

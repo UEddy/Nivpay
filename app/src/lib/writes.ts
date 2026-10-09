@@ -201,7 +201,7 @@ export async function nonceForNewWrite(store: WriteStore, chain: WriteChain, add
 }
 
 /** How a sequence ended: the outcome of the step it stopped at, counting from 0. */
-export type SequenceOutcome = { outcome: Outcome; step: number; steps: number };
+export type SequenceOutcome = { outcome: Outcome; step: number; steps: number; write: PendingWrite };
 
 /**
  * Follows a sequence to its end. Each step is followed to finality exactly
@@ -227,7 +227,7 @@ export async function followSequence(
       // A stuck step keeps its record, for a replacement on its nonce. The
       // steps after it were never broadcast; they are dropped, not replaced.
       if (outcome.kind === "stuck" && current.then?.length) await store.put({ ...current, replaceable: true, then: undefined });
-      return { outcome, step, steps };
+      return { outcome, step, steps, write: current };
     }
     const following: PendingWrite = {
       address: current.address,

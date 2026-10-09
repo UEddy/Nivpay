@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Log } from "viem";
+import { isAddressEqual, type Address, type Log } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
 import { ERC20_READ_ABI } from "../lib/abi.ts";
-import { LOG_PAGE_BLOCKS } from "../lib/config.ts";
+import { CTK, LOG_PAGE_BLOCKS, SETTLEMENT_PAIR } from "../lib/config.ts";
 import { DEPLOYMENT, DOLLAR } from "../lib/deployment.ts";
 import { PotFeed } from "../lib/feed.ts";
 import { idbFeedStore } from "../lib/idb.ts";
 import { linkUrl } from "../lib/invites.ts";
-import { formatAmount, parseAmount } from "../lib/money.ts";
+import { formatAmount, formatCurrency, parseAmount } from "../lib/money.ts";
 import { receiptUrl } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
 import { incomingFrom, incomingSource, RECEIVE_BACKLOG_BLOCKS, withFloor, type Incoming } from "../lib/transfer.ts";
@@ -16,17 +16,36 @@ import { Icon, NoticeLine, shareLink } from "./ui.tsx";
 
 const finalized = async () => (await readClient.getBlock({ blockTag: "finalized" })).number;
 
+/** What can arrive: dollars, and on AUSD builds the currency Agora's settlement delivers. */
+const WATCHED: Address[] = DEPLOYMENT === "ausd" ? [DOLLAR, CTK] : [DOLLAR];
+type Currency = { decimals: number; symbol: string };
+type Arrival = Incoming & { asset: Address };
+const keyOf = (p: Arrival) => `${p.tx}:${p.logIndex}`;
+
 /**
  * Receiving dollars: a request link to share, and the payments that reached
  * this account, each shown only once its block is finalized. The list starts
  * about ten minutes before the view was first opened on this phone and is
  * kept from then on.
  */
+/** "+$25.00" for dollars, "10.00 CTK" for another currency. */
+function show(currencies: Record<string, Currency>, p: Arrival): string {
+  const c = currencies[p.asset.toLowerCase()];
+  if (!c) return "…";
+  return c.symbol === "$" ? formatAmount(p.amount, c.decimals, "cents") : formatCurrency(p.amount, c.decimals, c.symbol);
+}
+
+/** A payment in another currency comes from Agora's settlement, not from a person's account. */
+function fromText(from: Address): string {
+  return isAddressEqual(from, SETTLEMENT_PAIR) ? copy.fromAgoraSettlement : copy.accountEnding(from);
+}
+
 export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode; onClose: () => void }) {
   const me = props.account.address;
   const [decimals, setDecimals] = useState<number | null>(null);
   const [balance, setBalance] = useState<bigint | null>(null);
-  const [payments, setPayments] = useState<Incoming[]>([]);
+  const [payments, setPayments] = useState<Arrival[]>([]);
+  const [currencies, setCurrencies] = useState<Record<string, Currency>>({});
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const [announce, setAnnounce] = useState("");
   const [failed, setFailed] = useState(false);
@@ -37,7 +56,7 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
 
   useEffect(() => {
     alive.current = true;
-    let feed: PotFeed | undefined;
+    const feeds: PotFeed[] = [];
     const readBalance = async () => {
       const at = { blockNumber: await finalized() } as const;
       const [d, b] = await Promise.all([
@@ -50,35 +69,49 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
       }
       return d;
     };
+    const byAsset = new Map<Address, Arrival[]>();
     void (async () => {
       try {
         const d = await readBalance();
+        const known: Record<string, Currency> = { [DOLLAR.toLowerCase()]: { decimals: d, symbol: "$" } };
+        for (const asset of WATCHED.slice(1)) {
+          const [decimals, symbol] = await Promise.all([
+            readClient.readContract({ address: asset, abi: ERC20_READ_ABI, functionName: "decimals" }),
+            readClient.readContract({ address: asset, abi: ERC20_READ_ABI, functionName: "symbol" }),
+          ]);
+          known[asset.toLowerCase()] = { decimals, symbol };
+        }
+        if (alive.current) setCurrencies(known);
         const floor = (await finalized()) - RECEIVE_BACKLOG_BLOCKS;
         if (!alive.current) return;
-        const source = incomingSource(DOLLAR, me, finalized, (params) => readClient.request({ method: "eth_getLogs", params: [params] }) as Promise<Log[]>);
-        feed = new PotFeed(source, withFloor(idbFeedStore(`receive:${DOLLAR}:${me}`), floor), floor, { pageSize: LOG_PAGE_BLOCKS, parallel: 4, everyMs: 1_000 });
-        feed.start(
-          (all, added) => {
-            if (!alive.current) return;
-            setFailed(false);
-            setPayments(incomingFrom(all, me));
-            const arrived = incomingFrom(added, me);
-            if (arrived.length) {
-              setFresh((f) => new Set([...f, ...arrived.map((p) => `${p.tx}:${p.logIndex}`)]));
-              const last = arrived[0]!;
-              setAnnounce(copy.receivedAnnounce(formatAmount(last.amount, d, "auto"), copy.accountEnding(last.from)));
-              void readBalance().catch(() => {});
-            }
-          },
-          () => alive.current && setFailed(true),
-        );
+        for (const asset of WATCHED) {
+          const source = incomingSource(asset, me, finalized, (params) => readClient.request({ method: "eth_getLogs", params: [params] }) as Promise<Log[]>);
+          const feed = new PotFeed(source, withFloor(idbFeedStore(`receive:${asset}:${me}`), floor), floor, { pageSize: LOG_PAGE_BLOCKS, parallel: 4, everyMs: 1_000 });
+          feeds.push(feed);
+          feed.start(
+            (all, added) => {
+              if (!alive.current) return;
+              setFailed(false);
+              byAsset.set(asset, incomingFrom(all, me).map((p) => ({ ...p, asset })));
+              setPayments([...byAsset.values()].flat().sort((a, b) => (a.block === b.block ? b.logIndex - a.logIndex : a.block > b.block ? -1 : 1)));
+              const arrived = incomingFrom(added, me).map((p) => ({ ...p, asset }));
+              if (arrived.length) {
+                setFresh((f) => new Set([...f, ...arrived.map(keyOf)]));
+                const last = arrived[0]!;
+                setAnnounce(copy.receivedAnnounce(show(known, last), fromText(last.from)));
+                void readBalance().catch(() => {});
+              }
+            },
+            () => alive.current && setFailed(true),
+          );
+        }
       } catch {
         if (alive.current) setFailed(true);
       }
     })();
     return () => {
       alive.current = false;
-      feed?.stop();
+      for (const f of feeds) f.stop();
     };
   }, [me]);
 
@@ -140,12 +173,12 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
           {payments.length === 0 && <p className="hint">{copy.noPaymentsYet}</p>}
           <div className="list">
             {payments.map((p) => {
-              const isNew = fresh.has(`${p.tx}:${p.logIndex}`);
+              const isNew = fresh.has(keyOf(p));
               return (
-                <div className={`list-row${isNew ? " arrived" : ""}`} key={`${p.tx}:${p.logIndex}`}>
+                <div className={`list-row${isNew ? " arrived" : ""}`} key={keyOf(p)}>
                   <div className="grow">
-                    <span className="name">+{decimals === null ? "…" : formatAmount(p.amount, decimals, "cents")}</span>
-                    <span className="meta">{copy.paymentFrom(copy.accountEnding(p.from))}</span>
+                    <span className="name">+{show(currencies, p)}</span>
+                    <span className="meta">{copy.paymentFrom(fromText(p.from))}</span>
                     {isNew && <span className="meta">{copy.justArrived}</span>}
                   </div>
                   <a className="receipt-link small" href={receiptUrl(p.tx)} target="_blank" rel="noopener noreferrer">

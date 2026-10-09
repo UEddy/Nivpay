@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decodeFunctionData, getAddress } from "viem";
+import { decodeFunctionData, encodeAbiParameters, getAddress, pad, toEventSelector, type Log } from "viem";
 import { ERROR_CODES } from "../copy.ts";
 import { ERC20_ALLOWANCE_ABI, SETTLEMENT_PAIR_ABI, SETTLEMENT_WHITELISTER_ABI } from "./abi.ts";
 import { AppError } from "./errors.ts";
@@ -12,7 +12,9 @@ import {
   EXCHANGE_GAS,
   fromCurrencyLabel,
   quote,
+  received,
   settlementCalls,
+  stepOf,
   type SettlementState,
 } from "./settle.ts";
 
@@ -117,4 +119,19 @@ test("every step's label says who and how much, so a reload can resume it", () =
     assert.deepEqual(fromCurrencyLabel(currencyLabel(UBONG, q, step)), { to: UBONG, amountIn: TEN, minOut: q.minOut });
   }
   assert.equal(fromCurrencyLabel("send 0x1111111111111111111111111111111111111111 1"), null);
+});
+
+test("what the recipient received is read from the exchange's receipt, in the other currency only", () => {
+  const topic = toEventSelector("Transfer(address,address,uint256)");
+  const log = (token: `0x${string}`, from: `0x${string}`, to: `0x${string}`, value: bigint) =>
+    ({ address: token, topics: [topic, pad(from, { size: 32 }), pad(to, { size: 32 })], data: encodeAbiParameters([{ type: "uint256" }], [value]) }) as unknown as Log;
+  const logs = [log(S.dollar, ME, S.pair, TEN), log(S.other, S.pair, UBONG, 10n * 10n ** 18n), log(S.other, S.pair, ME, 1n)];
+  assert.equal(received(logs, S.other, UBONG), 10n * 10n ** 18n);
+  assert.equal(received(logs, S.dollar, UBONG), 0n);
+});
+
+test("each step is told apart by its label", () => {
+  const q = quote(live, TEN, 1n);
+  assert.deepEqual((["setup", "allow", "send"] as const).map((s) => stepOf(currencyLabel(UBONG, q, s))), ["setup", "allow", "send"]);
+  assert.equal(stepOf("send 0x1 2"), null);
 });

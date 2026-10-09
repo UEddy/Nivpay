@@ -21,6 +21,7 @@ import { PotStore, rememberPotLink, type StoredPot } from "./lib/potstore.ts";
 import { retryStuckWrite, sendWrite, type Step } from "./lib/send.ts";
 import { acceptReply } from "./lib/replies.ts";
 import { latestReceipt, receiptUrl, rememberReceipt } from "./lib/receipts.ts";
+import { CURRENCY_LABEL } from "./lib/settle.ts";
 import { SEND_LABEL } from "./lib/transfer.ts";
 import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
 import { ChipInScreen } from "./screens/ChipIn.tsx";
@@ -472,7 +473,7 @@ function Home(props: {
   useEffect(() => {
     void idbWriteStore
       .get(account.address)
-      .then((w) => setSendInFlight(Boolean(w?.label.startsWith(`${SEND_LABEL} `))))
+      .then((w) => setSendInFlight(Boolean(w && (w.label.startsWith(`${SEND_LABEL} `) || w.label.startsWith(`${CURRENCY_LABEL} `)))))
       .catch(() => setSendInFlight(false));
   }, [account.address]);
   const [amountText, setAmountText] = useState("1,000");
