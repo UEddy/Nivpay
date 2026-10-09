@@ -5,27 +5,48 @@ import { PERSON_COLORS, payeeSpots, personSpots, reverseRoute, VIEW } from "../l
 /**
  * The Three Cities map with the clay pot (docs/design, docs/MOTION.md).
  *
- * Only transform, opacity and stroke-dashoffset ever move. A coin is a 0.1px
- * dash with a round cap, carried along its route by stroke-dashoffset; each
- * route is measured once with getTotalLength. Loops pause when the page is
- * hidden or the map is off screen, and reduced motion drops flights and loops.
+ * The map draws a state; the screens decide when it changes, because only
+ * they know when something is final. Only transform, opacity and
+ * stroke-dashoffset ever move. A coin is a 0.1px dash with a round cap,
+ * carried along its route by stroke-dashoffset; each route is measured once
+ * with getTotalLength. Layers are full-height rects scaled with scaleY from
+ * the bottom and lifted with translateY, so a layer rising, and every layer
+ * above it moving up, is all transform. Loops pause when the page is hidden
+ * or the map is off screen.
  */
 
-export type MapPerson = { name: string; city: string; you: boolean };
+export type MapPerson = {
+  name: string;
+  city: string;
+  sub: string;
+  /** "You": the sub line in the person's colour, bold. */
+  subStrong?: boolean;
+  /** solid: the person's colour. dashed: their colour, dashed. pencil: not there yet. */
+  ring: "solid" | "dashed" | "pencil";
+  dim?: boolean;
+  check?: boolean;
+  ping?: boolean;
+  route: "pencil" | "march" | "solid" | "none";
+};
+
 export type MapPayee = { name: string; sub: string };
 
 /**
- * draft: the rules aren't locked; routes are pencilled in.
- * live: the pot is made. If `celebrate` is set when it turns live, the lid
- * drops, the lock pops and an invite flies out to each other person.
+ * A coin on a person's route. "start": not yet left (hidden). "end": arrived.
+ * "hold": at the rim, pulsing, waiting for finality. "back": flying back to
+ * where it started, because it didn't go through.
  */
-export type MapState = "draft" | "live";
+export type Coin = { person: number; to: "pot" | "city"; at: "start" | "end" | "hold" | "back"; delayMs?: number; label?: string };
+
+/** A layer of the pot, bottom first. `fraction` of the pot's full height. Unknown funders have no person. */
+export type Layer = { person: number | null; fraction: number };
 
 const POT_PATH =
   "M72 38 C72 50 60 54 50 63 C28 82 23 118 35 146 C47 173 76 186 100 186 C124 186 153 173 165 146 C177 118 172 82 150 63 C140 54 128 50 128 38 Z";
 const GRID = ["M57 0 V232", "M114 0 V232", "M171 0 V232", "M228 0 V232", "M285 0 V232", "M0 46 H342", "M0 92 H342", "M0 138 H342", "M0 184 H342"];
-const FLIGHT_MS = 900;
-const STAGGER_MS = 140;
+/** Full height of the liquid in pot units: the most the pot can ever pay out. */
+const FULL = 128.5;
+const BOTTOM = 186.5;
 
 /** Picks a payee's icon from its name. Anything unrecognised gets a shop. */
 function payeeIcon(name: string): ReactNode {
@@ -84,54 +105,37 @@ function usePausedLoops(ref: React.RefObject<HTMLElement | null>): boolean {
 export function PotMap(props: {
   people: MapPerson[];
   payees: MapPayee[];
+  payeeRoutes: "pencil" | "dotted";
+  lid: "open" | "shut";
+  lock: boolean;
+  layers?: Layer[];
+  coins?: Coin[];
+  /** Tilts the pot once, when a layer lands. Changing the key replays it. */
+  sloshKey?: number;
   potText: string;
-  state: MapState;
-  celebrate: boolean;
+  badge: "draft" | "live";
   label: string;
 }) {
-  const { people, payees, state, celebrate } = props;
+  const { people, payees } = props;
   const card = useRef<HTMLDivElement>(null);
   const paused = usePausedLoops(card);
   const spots = personSpots(people.length);
   const payeeAt = payeeSpots(payees.length);
-  const live = state === "live";
-
-  // Invites fly only when the pot turns live while this screen watches.
-  // A pot that was already live when opened shows its settled state.
-  const [flight, setFlight] = useState<"none" | "ready" | "flying" | "landed">(live ? "landed" : "none");
-  const coins = useRef<(SVGPathElement | null)[]>([]);
+  const routes = useRef<(SVGPathElement | null)[]>([]);
   const [lengths, setLengths] = useState<number[]>([]);
 
   useLayoutEffect(() => {
-    setLengths(coins.current.map((c) => (c ? Math.ceil(c.getTotalLength()) : 0)));
-  }, [people.length]);
+    setLengths(routes.current.map((c) => (c ? Math.ceil(c.getTotalLength()) : 0)));
+  }, [spots.length]);
 
-  useEffect(() => {
-    if (!live) {
-      setFlight("none");
-      return;
-    }
-    if (!celebrate) {
-      setFlight("landed");
-      return;
-    }
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduced) {
-      setFlight("landed");
-      return;
-    }
-    // The lid drops and the lock pops first; then the invites leave.
-    setFlight("ready");
-    const others = Math.max(0, spots.length - 1);
-    const t1 = setTimeout(() => setFlight("flying"), 380);
-    const t2 = setTimeout(() => setFlight("landed"), 380 + FLIGHT_MS + STAGGER_MS * Math.max(0, others - 1));
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [live, celebrate, spots.length]);
-
-  const arrived = flight === "landed";
+  const layers = props.layers ?? [];
+  let below = 0;
+  const stacked = layers.map((l) => {
+    const fraction = Math.max(0, Math.min(l.fraction, 1 - below));
+    const out = { ...l, fraction, offset: below };
+    below += fraction;
+    return out;
+  });
   const hiddenPeople = people.length - spots.length;
   const hiddenPayees = payees.length - payeeAt.length;
 
@@ -145,55 +149,107 @@ export function PotMap(props: {
         </g>
 
         <g className="map-fade">
-          <g className={`routes-pencil${live ? " gone" : ""}`}>
-            {spots.map((s) => (
-              <path key={s.route} d={s.route} />
-            ))}
-            {payeeAt.map((s) => (
-              <path key={s.route} d={s.route} />
-            ))}
-          </g>
-          <g className={`routes-live${live ? " shown" : ""}`}>
-            {spots.map((s, i) => (
-              <path key={s.route} d={s.route} className="march" style={{ stroke: PERSON_COLORS[i]!.route }} />
-            ))}
-            {payeeAt.map((s) => (
-              <path key={s.route} d={s.route} className="payee-route" />
-            ))}
-          </g>
+          {spots.map((s, i) => {
+            const p = people[i]!;
+            const color = PERSON_COLORS[i]!.route;
+            return (
+              <g key={`route-${s.route}`}>
+                <path d={s.route} className={`route pencil${p.route === "pencil" ? "" : " gone"}`} />
+                <path
+                  ref={(el) => {
+                    routes.current[i] = el;
+                  }}
+                  d={s.route}
+                  className={`route ${p.route === "solid" ? "solid" : "dots"}${p.route === "march" ? " march" : ""}${
+                    p.route === "march" || p.route === "solid" ? " shown" : ""
+                  }`}
+                  style={{ stroke: color }}
+                />
+              </g>
+            );
+          })}
+          {payeeAt.map((s) => (
+            <path key={s.route} d={s.route} className={`route ${props.payeeRoutes === "pencil" ? "pencil" : "payee shown"}`} />
+          ))}
         </g>
 
-        {spots.map((s, i) =>
-          people[i]!.you ? null : (
-            <path
-              key={`coin-${s.route}`}
-              ref={(el) => {
-                coins.current[i] = el;
-              }}
-              d={reverseRoute(s.route)}
-              className="coin"
-              style={{
-                stroke: PERSON_COLORS[i]!.route,
-                strokeDashoffset: flight === "flying" || flight === "landed" ? -(lengths[i] ?? 0) : 6,
-                opacity: flight === "flying" ? 1 : 0,
-                transitionDelay: flight === "flying" ? `${STAGGER_MS * Math.max(0, i - 1)}ms` : "0ms",
-                transitionProperty: flight === "flying" ? "stroke-dashoffset" : "none",
-              }}
-            />
-          ),
-        )}
+        {(props.coins ?? []).map((c) => {
+          const s = spots[c.person];
+          if (!s) return null;
+          const len = lengths[c.person] ?? 0;
+          const color = PERSON_COLORS[c.person]!.route;
+          const offset = c.at === "start" || c.at === "back" ? 6 : c.at === "hold" ? -(len - 7) : -len;
+          return (
+            <g key={`coin-${c.person}-${c.to}`}>
+              {c.to === "pot" && (
+                <path
+                  d={s.route}
+                  className="trail"
+                  style={{
+                    stroke: color,
+                    strokeDasharray: `${len}px ${len}px`,
+                    strokeDashoffset: c.at === "start" || c.at === "back" ? len : 0,
+                    transitionProperty: c.at === "start" ? "none" : "stroke-dashoffset",
+                    transitionDelay: `${c.delayMs ?? 0}ms`,
+                  }}
+                />
+              )}
+              <path
+                d={c.to === "pot" ? s.route : reverseRoute(s.route)}
+                className={`coin${c.at === "hold" ? " holding" : ""}`}
+                style={{
+                  stroke: color,
+                  strokeDashoffset: offset,
+                  opacity: c.at === "start" ? 0 : 1,
+                  transitionProperty: c.at === "start" ? "none" : "stroke-dashoffset",
+                  transitionDelay: `${c.delayMs ?? 0}ms`,
+                }}
+              />
+              {c.label && c.at !== "start" && (
+                <text x={(s.x + 166) / 2} y={Math.min(s.y, 114) - 12} className="coin-label" textAnchor="middle" style={{ fill: PERSON_COLORS[c.person]!.text }}>
+                  {c.label}
+                </text>
+              )}
+            </g>
+          );
+        })}
 
         <g className="pot-in">
-          <svg x="118" y="66" width="96" height="96" viewBox="0 0 200 200" overflow="visible">
-            <path d={POT_PATH} className="pot-body" />
-            <path d="M40 76 L50 82 L60 76 L70 82 L80 76 L90 82 L100 76 L110 82 L120 76 L130 82 L140 76 L150 82 L160 76" className="pot-band" />
-            <g className={`pot-lid${live ? " shut" : ""}`}>
-              <rect x="62" y="26" width="76" height="14" rx="7" />
-            </g>
-          </svg>
+          {/* Two identical animations, alternated, so a new slosh replays without remounting the layers. */}
+          <g className={`slosh${props.sloshKey ? (props.sloshKey % 2 ? " odd" : " even") : ""}`}>
+            <svg x="118" y="66" width="96" height="96" viewBox="0 0 200 200" overflow="visible">
+              <defs>
+                <clipPath id="pot-clip">
+                  <path d={POT_PATH} />
+                </clipPath>
+              </defs>
+              <path d={POT_PATH} className="pot-fill" />
+              <g clipPath="url(#pot-clip)">
+                {stacked.map((l, i) => (
+                  <rect
+                    key={i}
+                    x="0"
+                    y={BOTTOM - FULL}
+                    width="200"
+                    height={FULL}
+                    className="layer"
+                    style={{
+                      fill: l.person === null ? "var(--route-empty)" : PERSON_COLORS[l.person]!.fill,
+                      transform: `translateY(${-(l.offset * FULL).toFixed(2)}px) scaleY(${l.fraction.toFixed(4)})`,
+                    }}
+                  />
+                ))}
+                <path d="M40 76 L50 82 L60 76 L70 82 L80 76 L90 82 L100 76 L110 82 L120 76 L130 82 L140 76 L150 82 L160 76" className="pot-band" />
+              </g>
+              <path d={POT_PATH} className="pot-outline" />
+              <g className={`pot-lid${props.lid === "shut" ? " shut" : ""}`}>
+                <rect x="62" y="26" width="76" height="14" rx="7" />
+              </g>
+            </svg>
+          </g>
         </g>
 
-        <g className={`pot-lock${live ? " on" : ""}`}>
+        <g className={`pot-lock${props.lock ? " on" : ""}`}>
           <circle cx="166" cy="124" r="13" />
           <svg x="158" y="116" width="16" height="16" viewBox="0 0 24 24">
             <rect x="5" y="11" width="14" height="10" rx="2" />
@@ -204,18 +260,21 @@ export function PotMap(props: {
         {spots.map((s, i) => {
           const p = people[i]!;
           const color = PERSON_COLORS[i]!;
-          const lit = p.you || (live && arrived);
           return (
             <g key={`city-${s.route}`} className="pop-in" style={{ animationDelay: `${250 + i * 100}ms` }}>
-              {!p.you && <circle cx={s.x} cy={s.y} r="11" className={`ping-ring${celebrate && live && arrived ? " pinging" : ""}`} style={{ stroke: color.route }} />}
+              <circle cx={s.x} cy={s.y} r="11" className={`ping-ring${p.ping ? " pinging" : ""}`} style={{ stroke: color.route }} />
               <circle
                 cx={s.x}
                 cy={s.y}
                 r="11"
-                className={p.you ? "city-ring" : "city-ring dashed"}
-                style={{ stroke: lit ? color.route : "var(--route-empty)" }}
+                className={`city-ring${p.ring === "solid" ? "" : " dashed"}`}
+                style={{ stroke: p.ring === "pencil" ? "var(--route-empty)" : color.route }}
               />
-              <circle cx={s.x} cy={s.y} r="5" className="city-dot" />
+              <circle cx={s.x} cy={s.y} r="5" className={`city-dot${p.dim ? " dim" : ""}`} />
+              <g className={`city-check${p.check ? " on" : ""}`}>
+                <circle cx={s.x + 9} cy={s.y - 9} r="6.5" style={{ fill: color.route }} />
+                <path d={`M${s.x + 6} ${s.y - 9} l2 2 l3.5 -4`} />
+              </g>
             </g>
           );
         })}
@@ -237,8 +296,14 @@ export function PotMap(props: {
                 <text x={s.label.x} y={s.label.y} className="map-city" textAnchor={s.label.anchor}>
                   {p.city}
                 </text>
-                <text x={s.label.x} y={s.label.y + 13} className="map-sub" textAnchor={s.label.anchor}>
-                  {p.you ? copy.personYou(p.name) : live && arrived ? copy.personDecides(p.name) : p.name}
+                <text
+                  x={s.label.x}
+                  y={s.label.y + 13}
+                  className={`map-sub${p.subStrong ? " strong" : ""}`}
+                  textAnchor={s.label.anchor}
+                  style={p.subStrong ? { fill: PERSON_COLORS[i]!.text } : undefined}
+                >
+                  {p.sub}
                 </text>
               </g>
             );
@@ -271,12 +336,12 @@ export function PotMap(props: {
           )}
         </g>
       </svg>
-      <div className={`map-badge${live ? " live" : ""}`}>
+      <div className={`map-badge${props.badge === "live" ? " live" : ""}`}>
         <span className="dot">
           <span />
           <span className="ping" />
         </span>
-        {live ? copy.live : copy.draft}
+        {props.badge === "live" ? copy.live : copy.draft}
       </div>
     </div>
   );

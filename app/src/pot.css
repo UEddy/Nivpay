@@ -378,50 +378,88 @@
   animation: lv-fade var(--dur-enter) ease-out 450ms both;
 }
 
-.routes-pencil path {
+.route {
   fill: none;
+  stroke-linecap: round;
+  transition: opacity 400ms ease-out;
+}
+
+.route.pencil {
   stroke: var(--route-empty);
   stroke-width: 1.6;
   stroke-dasharray: 3px 5px;
-  transition: opacity 400ms ease-out;
 }
 
-.routes-pencil.gone path {
+.route.pencil.gone {
   opacity: 0;
 }
 
-.routes-live path {
-  fill: none;
+.route.dots,
+.route.solid {
+  opacity: 0;
+}
+
+.route.dots {
   stroke-width: 2.2;
-  stroke-linecap: round;
   stroke-dasharray: 1px 6px;
-  opacity: 0;
-  transition: opacity 400ms ease-out;
 }
 
-.routes-live.shown path {
+.route.solid {
+  stroke-width: 3;
+}
+
+.route.shown {
   opacity: 1;
 }
 
-.routes-live path.payee-route {
-  stroke: var(--ink);
-}
-
-.routes-live.shown path.payee-route {
-  opacity: 0.5;
-}
-
-.routes-live.shown path.march {
+.route.march {
   animation: lv-march 1.4s linear infinite;
+}
+
+.route.payee {
+  stroke: var(--ink);
+  stroke-width: 1.8;
+  stroke-dasharray: 1px 6px;
+}
+
+.route.payee.shown {
+  opacity: 0.45;
+}
+
+.trail {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition-duration: var(--dur-flight);
+  transition-timing-function: var(--ease-flight);
 }
 
 .coin {
   fill: none;
-  stroke-width: 8;
+  stroke-width: 9;
   stroke-linecap: round;
   stroke-dasharray: 0.1px 400px;
   transition-duration: var(--dur-flight);
   transition-timing-function: var(--ease-flight);
+}
+
+@keyframes lv-hold {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Waiting at the rim for finality: a gentle pulse until it comes. */
+.coin.holding {
+  animation: lv-hold 900ms ease-in-out infinite;
+}
+
+.coin-label {
+  font: 600 13px var(--font-display);
 }
 
 .pot-in,
@@ -431,11 +469,70 @@
   animation: lv-pop 520ms var(--ease-swap) 100ms both;
 }
 
-.pot-body {
+.pot-fill {
   fill: var(--pot-clay);
+}
+
+.pot-outline {
+  fill: none;
   stroke: var(--ink);
   stroke-width: 5.5;
   stroke-linejoin: round;
+}
+
+.layer {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transition: transform 750ms var(--ease-fill);
+}
+
+@keyframes lv-slosh-odd {
+  0% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(-5deg);
+  }
+  45% {
+    transform: rotate(3.5deg);
+  }
+  70% {
+    transform: rotate(-1.5deg);
+  }
+  100% {
+    transform: rotate(0);
+  }
+}
+
+@keyframes lv-slosh-even {
+  0% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(-5deg);
+  }
+  45% {
+    transform: rotate(3.5deg);
+  }
+  70% {
+    transform: rotate(-1.5deg);
+  }
+  100% {
+    transform: rotate(0);
+  }
+}
+
+.slosh {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+.slosh.odd {
+  animation: lv-slosh-odd 900ms ease-out 1 both;
+}
+
+.slosh.even {
+  animation: lv-slosh-even 900ms ease-out 1 both;
 }
 
 .pot-band {
@@ -500,6 +597,38 @@
   fill: var(--ink);
 }
 
+.city-dot.dim {
+  opacity: 0.45;
+}
+
+.city-check {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  transform: scale(0.2);
+  transition:
+    transform var(--dur-pop) var(--ease-pop),
+    opacity 150ms ease-out;
+}
+
+.city-check.on {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.city-check circle {
+  stroke: var(--map-paper);
+  stroke-width: 1.5;
+}
+
+.city-check path {
+  fill: none;
+  stroke: var(--on-primary);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .ping-ring {
   fill: none;
   stroke-width: 2;
@@ -544,6 +673,10 @@
 .map-sub {
   font: 400 10px var(--font-body);
   fill: var(--muted);
+}
+
+.map-sub.strong {
+  font-weight: 600;
 }
 
 .map-amount {
@@ -797,4 +930,108 @@
 .list-row.stacked > .btn.small {
   align-self: flex-start;
   padding-left: 0;
+}
+
+/* ------------------------------------------------------------------------
+ * Chip in
+ * --------------------------------------------------------------------- */
+
+.stepper-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  padding: 10px 12px;
+  flex-shrink: 0;
+}
+
+.step-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 26px;
+  border: 1.5px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color var(--dur-press) ease-out;
+}
+
+.step-btn .ico {
+  stroke-width: 2;
+}
+
+.step-btn:active:not(:disabled) {
+  background: var(--chip);
+}
+
+.step-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.step-amount {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 600 clamp(34px, 13vw, 50px) / 1 var(--font-display);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  padding: 0;
+}
+
+.step-amount:disabled {
+  cursor: default;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  background: var(--chip);
+  border-radius: 16px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.done-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  animation: lv-up 420ms var(--ease-swap) both;
+}
+
+.check-ico {
+  color: var(--person-2);
+  stroke-width: 2.6;
+}
+
+@keyframes lv-breathe {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.9);
+  }
+}
+
+.ico.breathe {
+  animation: lv-breathe 700ms ease-in-out infinite;
 }

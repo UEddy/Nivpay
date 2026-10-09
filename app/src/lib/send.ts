@@ -22,6 +22,14 @@ type Call = {
    * pot uses it to sign the pot's labels, so it takes one fingerprint.
    */
   cosign?: (account: LocalAccount, hash: Hex) => Promise<void>;
+  /**
+   * Builds the call data inside the passkey session, for calls that carry a
+   * signature of their own: a pour-in signs its permit here, so the permit
+   * and the transaction take one fingerprint. `data` is then unused. The
+   * gas is estimated from the real data inside the session, so the account
+   * is made ready first for `gasHint`, before the session opens.
+   */
+  presign?: { gasHint: bigint; build: (account: LocalAccount) => Promise<Hex> };
 };
 
 async function fees() {
@@ -82,8 +90,8 @@ async function signAndSubmit(call: Call, nonce: number, replacing: boolean): Pro
   let broadcast = false;
   try {
     call.onStep?.("preparing");
-    const gas = await estimate(call.from, call.to, call.data);
     const f = await fees();
+    let gas = call.presign ? call.presign.gasHint : await estimate(call.from, call.to, call.data);
 
     stage = "gas grant";
     call.onStep?.("getting-ready");
@@ -93,7 +101,17 @@ async function signAndSubmit(call: Call, nonce: number, replacing: boolean): Pro
     call.onStep?.("confirm");
     const raw = await withSigner(call.from, async (account) => {
       stage = "signing";
-      const signed = await account.signTransaction({ chainId: CHAIN_ID, type: "eip1559", to: call.to, data: call.data, value: 0n, nonce, gas, ...f });
+      let data = call.data;
+      if (call.presign) {
+        data = await call.presign.build(account);
+        // One estimate on the real data. Monad charges the limit, so no padding.
+        stage = "preparing";
+        gas = await readClient.estimateGas({ account: call.from, to: call.to, data });
+        const balance = await readClient.getBalance({ address: call.from });
+        if (balance < gas * f.maxFeePerGas) throw new NotEnoughGasError(copy.errSetupFailed, ERROR_CODES.SETUP_REFUSED);
+        stage = "signing";
+      }
+      const signed = await account.signTransaction({ chainId: CHAIN_ID, type: "eip1559", to: call.to, data, value: 0n, nonce, gas, ...f });
       await call.cosign?.(account, keccak256(signed));
       return signed;
     });

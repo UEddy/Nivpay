@@ -11,22 +11,31 @@ import { DraftStore, newDraft } from "./lib/draft.ts";
 import { AppError, describeFailure, SendFailure } from "./lib/errors.ts";
 import { checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
 import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
-import { decodeLink, type Invite } from "./lib/invites.ts";
+import { decodeLink, type Invite, type PotLink } from "./lib/invites.ts";
 import { formatAmount, parseAmount } from "./lib/money.ts";
 import { hostCheck, signIn, signUp } from "./lib/passkey.ts";
 import { readClient } from "./lib/rpc.ts";
-import { CREATE_LABEL } from "./lib/pots.ts";
+import { PotStore, type StoredPot } from "./lib/potstore.ts";
 import { retryStuckWrite, sendWrite, type Step } from "./lib/send.ts";
 import { acceptReply } from "./lib/replies.ts";
 import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
+import { ChipInScreen } from "./screens/ChipIn.tsx";
 import { CreateScreen } from "./screens/Create.tsx";
 import { JoinScreen } from "./screens/Join.tsx";
 import { formatDay, NoticeLine, phoneTimeZone, type Notice } from "./screens/ui.tsx";
 
 const accounts = new AccountStore(localStorage);
 const drafts = new DraftStore(localStorage);
+const pots = new PotStore(localStorage);
 
-type Screen = { kind: "home" } | { kind: "create"; draftId: Hex } | { kind: "join"; invite: Invite };
+type Screen = { kind: "home" } | { kind: "create"; draftId: Hex } | { kind: "join"; invite: Invite } | { kind: "pot"; pot: StoredPot };
+
+function storedFromLink(link: PotLink, fragment: string): StoredPot {
+  const pot: StoredPot = { deployment: link.deployment, potId: link.potId.toString(), block: link.block.toString(), fragment, name: "", addedAt: Date.now() };
+  const known = pots.get(link.deployment, pot.potId);
+  pots.put({ ...pot, name: known?.name ?? "" });
+  return pots.get(link.deployment, pot.potId) ?? pot;
+}
 
 /**
  * Swaps screens inside a view transition where the browser has one, so the
@@ -87,8 +96,9 @@ export function App() {
   const [switching, setSwitching] = useState(false);
   const [screen, setScreen] = useState<Screen>({ kind: "home" });
   const [notice, setNotice] = useState<Notice | null>(null);
-  // An invite opened before this phone had an account: joined once there is one.
+  // An invite or pot opened before this phone had an account: opened once there is one.
   const [pendingInvite, setPendingInvite] = useState<Invite | null>(null);
+  const [pendingPot, setPendingPot] = useState<StoredPot | null>(null);
   const connection = useConnection();
   // Requests from this phone still in flight. Unknown until checked, and
   // unknown is never read as "nothing moved".
@@ -144,9 +154,9 @@ export function App() {
         }
         return;
       }
-      const ours = drafts.all().find((d) => d.made?.fragment === fragment);
-      if (ours) go({ kind: "create", draftId: ours.id });
-      else go({ kind: "home" }, { tone: "ok", text: copy.potLinkSoon });
+      const pot = storedFromLink(link, fragment);
+      if (accounts.active()) go({ kind: "pot", pot });
+      else setPendingPot(pot);
     },
     [go],
   );
@@ -169,6 +179,9 @@ export function App() {
     if (pendingInvite) {
       go({ kind: "join", invite: pendingInvite });
       setPendingInvite(null);
+    } else if (pendingPot) {
+      go({ kind: "pot", pot: pendingPot });
+      setPendingPot(null);
     }
   };
 
@@ -188,6 +201,19 @@ export function App() {
         banner={banner}
         notice={notice}
         onBack={() => go({ kind: "home" })}
+        onOpenPot={(pot) => go({ kind: "pot", pot })}
+      />
+    );
+  }
+  if (active && !switching && screen.kind === "pot") {
+    return (
+      <ChipInScreen
+        key={screen.pot.potId + active.address}
+        account={active}
+        pot={screen.pot}
+        banner={banner}
+        onName={(name) => pots.put({ ...screen.pot, name })}
+        onClose={() => go({ kind: "home" })}
       />
     );
   }
@@ -205,12 +231,13 @@ export function App() {
           notice={notice}
           onSwitch={() => setSwitching(true)}
           onOpenDraft={(draftId) => go({ kind: "create", draftId })}
+          onOpenPot={(pot) => go({ kind: "pot", pot })}
         />
       ) : (
         <Welcome
           known={accounts.list()}
           current={active}
-          invitedBy={pendingInvite?.from}
+          note={pendingInvite ? copy.joinNeedsAccount(pendingInvite.from) : pendingPot ? copy.potNeedsAccount : undefined}
           onReady={choose}
           onCancel={active ? () => setSwitching(false) : undefined}
         />
@@ -222,7 +249,8 @@ export function App() {
 function Welcome(props: {
   known: StoredAccount[];
   current?: StoredAccount;
-  invitedBy?: string;
+  /** Why the account is needed, when a link brought someone here. */
+  note?: string;
   onReady: (address: Address, name: string) => void;
   onCancel?: () => void;
 }) {
@@ -255,7 +283,7 @@ function Welcome(props: {
       </header>
       <h1>{props.current ? copy.switchAccount : copy.appName}</h1>
       <p className="lede">{copy.tagline}</p>
-      {props.invitedBy !== undefined && <div className="banner">{copy.joinNeedsAccount(props.invitedBy)}</div>}
+      {props.note && <div className="banner">{props.note}</div>}
 
       {!host.ok ? (
         <div className="card">
@@ -360,6 +388,7 @@ type Balances =
 
 /** Claims are told apart from mints by their label, which survives a reload. */
 const CLAIM_LABEL = "claim";
+const MINT_LABEL = "mint";
 
 async function readBalances(address: Address): Promise<Balances> {
   const block = await readClient.getBlock({ blockTag: "finalized" });
@@ -396,6 +425,7 @@ function Home(props: {
   notice: Notice | null;
   onSwitch: () => void;
   onOpenDraft: (draftId: Hex) => void;
+  onOpenPot: (pot: StoredPot) => void;
 }) {
   const { account, connection } = props;
   const [balances, setBalances] = useState<Balances | null>(null);
@@ -480,8 +510,8 @@ function Home(props: {
   // Resume a request that was in flight when the page was closed or reloaded.
   useEffect(() => {
     idbWriteStore.get(account.address).then((w) => {
-      // Only dollar claims and mints are followed here; a pot's screen follows its own.
-      if (!w || w.label.startsWith(CREATE_LABEL)) return;
+      // Only dollar claims and mints are followed here; a pot's screens follow their own.
+      if (!w || !(w.label.startsWith(CLAIM_LABEL) || w.label.startsWith(MINT_LABEL))) return;
       if (w.replaceable) {
         setStuck(true);
         setResult({ tone: "bad", text: copy.earlierStuck, code: ERROR_CODES.STUCK });
@@ -531,7 +561,7 @@ function Home(props: {
         from: account.address,
         to: TESTUSD,
         data: encodeFunctionData({ abi: TEST_DOLLAR_ABI, functionName: "mint", args: [account.address, amount] }),
-        label: `mint ${label} TESTUSD`,
+        label: `${MINT_LABEL} ${label} TESTUSD`,
         onStep: setStep,
       };
       const write = retry ? await retryStuckWrite(call) : await sendWrite(call);
@@ -586,7 +616,7 @@ function Home(props: {
         )}
       </section>
 
-      <YourPots account={account} onOpen={props.onOpenDraft} />
+      <YourPots account={account} onOpen={props.onOpenDraft} onOpenPot={props.onOpenPot} />
 
       <section className="card">
         <p className="eyebrow">{copy.addTestDollars}</p>
@@ -644,9 +674,16 @@ function Home(props: {
   );
 }
 
-/** The pots this account is making or has made on this phone. */
-function YourPots(props: { account: StoredAccount; onOpen: (draftId: Hex) => void }) {
-  const mine = drafts.forOwner(props.account.address);
+/** Pots this account is making, and pots made or opened on this phone. */
+function YourPots(props: { account: StoredAccount; onOpen: (draftId: Hex) => void; onOpenPot: (pot: StoredPot) => void }) {
+  const mine = drafts.forOwner(props.account.address).filter((d) => !d.made?.fragment);
+  // Pots made before the pot list existed are added to it once.
+  for (const d of drafts.forOwner(props.account.address)) {
+    if (d.made?.fragment && !pots.get(DEPLOYMENT, d.made.potId)) {
+      pots.put({ deployment: DEPLOYMENT, potId: d.made.potId, block: d.made.block, fragment: d.made.fragment, name: d.name, addedAt: d.createdAt });
+    }
+  }
+  const opened = pots.all(DEPLOYMENT);
   const start = () => {
     const draft = newDraft(props.account.address, phoneTimeZone(), Date.now(), (n) => crypto.getRandomValues(new Uint8Array(n)));
     drafts.put(draft);
@@ -655,7 +692,16 @@ function YourPots(props: { account: StoredAccount; onOpen: (draftId: Hex) => voi
   return (
     <section className="card">
       <p className="eyebrow">{copy.yourPots}</p>
-      {mine.length === 0 && <p className="hint">{copy.noPotsYet}</p>}
+      {mine.length + opened.length === 0 && <p className="hint">{copy.noPotsYet}</p>}
+      {opened.map((p) => (
+        <button type="button" className="home-pot" key={`pot-${p.potId}`} onClick={() => props.onOpenPot(p)}>
+          <span className="grow">
+            <span className="name">{p.name || copy.unnamedPot}</span>
+            <span className="meta">{copy.potRowJoined}</span>
+          </span>
+          <span className="tag live">{copy.live}</span>
+        </button>
+      ))}
       {mine.map((d) => (
         <button type="button" className="home-pot" key={d.id} onClick={() => props.onOpen(d.id)}>
           <span className="grow">

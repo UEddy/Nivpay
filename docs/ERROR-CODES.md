@@ -84,6 +84,16 @@ and no passkey prompt. A pot whose transaction reverts or is replaced shows
 | 73 | `createPot` would revert with these arguments, usually `EndTimeInPast`. Nothing was sent. | The draft's closing date and time zone |
 | 74 | A reply arrived for a pot that is already made or being made. Deciders and payees can't change after that. | The draft's `made` or `sending` field |
 
+## Opening a pot and chipping in
+
+A pour-in that reverts or is replaced shows 52 or 53, with "That didn't go
+through. Nothing moved."
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 75 | A pot link made for the other deployment (AUSD or TESTUSD) was opened on this one. | The link's deployment byte and `VITE_NIVPAY_POTS` |
+| 76 | No `PotCreated` for that pot id in the block the link names. The link is wrong or for another contract. | `eth_getLogs` at the link's block, topic 1 the pot id |
+
 ## Other
 
 | Code | What happened | Where to look |

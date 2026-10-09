@@ -8,6 +8,13 @@ export const POTS_READ_ABI = [
 ] as const;
 
 export const ERC20_READ_ABI = [
+  {
+    type: "function",
+    name: "nonces",
+    stateMutability: "view",
+    inputs: [{ name: "owner", type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
   { type: "function", name: "symbol", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
   { type: "function", name: "decimals", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
   {
@@ -47,6 +54,20 @@ export const POTS_ABI = [
   { type: "function", name: "MAX_APPROVERS", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint256" }] },
   { type: "function", name: "MAX_DESTINATIONS", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint256" }] },
   { type: "event", name: "PotCreated", inputs: [{ name: "potId", type: "uint256", indexed: true }, { name: "creator", type: "address", indexed: true }, { name: "purpose", type: "bytes32", indexed: false }, { name: "approvers", type: "address[]", indexed: false }, { name: "threshold", type: "uint8", indexed: false }, { name: "destinations", type: "address[]", indexed: false }, { name: "destinationLabels", type: "bytes32[]", indexed: false }, { name: "destinationCaps", type: "uint256[]", indexed: false }, { name: "endTime", type: "uint64", indexed: false }], anonymous: false },
+  { type: "function", name: "fund", stateMutability: "nonpayable", inputs: [{ name: "potId", type: "uint256" }, { name: "amount", type: "uint256" }], outputs: [{ name: "sharesMinted", type: "uint256" }] },
+  { type: "function", name: "fundWithPermit", stateMutability: "nonpayable", inputs: [{ name: "potId", type: "uint256" }, { name: "amount", type: "uint256" }, { name: "deadline", type: "uint256" }, { name: "v", type: "uint8" }, { name: "r", type: "bytes32" }, { name: "s", type: "bytes32" }], outputs: [{ name: "sharesMinted", type: "uint256" }] },
+  { type: "function", name: "funderInfo", stateMutability: "view", inputs: [{ name: "potId", type: "uint256" }, { name: "funder", type: "address" }], outputs: [{ name: "shares", type: "uint256" }, { name: "redeemable", type: "uint256" }] },
+  { type: "event", name: "Funded", inputs: [{ name: "potId", type: "uint256", indexed: true }, { name: "funder", type: "address", indexed: true }, { name: "assets", type: "uint256", indexed: false }, { name: "sharesMinted", type: "uint256", indexed: false }], anonymous: false },
+  { type: "event", name: "Exited", inputs: [{ name: "potId", type: "uint256", indexed: true }, { name: "funder", type: "address", indexed: true }, { name: "sharesBurned", type: "uint256", indexed: false }, { name: "assets", type: "uint256", indexed: false }], anonymous: false },
+  { type: "event", name: "Claimed", inputs: [{ name: "potId", type: "uint256", indexed: true }, { name: "funder", type: "address", indexed: true }, { name: "sharesBurned", type: "uint256", indexed: false }, { name: "assets", type: "uint256", indexed: false }], anonymous: false },
+  { type: "event", name: "Proposed", inputs: [{ name: "proposalId", type: "uint256", indexed: true }, { name: "potId", type: "uint256", indexed: true }, { name: "proposer", type: "address", indexed: true }, { name: "kind", type: "uint8", indexed: false }, { name: "destIndex", type: "uint16", indexed: false }, { name: "amount", type: "uint256", indexed: false }, { name: "expiresAt", type: "uint64", indexed: false }], anonymous: false },
+  { type: "event", name: "Approved", inputs: [{ name: "proposalId", type: "uint256", indexed: true }, { name: "potId", type: "uint256", indexed: true }, { name: "approver", type: "address", indexed: true }, { name: "approvals", type: "uint8", indexed: false }], anonymous: false },
+  { type: "event", name: "ApprovalRevoked", inputs: [{ name: "proposalId", type: "uint256", indexed: true }, { name: "potId", type: "uint256", indexed: true }, { name: "approver", type: "address", indexed: true }, { name: "approvals", type: "uint8", indexed: false }], anonymous: false },
+  { type: "event", name: "ProposalCancelled", inputs: [{ name: "proposalId", type: "uint256", indexed: true }, { name: "potId", type: "uint256", indexed: true }, { name: "proposer", type: "address", indexed: true }], anonymous: false },
+  { type: "event", name: "PayoutExecuted", inputs: [{ name: "proposalId", type: "uint256", indexed: true }, { name: "potId", type: "uint256", indexed: true }, { name: "destination", type: "address", indexed: true }, { name: "destIndex", type: "uint16", indexed: false }, { name: "amount", type: "uint256", indexed: false }, { name: "fee", type: "uint256", indexed: false }], anonymous: false },
+  { type: "event", name: "Frozen", inputs: [{ name: "potId", type: "uint256", indexed: true }, { name: "approver", type: "address", indexed: true }], anonymous: false },
+  { type: "event", name: "Unfrozen", inputs: [{ name: "potId", type: "uint256", indexed: true }, { name: "proposalId", type: "uint256", indexed: true }], anonymous: false },
+  { type: "event", name: "Closed", inputs: [{ name: "potId", type: "uint256", indexed: true }, { name: "viaProposal", type: "bool", indexed: false }, { name: "remainingAssets", type: "uint256", indexed: false }], anonymous: false },
   { type: "error", name: "AlreadyApproved", inputs: [] },
   { type: "error", name: "ArrayLengthMismatch", inputs: [] },
   { type: "error", name: "BadApproverCount", inputs: [] },

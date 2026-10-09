@@ -4,7 +4,8 @@ import { copy, ERROR_CODES } from "../copy.ts";
 import { POTS_ABI } from "../lib/abi.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
 import { liveWriteChain, waitForFinalized } from "../lib/chain.ts";
-import { POTS } from "../lib/deployment.ts";
+import { DEPLOYMENT, POTS } from "../lib/deployment.ts";
+import { PotStore, type StoredPot } from "../lib/potstore.ts";
 import {
   allDeciders,
   checkDraft,
@@ -35,7 +36,7 @@ import { withSigner } from "../lib/passkey.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { fitsText32 } from "../lib/text32.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
-import { PotMap } from "./PotMap.tsx";
+import { PotMap, type Coin, type MapPerson } from "./PotMap.tsx";
 import { andList, formatDay, Icon, NoticeLine, phoneTimeZone, shareLink, Sheet, type Notice } from "./ui.tsx";
 
 type SheetKind = "name" | "deciders" | "payees" | "closes" | "leftover" | "confirm";
@@ -58,6 +59,7 @@ const MISSING_LABEL: Record<Missing, string> = {
   "closes-past": copy.missingClosesPast,
 };
 
+const potStore = new PotStore(localStorage);
 const writeLabel = (draft: Draft) => `${CREATE_LABEL} ${draft.id}`;
 const sharesOf = (stored: { account: Address; amount: string }[]) => stored.map((s) => ({ account: s.account, amount: BigInt(s.amount) }));
 const ending = (account: string) => copy.accountEnding(account);
@@ -70,6 +72,7 @@ export function CreateScreen(props: {
   banner: ReactNode;
   notice: Notice | null;
   onBack: () => void;
+  onOpenPot: (pot: StoredPot) => void;
 }) {
   const { account, drafts, draftId } = props;
   const [draft, setDraft] = useState<Draft | undefined>(() => drafts.get(draftId));
@@ -81,6 +84,25 @@ export function CreateScreen(props: {
   const [result, setResult] = useState<Notice | null>(props.notice);
   const [stuck, setStuck] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
+  // The map's motion when the pot is made (docs/MOTION.md, "Pot created",
+  // about 1.8s): the lid drops and the lock pops, then an invite flies out to
+  // each city, then each ring lights up. Only ever after the finalized receipt.
+  const [phase, setPhase] = useState<"draft" | "locked" | "flying" | "landed">(() => (drafts.get(draftId)?.made ? "landed" : "draft"));
+  useEffect(() => {
+    if (!celebrate) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setPhase("landed");
+      return;
+    }
+    const others = Math.max(0, (drafts.get(draftId)?.deciders.length ?? 0));
+    setPhase("locked");
+    const t1 = setTimeout(() => setPhase("flying"), 380);
+    const t2 = setTimeout(() => setPhase("landed"), 380 + 900 + 140 * Math.max(0, others - 1));
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [celebrate, drafts, draftId]);
   const [announce, setAnnounce] = useState("");
   const [shareNote, setShareNote] = useState<string | null>(null);
   const alive = useRef(true);
@@ -134,6 +156,7 @@ export function CreateScreen(props: {
         ? { ...base, fragment: potFragment(made.potId, made.block, sending.people, sharesOf(sending.shares), signature) }
         : { ...base, fragment: "", unsigned: { createdIn: hash, people: sending.people, shares: sending.shares } };
       update((d) => ({ ...d, sending: undefined, made: record }));
+      if (record.fragment) rememberPot(record.potId, record.block, record.fragment);
       if (!alive.current) return;
       setStep(null);
       setStuck(false);
@@ -304,6 +327,7 @@ export function CreateScreen(props: {
       const signature = await withSigner(account.address, (signer) => signLabels(signer, POTS, unsigned.createdIn, unsigned.people, shares));
       const fragment = potFragment(BigInt(made.potId), BigInt(made.block), unsigned.people, shares, signature);
       update((d) => ({ ...d, made: d.made && { potId: d.made.potId, block: d.made.block, fragment } }));
+      rememberPot(made.potId, made.block, fragment);
     } catch (e) {
       setResult({ tone: "bad", ...describeFailure(e) });
     } finally {
@@ -311,12 +335,34 @@ export function CreateScreen(props: {
     }
   };
 
+  /** Lists the made pot on Home, and returns it for opening. */
+  function rememberPot(potId: string, block: string, fragment: string): StoredPot {
+    const pot = { deployment: DEPLOYMENT, potId, block, fragment, name: drafts.get(draftId)?.name ?? "", addedAt: Date.now() };
+    potStore.put(pot);
+    return pot;
+  }
+
   const potUrl = made ? `${location.origin}/#${made.fragment}` : "";
 
-  const mapPeople = people.map((p, i) => ({ name: p.name, city: p.city || copy.yourCity, you: i === 0 }));
+  const live = phase !== "draft";
+  const mapPeople: MapPerson[] = people.map((p, i) => {
+    const you = i === 0;
+    return {
+      name: p.name,
+      city: p.city || copy.yourCity,
+      sub: you ? copy.personYou(p.name) : phase === "landed" ? copy.personDecides(p.name) : p.name,
+      ring: you ? "solid" : phase === "landed" ? "dashed" : "pencil",
+      ping: !you && phase === "landed" && celebrate,
+      route: live ? "march" : "pencil",
+    };
+  });
+  const coins: Coin[] =
+    phase === "locked" || phase === "flying"
+      ? people.slice(1).map((_, k) => ({ person: k + 1, to: "city", at: phase === "flying" ? "end" : "start", delayMs: 140 * k }))
+      : [];
   const mapPayees = draft.payees.map((p) => ({ name: p.name, sub: copy.upTo(amount(p.cap)) }));
   const mapLabel = copy.map(
-    andList(mapPeople.map((p) => `${p.name} in ${p.city}`)),
+    andList(people.map((p) => `${p.name} in ${p.city || copy.yourCity}`)),
     draft.payees.length ? andList(draft.payees.map((p) => p.name)) : copy.nobodyYet,
   );
 
@@ -330,9 +376,12 @@ export function CreateScreen(props: {
         <PotMap
           people={mapPeople}
           payees={mapPayees}
+          payeeRoutes={live ? "dotted" : "pencil"}
+          lid={live ? "shut" : "open"}
+          lock={live}
+          coins={coins}
           potText={decimals === null ? "$0" : formatAmount(0n, decimals, "auto")}
-          state={made ? "live" : "draft"}
-          celebrate={celebrate}
+          badge={live ? "live" : "draft"}
           label={mapLabel}
         />
 
@@ -412,6 +461,9 @@ export function CreateScreen(props: {
               {copy.shareInviteLink}
             </button>
             {shareNote && <p className="foot-hint">{shareNote}</p>}
+            <button type="button" className="pill-btn outline" onClick={() => props.onOpenPot(rememberPot(made.potId, made.block, made.fragment))}>
+              {copy.addYourShare}
+            </button>
           </>
         ) : (
           <>
