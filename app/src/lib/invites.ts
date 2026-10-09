@@ -4,7 +4,7 @@ import type { Person, Share } from "./draft.ts";
 import { LinkReader, LinkWriter } from "./links.ts";
 
 /**
- * The three links NivPay sends through chats (invite case B in
+ * The links NivPay sends through chats (invite case B in
  * docs/APP-CONTRACT-MAP.md section 9):
  *
  *  - invite: the creator asks someone to decide, or to be paid. Unsigned; it
@@ -23,6 +23,12 @@ import { LinkReader, LinkWriter } from "./links.ts";
  *    PotCreated event. Pot links are version 2; version 1 pot links, made
  *    before suggested shares, still open and verify against their own types.
  *
+ *  - pay: a request to be paid, from one person to another (Send).
+ *  - ask: a payment request from a pot, sent by whoever asked to the other
+ *    deciders. It names the pot, its creation block and the request, and
+ *    nothing else: the payee, amount, fee and every yes are read from the
+ *    chain, and the names from the pot link already on that phone, if any.
+ *
  * All of them are packed binary in lowercase base32 (links.ts), so no 0x and
  * no banned word can appear in a link.
  */
@@ -32,7 +38,7 @@ export const LINK_VERSION = 1;
 export const POT_LINK_VERSION = 2;
 /** Invites carry the creator's account and a suggested share from version 2. */
 export const INVITE_VERSION = 2;
-const KIND = { invite: 1, reply: 2, pot: 3, pay: 4 } as const;
+const KIND = { invite: 1, reply: 2, pot: 3, pay: 4, ask: 5 } as const;
 export const ROLE = { decider: 0, payee: 1 } as const;
 export type Role = (typeof ROLE)[keyof typeof ROLE];
 
@@ -89,7 +95,17 @@ export type PayLink = {
   amount: bigint;
 };
 
-export type Link = Invite | Reply | PotLink | PayLink;
+/** A payment request from a pot, for the other deciders to say yes to. Unsigned: it only points at what the chain holds. */
+export type AskLink = {
+  kind: "ask";
+  deployment: Deployment;
+  potId: bigint;
+  /** The block the pot was made in, so its PotCreated event is one read. */
+  block: bigint;
+  proposalId: bigint;
+};
+
+export type Link = Invite | Reply | PotLink | PayLink | AskLink;
 
 /** Text limits in links, so a crafted link can't carry a novel. */
 const MAX_TEXT = 64;
@@ -150,6 +166,9 @@ export function encodeLink(link: Link): string {
       break;
     case "pay":
       w.uint(link.deployment === "ausd" ? 0 : 1).account(link.account).text(link.name).uint(link.amount);
+      break;
+    case "ask":
+      w.uint(link.deployment === "ausd" ? 0 : 1).uint(link.potId).uint(link.block).uint(link.proposalId);
       break;
   }
   return w.toFragment();
@@ -222,6 +241,10 @@ export function decodeLink(fragment: string): Link {
     const d = Number(r.uint());
     if (d !== 0 && d !== 1) throw new Error("link is damaged");
     link = { kind: "pay", deployment: d === 0 ? "ausd" : "testusd", account: getAddress(r.account()), name: checkedText(r), amount: r.uint() };
+  } else if (kind === KIND.ask) {
+    const d = Number(r.uint());
+    if (d !== 0 && d !== 1) throw new Error("link is damaged");
+    link = { kind: "ask", deployment: d === 0 ? "ausd" : "testusd", potId: r.uint(), block: r.uint(), proposalId: r.uint() };
   } else {
     throw new Error("link is damaged");
   }

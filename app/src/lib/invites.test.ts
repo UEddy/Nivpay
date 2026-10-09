@@ -12,6 +12,7 @@ import {
   signReply,
   verifyLabels,
   verifyReply,
+  type AskLink,
   type Invite,
   type PayLink,
   type PotLink,
@@ -209,4 +210,25 @@ test("a damaged request to be paid is refused", () => {
   assert.throws(() => decodeLink(good.slice(0, -3)), /damaged/);
   assert.throws(() => decodeLink(`${good}aa`), /damaged/);
   assert.throws(() => decodeLink(encodeLink({ kind: "pay", deployment: "ausd", account: ubong, name: "x".repeat(65), amount: 1n })), /damaged/);
+});
+
+test("a payment request link round trips, carries only numbers, and is safe to paste in a chat", () => {
+  for (const link of [
+    { kind: "ask", deployment: "ausd", potId: 0n, block: 66_120_345n, proposalId: 0n },
+    { kind: "ask", deployment: "testusd", potId: 4_096n, block: 47_000_000_123n, proposalId: 1_000_000n },
+  ] satisfies AskLink[]) {
+    const url = linkUrl("https://nivpay.vercel.app", link);
+    assertChatSafe(url);
+    assert.deepEqual(decodeLink(url.split("#")[1]!), link);
+  }
+});
+
+test("a damaged payment request link is refused", () => {
+  const good = encodeLink({ kind: "ask", deployment: "ausd", potId: 3n, block: 66_120_345n, proposalId: 9n });
+  assert.throws(() => decodeLink(good.slice(0, -2)), /damaged/);
+  assert.throws(() => decodeLink(`${good}aa`), /damaged/);
+  const otherDeployment = new LinkWriter().uint(1).uint(5).uint(2).uint(3).uint(66_120_345n).uint(9).toFragment();
+  assert.throws(() => decodeLink(otherDeployment), /damaged/);
+  const asVersion2 = new LinkWriter().uint(2).uint(5).uint(0).uint(3).uint(66_120_345n).uint(9).toFragment();
+  assert.throws(() => decodeLink(asVersion2), /damaged/, "payment request links are version 1 only");
 });

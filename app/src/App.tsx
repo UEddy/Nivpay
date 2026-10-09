@@ -14,7 +14,7 @@ import { AppError, describeFailure, SendFailure } from "./lib/errors.ts";
 import { checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
 import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
 import { InvitedStore, matchInvites, type AnsweredInvite } from "./lib/invited.ts";
-import { decodeLink, type Invite, type PayLink, type PotLink } from "./lib/invites.ts";
+import { decodeLink, type AskLink, type Invite, type PayLink, type PotLink } from "./lib/invites.ts";
 import { formatAmount, parseAmount } from "./lib/money.ts";
 import { hostCheck, signIn, signUp } from "./lib/passkey.ts";
 import { readClient } from "./lib/rpc.ts";
@@ -47,6 +47,16 @@ type Screen =
 
 function storedFromLink(link: PotLink, fragment: string): StoredPot {
   return rememberPotLink(pots, link, fragment, Date.now());
+}
+
+/**
+ * The pot a payment request link points at: the one on this phone, with its
+ * signed names, or else one with no link, read from the chain alone.
+ */
+function potForRequest(link: AskLink): StoredPot {
+  const known = pots.get(link.deployment, link.potId.toString());
+  if (known && known.block === link.block.toString()) return known;
+  return { deployment: link.deployment, potId: link.potId.toString(), block: link.block.toString(), fragment: "", name: "", addedAt: Date.now() };
 }
 
 /**
@@ -170,6 +180,17 @@ export function App() {
       if (link.kind === "pay") {
         if (accounts.active()) go({ kind: "send", request: link });
         else setPendingPay(link);
+        return;
+      }
+      if (link.kind === "ask") {
+        if (link.deployment !== DEPLOYMENT) {
+          go({ kind: "home" }, { tone: "bad", text: copy.errPotOtherVersion, code: ERROR_CODES.POT_OTHER_VERSION });
+          return;
+        }
+        // Names come from the pot link already on this phone, if there is one.
+        const pot = potForRequest(link);
+        if (accounts.active()) go({ kind: "pot", pot });
+        else setPendingPot(pot);
         return;
       }
       const pot = storedFromLink(link, fragment);
