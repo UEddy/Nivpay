@@ -12,12 +12,15 @@ import {
   normalizeSending,
   parseAccountId,
   potRecipients,
+  replyProgress,
   signedShares,
   withAttempt,
   withDeciderShare,
   withPayeeShare,
   withDecider,
+  withInvited,
   withoutDecider,
+  withoutInvited,
   withPayeeAccount,
   withSentTo,
   type Draft,
@@ -254,4 +257,28 @@ test("sending is remembered per person, whatever the casing, and only on a made 
   assert.deepEqual(d.made?.sentTo, [UBONG.toLowerCase(), CATERER.toLowerCase()]);
   assert.deepEqual(potRecipients(d).filter((r) => r.sent).map((r) => r.name), ["Ubong", "Caterer"]);
   assert.equal(withSentTo(mamas60th(), UBONG).made, undefined);
+});
+
+test("an unanswered invite to decide holds the pot back until it is answered or removed", () => {
+  const d = withInvited(mamas60th(), "0x0303030303030303", "Efe");
+  assert.deepEqual(checkDraft(d, LIMITS, NOW, POTS).missing, ["replies"]);
+  assert.equal(checkDraft(d, LIMITS, NOW, POTS).args, undefined);
+  assert.deepEqual(checkDraft(withoutInvited(d, "0x0303030303030303"), LIMITS, NOW, POTS).missing, []);
+  const again = withInvited(d, "0x0303030303030303", "Efe O.");
+  assert.deepEqual(again.invited, [{ slot: "0x0303030303030303", name: "Efe O." }], "sending again keeps one invite");
+});
+
+test("reply progress names who has replied and who the draft is waiting for", () => {
+  const blank = newDraft(IDARA, "Europe/London", 0, random);
+  assert.deepEqual(replyProgress(blank), { replied: [], waiting: [] });
+
+  let d = withInvited(blank, "0x0303030303030303", "Ubong");
+  d = { ...d, payees: [{ slot: "0x0101010101010101", name: "Caterer", cap: "700000000" }] };
+  assert.deepEqual(replyProgress(d), { replied: [], waiting: ["Ubong", "Caterer"] });
+
+  d = withDecider(withoutInvited(d, "0x0303030303030303"), person(UBONG, "Ubong", "Houston", "America/Chicago"));
+  assert.deepEqual(replyProgress(d), { replied: ["Ubong"], waiting: ["Caterer"] });
+
+  d = withPayeeAccount(d, "0x0101010101010101", CATERER, "pasted");
+  assert.deepEqual(replyProgress(d), { replied: ["Ubong", "Caterer"], waiting: [] });
 });

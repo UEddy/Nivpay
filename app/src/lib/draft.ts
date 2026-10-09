@@ -134,6 +134,9 @@ export function withSentTo(draft: Draft, account: Address): Draft {
   return { ...draft, made: { ...draft.made, sentTo: [...sentTo, key] } };
 }
 
+/** Someone asked to decide who hasn't replied yet. The slot ties their reply to this name. */
+export type Invited = { slot: Hex; name: string };
+
 export type Draft = {
   id: Hex;
   owner: Address;
@@ -141,6 +144,8 @@ export type Draft = {
   me: { city: string; timeZone: string };
   /** The other deciders. The creator always decides too, and comes first. */
   deciders: Person[];
+  /** Invites to decide that have gone out and not been answered. */
+  invited?: Invited[];
   threshold: number;
   /** Suggested shares for the deciders, the creator included, by lowercase account. */
   shares?: Record<string, string>;
@@ -199,6 +204,31 @@ export function withoutDecider(draft: Draft, account: Address): Draft {
   const wasMajority = draft.threshold === majority(draft.deciders.length + 1);
   const threshold = wasMajority ? majority(deciders.length + 1) : Math.min(draft.threshold, deciders.length + 1);
   return { ...draft, deciders, threshold, shares };
+}
+
+/** Records an invite to decide, sent to `name`. */
+export function withInvited(draft: Draft, slot: Hex, name: string): Draft {
+  const others = (draft.invited ?? []).filter((i) => i.slot !== slot);
+  return { ...draft, invited: [...others, { slot, name }] };
+}
+
+/** Drops an invite to decide: answered, or no longer wanted. */
+export function withoutInvited(draft: Draft, slot: Hex): Draft {
+  if (!draft.invited?.some((i) => i.slot === slot)) return draft;
+  return { ...draft, invited: draft.invited.filter((i) => i.slot !== slot) };
+}
+
+/**
+ * Who has replied and who the draft is still waiting for, by name. Deciders
+ * count once they have replied; places it pays once their account is known,
+ * from a reply or a confirmed paste. Waiting: unanswered invites to decide,
+ * then places it pays with no account yet.
+ */
+export function replyProgress(draft: Draft): { replied: string[]; waiting: string[] } {
+  return {
+    replied: [...draft.deciders.map((d) => d.name), ...draft.payees.filter((p) => p.account).map((p) => p.name)],
+    waiting: [...(draft.invited ?? []).map((i) => i.name), ...draft.payees.filter((p) => !p.account).map((p) => p.name)],
+  };
 }
 
 /** Sets or clears a decider's suggested share. Zero clears it. */
@@ -297,7 +327,7 @@ function offsetMs(at: number, timeZone: string): number {
 export type Limits = { maxDeciders: number; maxPayees: number };
 
 /** What is still missing before the pot can be made, in the order the screen shows them. */
-export type Missing = "name" | "city" | "deciders" | "payees" | "payee-account" | "closes" | "closes-past";
+export type Missing = "name" | "city" | "deciders" | "replies" | "payees" | "payee-account" | "closes" | "closes-past";
 
 export type CreateArgs = readonly [Hex, readonly Address[], number, readonly Address[], readonly Hex[], readonly bigint[], bigint];
 
@@ -321,6 +351,8 @@ export function checkDraft(
   if (deciders.length > limits.maxDeciders || !unique || draft.threshold < 1 || draft.threshold > deciders.length) {
     missing.push("deciders");
   }
+  // Everyone invited to decide answers, or is removed, before the pot is made.
+  if (draft.invited?.length) missing.push("replies");
 
   const payeesOk =
     draft.payees.length >= 1 &&

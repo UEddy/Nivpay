@@ -18,9 +18,10 @@ import {
   parseAccountId,
   potRecipients,
   signedShares,
-  withDecider,
   withDeciderShare,
+  withInvited,
   withoutDecider,
+  withoutInvited,
   withPayeeAccount,
   withPayeeShare,
   withSentTo,
@@ -31,7 +32,7 @@ import {
 } from "../lib/draft.ts";
 import { describeFailure, SendFailure } from "../lib/errors.ts";
 import { idbWriteStore } from "../lib/idb.ts";
-import { decodeLink, linkUrl, NO_SLOT, ROLE, signLabels, type Reply } from "../lib/invites.ts";
+import { decodeLink, linkUrl, ROLE, signLabels, type Reply } from "../lib/invites.ts";
 import { formatAmount, parseAmount } from "../lib/money.ts";
 import { checkCreate, CREATE_LABEL, potFragment, potMadeBy, readCreateTerms, type CreateTerms } from "../lib/pots.ts";
 import { acceptReply } from "../lib/replies.ts";
@@ -41,7 +42,7 @@ import { fitsText32 } from "../lib/text32.ts";
 import { rememberReceipt } from "../lib/receipts.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { PotMap, type Coin, type MapPerson } from "./PotMap.tsx";
-import { andList, formatDay, Icon, NoticeLine, phoneTimeZone, shareLink, Sheet, type Notice } from "./ui.tsx";
+import { andList, formatDay, Icon, NoticeLine, phoneTimeZone, shareLink, Sheet, type Notice, type ShareResult } from "./ui.tsx";
 
 type SheetKind = "name" | "deciders" | "payees" | "closes" | "leftover" | "confirm";
 
@@ -57,6 +58,7 @@ const MISSING_LABEL: Record<Missing, string> = {
   name: copy.missingName,
   city: copy.missingCity,
   deciders: copy.missingDeciders,
+  replies: copy.missingReplies,
   payees: copy.missingPayees,
   "payee-account": copy.missingPayeeAccount,
   closes: copy.missingCloses,
@@ -310,11 +312,12 @@ export function CreateScreen(props: {
     }
   };
 
-  const share = async (url: string, text: string) => {
+  const share = async (url: string, text: string): Promise<ShareResult> => {
     setShareNote(null);
     const how = await shareLink(url, text);
     if (how === "copied") setShareNote(copy.linkCopied);
     if (how === "failed") setShareNote(copy.copyFailed);
+    return how;
   };
 
   /** Sends one person their pot link through the share sheet, and remembers it once it has left this phone. */
@@ -720,7 +723,7 @@ function DecidersSheet(props: {
   me: StoredAccount;
   update: (change: (d: Draft) => Draft) => void;
   onReply: (reply: Reply) => Promise<string>;
-  onShare: (url: string, text: string) => Promise<void>;
+  onShare: (url: string, text: string) => Promise<ShareResult>;
   shareNote: string | null;
   decimals: number | null;
   maxDeciders: number | null;
@@ -729,22 +732,30 @@ function DecidersSheet(props: {
   const { draft, update } = props;
   const [replyText, setReplyText] = useState("");
   const [replyNote, setReplyNote] = useState<Notice | null>(null);
+  const [inviteName, setInviteName] = useState("");
+  const invited = draft.invited ?? [];
   const total = draft.deciders.length + 1;
-  const full = props.maxDeciders !== null && total >= props.maxDeciders;
+  const full = props.maxDeciders !== null && total + invited.length >= props.maxDeciders;
 
-  const invite = () =>
-    props.onShare(
+  /** Sends an invite to decide, named so the draft can show who hasn't replied. Recorded once it leaves the phone. */
+  const invite = async (slot: Hex, name: string) => {
+    const how = await props.onShare(
       linkUrl(location.origin, {
         kind: "invite",
         draftId: draft.id,
         role: ROLE.decider,
-        slot: NO_SLOT,
+        slot,
         from: props.me.name,
         potName: draft.name || copy.unnamedPot,
         payeeName: "",
       }),
       copy.joinAsDecider(props.me.name, draft.name || copy.unnamedPot),
     );
+    if (how === "shared" || how === "copied") {
+      update((d) => withInvited(d, slot, name));
+      setInviteName("");
+    }
+  };
 
   const addReply = async () => {
     setReplyNote(null);
@@ -798,8 +809,29 @@ function DecidersSheet(props: {
               onChange={(v) => update((d) => withDeciderShare(d, p.account, v))} />
           </div>
         ))}
+        {invited.map((i) => (
+          <div className="list-row" key={i.slot}>
+            <div className="grow">
+              <span className="name">{i.name}</span>
+              <span className="meta">{copy.waitingForReply}</span>
+            </div>
+            <button type="button" className="btn ghost small" onClick={() => invite(i.slot, i.name)}>
+              {copy.sendAgain}
+            </button>
+            <button type="button" className="btn ghost small" onClick={() => update((d) => withoutInvited(d, i.slot))}>
+              {copy.remove}
+            </button>
+          </div>
+        ))}
       </div>
-      <button type="button" className="btn" disabled={full} onClick={invite}>
+      {!full && (
+        <label className="field">
+          <span>{copy.inviteeName}</span>
+          <input value={inviteName} onChange={(e) => setInviteName(e.target.value)} maxLength={40} placeholder={copy.namePlaceholder} autoComplete="off" />
+        </label>
+      )}
+      <button type="button" className="btn" disabled={full || !inviteName.trim()}
+        onClick={() => invite(newSlot((n) => crypto.getRandomValues(new Uint8Array(n))), inviteName.trim())}>
         {copy.inviteToDecide}
       </button>
       {props.shareNote && <p className="hint">{props.shareNote}</p>}
@@ -841,7 +873,7 @@ function PayeesSheet(props: {
   update: (change: (d: Draft) => Draft) => void;
   decimals: number | null;
   maxPayees: number | null;
-  onShare: (url: string, text: string) => Promise<void>;
+  onShare: (url: string, text: string) => Promise<ShareResult>;
   shareNote: string | null;
   onClose: () => void;
 }) {

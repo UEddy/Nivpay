@@ -84,11 +84,13 @@ export function Icon(props: { name: keyof typeof ICONS; size?: number; className
   );
 }
 
+export type ShareResult = "shared" | "copied" | "cancelled" | "failed";
+
 /**
  * Shares a link through the phone's share sheet, or copies it where there is
  * none. Says which happened, so the screen can tell people.
  */
-export async function shareLink(url: string, text: string): Promise<"shared" | "copied" | "cancelled" | "failed"> {
+export async function shareLink(url: string, text: string): Promise<ShareResult> {
   if (typeof navigator.share === "function") {
     try {
       await navigator.share({ text, url });

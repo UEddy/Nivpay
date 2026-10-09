@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { getAddress, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { ERROR_CODES } from "../copy.ts";
-import { DraftStore, newDraft, type Draft } from "./draft.ts";
+import { DraftStore, newDraft, withInvited, type Draft } from "./draft.ts";
 import { AppError } from "./errors.ts";
 import { NO_SLOT, ROLE, signReply, type Invite } from "./invites.ts";
 import { acceptReply } from "./replies.ts";
@@ -71,4 +71,19 @@ test("replies are refused when tampered, unknown, or too late", async () => {
   store.put({ ...draft, sending: { hash: `0x${"11".repeat(32)}`, labelsSignature: `0x${"22".repeat(65)}`, people: [], shares: [] } });
   await assert.rejects(acceptReply(store, POTS, reply), code(ERROR_CODES.REPLY_TOO_LATE));
   assert.equal(store.get(draft.id)!.deciders.length, 0, "nothing was added");
+});
+
+test("a reply to a named invite answers it, and an older unnamed one leaves the rest waiting", async () => {
+  const { store, draft, invite } = setup();
+  const named: Hex = "0x0a0a0a0a0a0a0a0a";
+  store.put(withInvited(withInvited(draft, named, "Ubong"), "0x0b0b0b0b0b0b0b0b", "Efe"));
+  const ubongPerson = { account: ubong.address, name: "Ubong", city: "Houston", timeZone: "America/Chicago" };
+  await acceptReply(store, POTS, await signReply(ubong, POTS, { ...invite(ROLE.decider), slot: named }, ubongPerson));
+  assert.deepEqual(store.get(draft.id)!.invited, [{ slot: "0x0b0b0b0b0b0b0b0b", name: "Efe" }]);
+
+  const chidiPerson = { account: chidi.address, name: "Chidi", city: "Uyo", timeZone: "Africa/Lagos" };
+  await acceptReply(store, POTS, await signReply(chidi, POTS, invite(ROLE.decider), chidiPerson));
+  const saved = store.get(draft.id)!;
+  assert.deepEqual(saved.deciders.map((d) => d.name), ["Ubong", "Chidi"]);
+  assert.deepEqual(saved.invited, [{ slot: "0x0b0b0b0b0b0b0b0b", name: "Efe" }]);
 });

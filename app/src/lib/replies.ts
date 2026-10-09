@@ -1,6 +1,6 @@
 import type { Address } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
-import { withDecider, withPayeeAccount, type Draft, type DraftStore } from "./draft.ts";
+import { withDecider, withoutInvited, withPayeeAccount, type Draft, type DraftStore } from "./draft.ts";
 import { AppError } from "./errors.ts";
 import { ROLE, verifyReply, type Reply } from "./invites.ts";
 
@@ -16,7 +16,8 @@ export async function acceptReply(store: DraftStore, pots: Address, reply: Reply
   if (!(await verifyReply(pots, reply))) throw new AppError(copy.errReplyUnverified, ERROR_CODES.REPLY_UNVERIFIED);
 
   if (reply.role === ROLE.decider) {
-    const next = withDecider(draft, reply.person);
+    // A reply to a named invite answers it. Older invites carry no slot.
+    const next = withDecider(withoutInvited(draft, reply.slot), reply.person);
     store.put(next);
     return { draft: next, text: copy.replyAdded(reply.person.name) };
   }

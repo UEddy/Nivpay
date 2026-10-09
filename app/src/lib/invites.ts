@@ -30,7 +30,7 @@ const KIND = { invite: 1, reply: 2, pot: 3, pay: 4 } as const;
 export const ROLE = { decider: 0, payee: 1 } as const;
 export type Role = (typeof ROLE)[keyof typeof ROLE];
 
-/** A decider's invite has no slot: any number of people may answer it. */
+/** Decider invites made before they were named have no slot: any number of people may answer one. */
 export const NO_SLOT: Hex = "0x0000000000000000";
 
 export type Invite = {
