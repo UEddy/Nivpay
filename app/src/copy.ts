@@ -322,6 +322,7 @@ export const copy = {
   justArrived: "Just arrived",
   receivedAnnounce: (amount: string, from: string) => `${amount} received from ${from}.`,
   errReceiveRead: "Couldn't check for payments just now. Trying again.",
+  errNotEnoughForFees: "Your account can't cover the processing for this yet, and can't be topped up while it holds what it has. Send a smaller payment first, or try again later. Nothing was sent.",
   potRowSendToMore: (people: number) => `Made. Send it to ${people} more ${people === 1 ? "person" : "people"}.`,
 
   // Joining from an invite
@@ -405,6 +406,10 @@ export const ERROR_CODES = {
   SEND_REFUSED: 84,
   PAY_LINK_OTHER_VERSION: 85,
   RECEIVE_READ_FAILED: 86,
+  PAIR_PAUSED: 90,
+  QUOTE_CHANGED: 91,
+  LOW_LIQUIDITY: 92,
+  NOT_ENOUGH_FOR_FEES: 93,
   UNKNOWN: 99,
 } as const;
 

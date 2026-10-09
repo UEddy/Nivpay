@@ -6,7 +6,7 @@ import { NotEnoughGasError, SendFailure, setupFailure, type SendStage } from "./
 import { idbWriteStore } from "./idb.ts";
 import { withSigner } from "./passkey.ts";
 import { readClient } from "./rpc.ts";
-import { nonceForNewWrite, nonceForReplacement, replace, submit, type PendingWrite } from "./writes.ts";
+import { nonceForNewWrite, nonceForReplacement, replace, submit, type PendingWrite, type SignedNext } from "./writes.ts";
 
 export type Step = "preparing" | "getting-ready" | "confirm" | "sending";
 
@@ -71,6 +71,11 @@ export async function ensureGas(address: Address, needed: bigint): Promise<void>
     return;
   }
   if (res.status === 409 && balance >= needed && needed > 0n) return;
+  // Grants go only to accounts holding under the grant threshold. One holding
+  // more than that, but less than this request needs, can't be topped up yet.
+  if (res.status === 409 && body.error === "this account already has enough") {
+    throw new NotEnoughGasError(copy.errNotEnoughForFees, ERROR_CODES.NOT_ENOUGH_FOR_FEES);
+  }
   throw setupFailure(res.status, body);
 }
 
@@ -159,4 +164,62 @@ export async function retryStuckWrite(call: Call): Promise<PendingWrite> {
     throw new SendFailure("preparing", false, error);
   }
   return signAndSubmit(call, nonce, true);
+}
+
+/** One request in a sequence. `gas` is required when it can't be estimated before the steps before it have run. */
+export type SequenceCall = { to: Address; data: Hex; label: string; gas?: bigint };
+
+/**
+ * Several requests behind one confirm and one fingerprint. The gas for all of
+ * them is made ready first, then one passkey session signs each on the next
+ * nonce, and only the first is broadcast. lib/writes.ts followSequence sends
+ * each next one once the one before it is final. With `replacing`, the first
+ * takes the nonce of a stuck request, as a retry of a single write does.
+ */
+export async function sendSequence(from: Address, calls: SequenceCall[], onStep?: (step: Step) => void, replacing = false): Promise<PendingWrite> {
+  if (calls.length === 0) throw new Error("nothing to send");
+  let stage: SendStage = "preparing";
+  let broadcast = false;
+  try {
+    onStep?.("preparing");
+    const nonce = replacing ? await nonceForReplacement(idbWriteStore, liveWriteChain, from) : await nonceForNewWrite(idbWriteStore, liveWriteChain, from);
+    const f = await fees();
+    const gas = await Promise.all(calls.map((c) => c.gas ?? estimate(from, c.to, c.data)));
+
+    stage = "gas grant";
+    onStep?.("getting-ready");
+    await ensureGas(from, gas.reduce((a, b) => a + b, 0n) * f.maxFeePerGas);
+
+    stage = "passkey";
+    onStep?.("confirm");
+    const signed = await withSigner(from, async (account) => {
+      stage = "signing";
+      const out: SignedNext[] = [];
+      for (const [i, c] of calls.entries()) {
+        const raw = await account.signTransaction({ chainId: CHAIN_ID, type: "eip1559", to: c.to, data: c.data, value: 0n, nonce: nonce + i, gas: gas[i]!, ...f });
+        out.push({ nonce: nonce + i, raw, hash: keccak256(raw), label: c.label });
+      }
+      return out;
+    });
+
+    stage = "broadcast";
+    onStep?.("sending");
+    const [first, ...rest] = signed;
+    const write: PendingWrite = {
+      address: from,
+      nonce: first!.nonce,
+      raw: first!.raw,
+      hash: first!.hash,
+      label: first!.label,
+      submittedAt: Date.now(),
+      replaceable: false,
+      then: rest.length ? rest : undefined,
+    };
+    if (replacing) await replace(idbWriteStore, liveWriteChain, write);
+    else await submit(idbWriteStore, liveWriteChain, write);
+    broadcast = true;
+    return write;
+  } catch (error) {
+    throw new SendFailure(stage, broadcast, error);
+  }
 }

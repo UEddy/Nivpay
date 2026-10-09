@@ -19,6 +19,11 @@ import { AppError } from "./errors.ts";
  *     transaction is in a block, so the nonce, not mempool visibility, is what
  *     makes this safe.
  *
+ *  5. Several requests signed with one fingerprint (a sequence) sit on
+ *     consecutive nonces. Only the first is broadcast; each next one is
+ *     broadcast only once the one before it is final and succeeded. If any
+ *     step reverts, is superseded or sticks, the rest are dropped unsent.
+ *
  * Nothing in this module signs anything.
  */
 
@@ -30,7 +35,11 @@ export type PendingWrite = {
   label: string;
   submittedAt: number;
   replaceable: boolean;
+  /** The rest of a sequence signed with the same fingerprint, each on the next nonce, not yet broadcast. */
+  then?: SignedNext[];
 };
+
+export type SignedNext = { nonce: number; raw: Hex; hash: Hex; label: string };
 
 export interface WriteStore {
   get(address: Address): Promise<PendingWrite | undefined>;
@@ -186,4 +195,50 @@ export async function replace(store: WriteStore, chain: WriteChain, replacement:
 export async function nonceForNewWrite(store: WriteStore, chain: WriteChain, address: Address): Promise<number> {
   await assertNoWriteInFlight(store, address);
   return chain.getNonce(address, "pending");
+}
+
+/** How a sequence ended: the outcome of the step it stopped at, counting from 0. */
+export type SequenceOutcome = { outcome: Outcome; step: number; steps: number };
+
+/**
+ * Follows a sequence to its end. Each step is followed to finality exactly
+ * as a single write is; only after it is final and succeeded is the next,
+ * already signed, saved and broadcast. `onStep` hears each step as it starts.
+ */
+export async function followSequence(
+  store: WriteStore,
+  chain: WriteChain,
+  write: PendingWrite,
+  onStep: (step: number, steps: number) => void = () => {},
+  timing: Timing = DEFAULT_TIMING,
+  firstStep = 0,
+): Promise<SequenceOutcome> {
+  const steps = firstStep + 1 + (write.then?.length ?? 0);
+  let current = write;
+  let step = firstStep;
+  for (;;) {
+    onStep(step, steps);
+    const outcome = await followToFinality(store, chain, current, timing);
+    const [next, ...rest] = current.then ?? [];
+    if (outcome.kind !== "final" || !next) {
+      // A stuck step keeps its record, for a replacement on its nonce. The
+      // steps after it were never broadcast; they are dropped, not replaced.
+      if (outcome.kind === "stuck" && current.then?.length) await store.put({ ...current, replaceable: true, then: undefined });
+      return { outcome, step, steps };
+    }
+    const following: PendingWrite = {
+      address: current.address,
+      nonce: next.nonce,
+      raw: next.raw,
+      hash: next.hash,
+      label: next.label,
+      submittedAt: timing.now(),
+      replaceable: false,
+      then: rest.length ? rest : undefined,
+    };
+    if (next.nonce !== current.nonce + 1) throw new Error(`a sequence must use consecutive nonces, got ${current.nonce} then ${next.nonce}`);
+    await submit(store, chain, following);
+    current = following;
+    step += 1;
+  }
 }

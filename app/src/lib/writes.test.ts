@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Address, Hex } from "viem";
 import {
+  followSequence,
   followToFinality,
   nonceForNewWrite,
   nonceForReplacement,
@@ -183,4 +184,86 @@ test("a new write takes the pending nonce, only when nothing is in flight", asyn
   const store = memoryStore();
   const { chain } = fakeChain({ pendingNonce: 9 });
   assert.equal(await nonceForNewWrite(store, chain, ME), 9);
+});
+
+// ---------------------------------------------------------------------------
+// Sequences: several requests behind one fingerprint
+// ---------------------------------------------------------------------------
+
+const h = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as Hex;
+
+/** A chain where each hash lands, reverts or never appears, and only after its own bytes were broadcast. */
+function sequenceChain(fate: Record<string, "success" | "reverted" | "never">) {
+  const broadcasts: Hex[] = [];
+  const seenAt = new Map<Hex, number>();
+  let tick = 0;
+  const chain: WriteChain = {
+    async sendRawTransaction(raw) {
+      broadcasts.push(raw);
+      if (!seenAt.has(raw)) seenAt.set(raw, tick);
+      return "0x";
+    },
+    async getReceipt(hash) {
+      tick++;
+      const raw = `0x${hash.slice(-4)}` as Hex;
+      const f = fate[raw];
+      if (!seenAt.has(raw) || f === "never" || !f) return null;
+      return { blockNumber: 100n + BigInt(seenAt.get(raw)!), status: f };
+    },
+    getFinalizedBlockNumber: async () => 10_000n,
+    getNonce: async (_a, tag) => (tag === "finalized" ? 5 : 5),
+    isInBlock: async () => false,
+  };
+  return { chain, broadcasts };
+}
+
+function sequence(): PendingWrite {
+  const step = (n: number) => ({ nonce: 5 + n, raw: `0x${(0xa000 + n).toString(16)}` as Hex, hash: h(0xa000 + n), label: `step ${n}` });
+  const first = step(0);
+  return { address: ME, ...first, submittedAt: 0, replaceable: false, then: [step(1), step(2)] };
+}
+
+test("a sequence broadcasts each step only after the one before it is final", async () => {
+  const store = memoryStore();
+  const { chain, broadcasts } = sequenceChain({ "0xa000": "success", "0xa001": "success", "0xa002": "success" });
+  const started: number[] = [];
+  await submit(store, chain, sequence());
+  const result = await followSequence(store, chain, sequence(), (s) => started.push(s), clock());
+  assert.equal(result.outcome.kind, "final");
+  assert.deepEqual([result.step, result.steps], [2, 3]);
+  assert.deepEqual(started, [0, 1, 2]);
+  assert.deepEqual([...new Set(broadcasts)], ["0xa000", "0xa001", "0xa002"], "in order, each once it was its turn");
+  assert.equal(store.map.size, 0, "the lock is released at the end");
+});
+
+test("if a step reverts, the steps after it are never broadcast and the lock is released", async () => {
+  const store = memoryStore();
+  const { chain, broadcasts } = sequenceChain({ "0xa000": "success", "0xa001": "reverted", "0xa002": "success" });
+  await submit(store, chain, sequence());
+  const result = await followSequence(store, chain, sequence(), undefined, clock());
+  assert.deepEqual([result.outcome.kind, result.step], ["reverted", 1]);
+  assert.ok(!broadcasts.includes("0xa002"));
+  assert.equal(store.map.size, 0);
+});
+
+test("if a step sticks, it stays replaceable on its nonce and the unsent rest is dropped", async () => {
+  const store = memoryStore();
+  const { chain, broadcasts } = sequenceChain({ "0xa000": "never" });
+  await submit(store, chain, sequence());
+  const result = await followSequence(store, chain, sequence(), undefined, clock());
+  assert.deepEqual([result.outcome.kind, result.step], ["stuck", 0]);
+  assert.deepEqual([...new Set(broadcasts)], ["0xa000"]);
+  const kept = store.map.get(ME)!;
+  assert.equal(kept.replaceable, true);
+  assert.equal(kept.nonce, 5);
+  assert.equal(kept.then, undefined);
+});
+
+test("a sequence on nonces that aren't consecutive is refused before the next step is sent", async () => {
+  const store = memoryStore();
+  const bad = { ...sequence(), then: [{ nonce: 9, raw: "0xa001" as Hex, hash: h(0xa001), label: "x" }] };
+  const { chain, broadcasts } = sequenceChain({ "0xa000": "success", "0xa001": "success" });
+  await submit(store, chain, bad);
+  await assert.rejects(followSequence(store, chain, bad, undefined, clock()), /consecutive/);
+  assert.ok(!broadcasts.includes("0xa001"));
 });

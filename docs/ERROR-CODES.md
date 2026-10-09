@@ -30,6 +30,7 @@ means it was, and the app is still tracking it.
 | 19 | The service refused for another reason: not a personal account, wrong chain, wrong origin, or not found. | Vercel function log, `"event":"refused"` |
 | 20 | The grant was sent but wasn't final within 60 seconds. | Funder's recent transactions |
 | 21 | The grant was included but reverted. | The grant transaction |
+| 93 | The account holds more than the grant threshold (0.05 MON), so `/api/fund` won't top it up (`this account already has enough`), but less than this request needs. It happens with requests that take several steps, such as the first payment in another currency. Nothing was sent. | The account's balance against the request's gas x max fee |
 
 ## Passkey
 
