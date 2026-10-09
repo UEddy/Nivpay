@@ -36,7 +36,7 @@ import { monadTestnet } from "viem/chains";
 export const CHAIN_ID = 10143;
 export const RPC_URL = "https://testnet-rpc.monad.xyz";
 export const GRANT = parseEther("0.1");
-export const THRESHOLD = parseEther("0.05");
+export const THRESHOLD = parseEther("0.075");
 export const MAX_SENT_TXS = 10;
 export const FLOOR = parseEther("1");
 export const GRANT_GAS = 21_000n;

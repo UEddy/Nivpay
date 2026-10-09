@@ -1,11 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { Address, Hex } from "viem";
+import { parseEther, type Address, type Hex } from "viem";
 import {
   FLOOR,
   FundConfigError,
   GRANT,
   handleFund,
+  MAX_SENT_TXS,
   normalizeFunderKey,
   safeDetail,
   THRESHOLD,
@@ -106,6 +107,16 @@ test("the key is never read on any refusal", async () => {
     const res = await handleFund(req({ address: USER }), guardedEnv(), () => chain(script).c, () => {});
     assert.equal(res.status, status, JSON.stringify(script, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
   }
+});
+
+test("the threshold covers the largest single action, so no account is stuck between the two", () => {
+  // The first payment in another currency: three requests, about 0.059 MON at
+  // their max fee. An account at or above the threshold can always pay for it.
+  assert.equal(THRESHOLD, parseEther("0.075"));
+  assert.ok(THRESHOLD > parseEther("0.059"));
+  assert.equal(GRANT, parseEther("0.1"));
+  assert.equal(MAX_SENT_TXS, 10);
+  assert.equal(FLOOR, parseEther("1"));
 });
 
 test("only POST", async () => {

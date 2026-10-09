@@ -431,7 +431,7 @@ person's own. Sizes come from the gas measured in
 | Rule | Value | Why |
 | --- | --- | --- |
 | Grant | 0.1 MON, fixed | a decider's whole story costs about 0.071 MON, a creator's first three actions about 0.084 |
-| Only when the account holds under | 0.05 MON | above the most expensive single action, making a pot, about 0.044 |
+| Only when the account holds under | 0.075 MON | above the most expensive single action, the first payment in another currency, about 0.059 (making a pot is about 0.044) |
 | Only while the account has sent fewer than | 10 transactions | a full story is 5 to 7 per person |
 | Only accounts with | no contract code | |
 | Funder floor | 1 MON | granting stops before the funder can run dry |
@@ -452,12 +452,13 @@ header it likes. Two requests for the same address that reach different
 server instances at the same moment can both be granted. None of this can
 touch anyone's pot: the funder only ever holds testnet MON for gas.
 
-**A gap for requests with several steps.** A grant is sent only to accounts
-holding under 0.05 MON. A first payment in another currency signs three
-requests whose gas limits add up to about 0.06 MON at today's price, so an
-account holding between those two can neither afford it nor be topped up.
-The app says so with code 93 before anything is signed; the account gets
-back under the threshold by doing anything smaller first.
+**Requests with several steps.** A first payment in another currency signs
+three requests whose gas limits add up to about 0.059 MON at today's price,
+the largest single action in the app. The threshold sits above it, at
+0.075 MON, so an account that can't be topped up can always pay for it. Only
+if the network price rose above about 130 gwei could an account hold too much
+for a grant and too little for the request; the app then says so with code 93
+before anything is signed.
 
 ## Getting test AUSD
 
