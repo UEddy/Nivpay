@@ -150,9 +150,9 @@ test("'Nothing has moved' is only said when no request is in flight", () => {
 // The dash rule covers the whole codebase, not just the screens
 // ---------------------------------------------------------------------------
 
-test("no em or en dash in any tracked file except package-lock.json", () => {
+test("no em or en dash in any tracked or newly added file except package-lock.json", () => {
   const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: APP, encoding: "utf8" }).trim();
-  const files = execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8" })
+  const files = execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: root, encoding: "utf8" })
     .split("\0")
     .filter((f) => f && !f.endsWith("package-lock.json"));
   assert.ok(files.length > 50, `found the tracked files (${files.length})`);
