@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { encodeFunctionData, type Hex } from "viem";
+import { encodeFunctionData, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import { POTS_ABI } from "../lib/abi.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
@@ -9,6 +9,9 @@ import {
   allDeciders,
   checkDraft,
   confirmsAccount,
+  labelsFor,
+  normalizeSending,
+  withAttempt,
   deciderShare,
   newSlot,
   parseAccountId,
@@ -28,6 +31,7 @@ import { decodeLink, linkUrl, NO_SLOT, ROLE, signLabels, type Reply } from "../l
 import { formatAmount, parseAmount } from "../lib/money.ts";
 import { checkCreate, CREATE_LABEL, potFragment, potMadeBy, readCreateTerms, type CreateTerms } from "../lib/pots.ts";
 import { acceptReply } from "../lib/replies.ts";
+import { withSigner } from "../lib/passkey.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { fitsText32 } from "../lib/text32.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
@@ -55,6 +59,7 @@ const MISSING_LABEL: Record<Missing, string> = {
 };
 
 const writeLabel = (draft: Draft) => `${CREATE_LABEL} ${draft.id}`;
+const sharesOf = (stored: { account: Address; amount: string }[]) => stored.map((s) => ({ account: s.account, amount: BigInt(s.amount) }));
 const ending = (account: string) => copy.accountEnding(account);
 
 /** Make a pot (docs/design/Live-Create.dc.html). */
@@ -117,12 +122,18 @@ export function CreateScreen(props: {
 
   const finish = useCallback(
     async (hash: Hex) => {
-      const sending = drafts.get(draftId)?.sending;
-      if (!sending || sending.hash !== hash) return;
+      const stored = drafts.get(draftId)?.sending;
+      if (!stored) return;
+      const sending = normalizeSending(stored);
       const made = await potMadeBy(hash);
-      const shares = sending.shares.map((s) => ({ account: s.account, amount: BigInt(s.amount) }));
-      const fragment = potFragment(made.potId, made.block, sending.people, shares, sending.labelsSignature);
-      update((d) => ({ ...d, sending: undefined, made: { potId: made.potId.toString(), block: made.block.toString(), fragment } }));
+      const signature = labelsFor(sending, hash);
+      const base = { potId: made.potId.toString(), block: made.block.toString() };
+      // The names are signed over the transaction that landed. If this phone
+      // has no signature for it, the creator signs them again before sharing.
+      const record = signature
+        ? { ...base, fragment: potFragment(made.potId, made.block, sending.people, sharesOf(sending.shares), signature) }
+        : { ...base, fragment: "", unsigned: { createdIn: hash, people: sending.people, shares: sending.shares } };
+      update((d) => ({ ...d, sending: undefined, made: record }));
       if (!alive.current) return;
       setStep(null);
       setStuck(false);
@@ -173,28 +184,34 @@ export function CreateScreen(props: {
   useEffect(() => {
     const d = drafts.get(draftId);
     if (!d?.sending || d.made) return;
-    const sending = d.sending;
+    const sending = normalizeSending(d.sending);
     void (async () => {
       const w = await idbWriteStore.get(account.address).catch(() => undefined);
       if (w && w.label === writeLabel(d)) {
+        // Follow whichever attempt is on record, even one whose retry was
+        // signed but never sent: finish() finds the names for its hash.
         if (w.replaceable) {
           setStuck(true);
           setResult({ tone: "bad", text: copy.earlierStuck, code: ERROR_CODES.STUCK });
-        } else if (w.hash === sending.hash) {
+        } else {
           await land(w);
         }
         return;
       }
-      // Its record is gone, so it already ended one way or another. Find out which.
+      // Its record is gone, so it already ended one way or another. At most
+      // one attempt can be in a block, since they share a nonce.
       setStep("landing");
       try {
-        const receipt = await liveWriteChain.getReceipt(sending.hash);
-        if (!receipt) {
+        let landed: { hash: Hex } | null = null;
+        for (const a of sending.attempts) {
+          if (await liveWriteChain.getReceipt(a.hash)) landed = a;
+        }
+        if (!landed) {
           failed({ tone: "bad", text: copy.createDidNotGoThrough, code: ERROR_CODES.SUPERSEDED });
           return;
         }
-        const status = await waitForFinalized(sending.hash);
-        if (status === "success") await finish(sending.hash);
+        const status = await waitForFinalized(landed.hash);
+        if (status === "success") await finish(landed.hash);
         else failed({ tone: "bad", text: copy.createDidNotGoThrough, code: ERROR_CODES.REVERTED });
       } catch (e) {
         if (!alive.current) return;
@@ -243,7 +260,8 @@ export function CreateScreen(props: {
       cosign: async (signer: Parameters<typeof signLabels>[0], hash: Hex) => {
         const labelsSignature = await signLabels(signer, POTS, hash, signedPeople, shares);
         const asText = shares.map((s) => ({ account: s.account, amount: s.amount.toString() }));
-        update((d) => ({ ...d, sending: { hash, labelsSignature, people: signedPeople, shares: asText } }));
+        // Saved before anything is broadcast, next to any earlier attempt's.
+        update((d) => ({ ...d, sending: withAttempt(d.sending, signedPeople, asText, { hash, labelsSignature }) }));
       },
     };
     try {
@@ -273,6 +291,24 @@ export function CreateScreen(props: {
     const accepted = await acceptReply(drafts, POTS, reply);
     setDraft(accepted.draft);
     return accepted.text;
+  };
+
+  /** Signs the names again over the transaction that made the pot, when this phone had no signature for it. */
+  const signNames = async () => {
+    const unsigned = made?.unsigned;
+    if (!made || !unsigned) return;
+    setResult(null);
+    setStep("confirm");
+    try {
+      const shares = sharesOf(unsigned.shares);
+      const signature = await withSigner(account.address, (signer) => signLabels(signer, POTS, unsigned.createdIn, unsigned.people, shares));
+      const fragment = potFragment(BigInt(made.potId), BigInt(made.block), unsigned.people, shares, signature);
+      update((d) => ({ ...d, made: d.made && { potId: d.made.potId, block: d.made.block, fragment } }));
+    } catch (e) {
+      setResult({ tone: "bad", ...describeFailure(e) });
+    } finally {
+      setStep(null);
+    }
   };
 
   const potUrl = made ? `${location.origin}/#${made.fragment}` : "";
@@ -360,7 +396,15 @@ export function CreateScreen(props: {
         <p className="sr-only" aria-live="polite">
           {announce}
         </p>
-        {made ? (
+        {made?.unsigned ? (
+          <>
+            <p className="foot-line">{copy.namesNeedSigning}</p>
+            {result && <NoticeLine notice={result} />}
+            <button type="button" className={`pill-btn${step ? " busy" : ""}`} disabled={step !== null} onClick={signNames}>
+              {step ? copy.stepConfirm : copy.signTheNames}
+            </button>
+          </>
+        ) : made ? (
           <>
             <p className="foot-line">{others.length ? copy.potMade(andList(others)) : copy.potMadeAlone}</p>
             <button type="button" className="pill-btn" onClick={() => share(potUrl, copy.shareText(draft.name))}>

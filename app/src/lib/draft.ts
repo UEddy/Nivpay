@@ -41,22 +41,63 @@ export type Payee = {
 export type Share = { account: Address; amount: bigint };
 
 /** The signed transaction that makes the pot, kept until it is final. */
+/**
+ * The pot's transaction while it is in flight. The labels are signed over a
+ * transaction's hash, so each signed attempt (the first send, and each retry
+ * of a stuck one, on the same nonce) keeps its own signature. Whichever
+ * attempt lands, its names are here, even if a later retry was signed but
+ * never sent.
+ */
 export type Sending = {
-  hash: Hex;
-  /** The creator's signature over the labels, made in the same passkey step. */
-  labelsSignature: Hex;
-  /** The labels exactly as signed. */
+  /** The labels exactly as signed. The same for every attempt. */
   people: Person[];
   /** The suggested shares exactly as signed, amounts as decimal strings. */
   shares: { account: Address; amount: string }[];
+  attempts: Attempt[];
 };
+
+export type Attempt = { hash: Hex; labelsSignature: Hex };
+
+/** What older versions of the app stored: one attempt, inline. */
+type LegacySending = { hash: Hex; labelsSignature: Hex; people: Person[]; shares?: Sending["shares"] };
+
+/** Reads a stored Sending in either shape. */
+export function normalizeSending(stored: Sending | LegacySending): Sending {
+  if ("attempts" in stored) return stored;
+  return {
+    people: stored.people,
+    shares: stored.shares ?? [],
+    attempts: [{ hash: stored.hash, labelsSignature: stored.labelsSignature }],
+  };
+}
+
+/** Records one more signed attempt. Called before it is broadcast. */
+export function withAttempt(
+  current: Sending | LegacySending | undefined,
+  people: Person[],
+  shares: Sending["shares"],
+  attempt: Attempt,
+): Sending {
+  const before = current ? normalizeSending(current).attempts.filter((a) => a.hash !== attempt.hash) : [];
+  return { people, shares, attempts: [...before, attempt] };
+}
+
+/** The signature over the labels for the transaction that actually made the pot, if this phone signed one. */
+export function labelsFor(sending: Sending | LegacySending, hash: Hex): Hex | undefined {
+  return normalizeSending(sending).attempts.find((a) => a.hash.toLowerCase() === hash.toLowerCase())?.labelsSignature;
+}
 
 export type Made = {
   potId: string;
   /** The block the pot was made in, so its story starts there. */
   block: string;
-  /** The `#` fragment of the pot's link, to share again any time. */
+  /** The `#` fragment of the pot's link, to share again any time. Empty while the names still need signing. */
   fragment: string;
+  /**
+   * Set only if the transaction that landed has no signed names on this
+   * phone. The creator signs them again, over this hash, before sharing.
+   */
+  unsigned?: { createdIn: Hex; people: Person[]; shares: Sending["shares"] };
 };
 
 export type Draft = {
@@ -72,7 +113,7 @@ export type Draft = {
   payees: Payee[];
   /** The closing day as yyyy-mm-dd, in the creator's own time zone. */
   closes: string;
-  sending?: Sending;
+  sending?: Sending | LegacySending;
   made?: Made;
   createdAt: number;
 };

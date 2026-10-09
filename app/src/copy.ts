@@ -150,6 +150,8 @@ export const copy = {
   readingPotRules: "Reading the rules for new pots…",
   potMade: (others: string) => `Pot made. Share the link so ${others} can open it.`,
   potMadeAlone: "Pot made. Share the link with anyone who'll chip in.",
+  namesNeedSigning: "Pot made. Confirm once more to add everyone's names to the link, then you can share it.",
+  signTheNames: "Add the names",
   potMadeAnnounce: (name: string, payees: string) => `${name} is made. It can only pay ${payees}.`,
   shareInviteLink: "Share the invite link",
   shareText: (name: string) => `Open our pot for ${name} on NivPay.`,

@@ -1,15 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { getAddress, type Address } from "viem";
+import { getAddress, type Address, type Hex } from "viem";
 import {
   checkDraft,
   confirmsAccount,
   DraftStore,
   endTimeFor,
+  labelsFor,
   majority,
   newDraft,
+  normalizeSending,
   parseAccountId,
   signedShares,
+  withAttempt,
   withDeciderShare,
   withPayeeShare,
   withDecider,
@@ -155,6 +158,43 @@ test("suggested shares: per decider and per payee, signed once per account, zero
   // A decider who is also a payee is signed once, with the decider's share.
   const both = withPayeeShare(withPayeeAccount(d, "0x0101010101010101", IDARA, "pasted"), "0x0101010101010101", 9n);
   assert.deepEqual(signedShares(both).filter((s) => s.account === IDARA), [{ account: IDARA, amount: 500_000_000n }]);
+});
+
+test("a stuck pot keeps the names for every attempt, so whichever lands can be shared", () => {
+  const people = [person(IDARA, "Idara", "London", "Europe/London")];
+  const shares = [{ account: IDARA, amount: "500000000" }];
+  const first = { hash: `0x${"a1".repeat(32)}`, labelsSignature: `0x${"b1".repeat(65)}` } as const;
+  const retry = { hash: `0x${"a2".repeat(32)}`, labelsSignature: `0x${"b2".repeat(65)}` } as const;
+
+  // The first attempt is signed and sent, then gets stuck.
+  let sending = withAttempt(undefined, people, shares, first);
+  // A retry is signed (its names saved before broadcast), then fails before it is sent.
+  sending = withAttempt(sending, people, shares, retry);
+  assert.equal(sending.attempts.length, 2);
+
+  // The first attempt lands after all: its own names are still there.
+  assert.equal(labelsFor(sending, first.hash), first.labelsSignature);
+  // Or the retry is the one that lands.
+  assert.equal(labelsFor(sending, retry.hash), retry.labelsSignature);
+  assert.equal(labelsFor(sending, retry.hash.toUpperCase().replace("0X", "0x") as Hex), retry.labelsSignature, "any case");
+  // A transaction this phone never signed names for has none, and the screen asks to sign again.
+  assert.equal(labelsFor(sending, `0x${"cc".repeat(32)}`), undefined);
+
+  // Signing the same attempt twice doesn't duplicate it.
+  assert.equal(withAttempt(sending, people, shares, retry).attempts.length, 2);
+});
+
+test("a pot being made, saved by the earlier version, still resolves its names", () => {
+  const legacy = {
+    hash: `0x${"a1".repeat(32)}` as Hex,
+    labelsSignature: `0x${"b1".repeat(65)}` as Hex,
+    people: [person(IDARA, "Idara", "London", "Europe/London")],
+  };
+  const sending = normalizeSending(legacy);
+  assert.deepEqual(sending.shares, []);
+  assert.equal(labelsFor(legacy, legacy.hash), legacy.labelsSignature);
+  const next = withAttempt(legacy, legacy.people, [], { hash: `0x${"a2".repeat(32)}`, labelsSignature: `0x${"b2".repeat(65)}` });
+  assert.deepEqual(next.attempts.map((a) => a.hash), [legacy.hash, `0x${"a2".repeat(32)}`]);
 });
 
 test("drafts are stored per creator and found by id from any account", () => {
