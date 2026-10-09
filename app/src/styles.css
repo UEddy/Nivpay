@@ -349,3 +349,35 @@ h2 {
     font-size: clamp(18px, 9cqi, 26px);
   }
 }
+
+.money-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.money-actions .btn {
+  margin: 0;
+}
+
+.receipt-link.small {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.list-row.arrived {
+  animation: arrived 1.2s ease-out;
+}
+
+@keyframes arrived {
+  from {
+    background: var(--chip);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .list-row.arrived {
+    animation: none;
+  }
+}

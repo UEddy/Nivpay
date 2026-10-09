@@ -13,7 +13,7 @@ import { potsReader } from "./lib/discoverLive.ts";
 import { AppError, describeFailure, SendFailure } from "./lib/errors.ts";
 import { checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
 import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
-import { decodeLink, type Invite, type PotLink } from "./lib/invites.ts";
+import { decodeLink, type Invite, type PayLink, type PotLink } from "./lib/invites.ts";
 import { formatAmount, parseAmount } from "./lib/money.ts";
 import { hostCheck, signIn, signUp } from "./lib/passkey.ts";
 import { readClient } from "./lib/rpc.ts";
@@ -21,17 +21,26 @@ import { PotStore, rememberPotLink, type StoredPot } from "./lib/potstore.ts";
 import { retryStuckWrite, sendWrite, type Step } from "./lib/send.ts";
 import { acceptReply } from "./lib/replies.ts";
 import { latestReceipt, receiptUrl, rememberReceipt } from "./lib/receipts.ts";
+import { SEND_LABEL } from "./lib/transfer.ts";
 import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
 import { ChipInScreen } from "./screens/ChipIn.tsx";
 import { CreateScreen } from "./screens/Create.tsx";
 import { JoinScreen } from "./screens/Join.tsx";
+import { ReceiveScreen } from "./screens/Receive.tsx";
+import { SendScreen } from "./screens/Send.tsx";
 import { formatDay, NoticeLine, phoneTimeZone, type Notice } from "./screens/ui.tsx";
 
 const accounts = new AccountStore(localStorage);
 const drafts = new DraftStore(localStorage);
 const pots = new PotStore(localStorage);
 
-type Screen = { kind: "home" } | { kind: "create"; draftId: Hex } | { kind: "join"; invite: Invite } | { kind: "pot"; pot: StoredPot };
+type Screen =
+  | { kind: "home" }
+  | { kind: "create"; draftId: Hex }
+  | { kind: "join"; invite: Invite }
+  | { kind: "pot"; pot: StoredPot }
+  | { kind: "send"; request: PayLink | null }
+  | { kind: "receive" };
 
 function storedFromLink(link: PotLink, fragment: string): StoredPot {
   return rememberPotLink(pots, link, fragment, Date.now());
@@ -99,6 +108,7 @@ export function App() {
   // An invite or pot opened before this phone had an account: opened once there is one.
   const [pendingInvite, setPendingInvite] = useState<Invite | null>(null);
   const [pendingPot, setPendingPot] = useState<StoredPot | null>(null);
+  const [pendingPay, setPendingPay] = useState<PayLink | null>(null);
   const connection = useConnection();
   // Requests from this phone still in flight. Unknown until checked, and
   // unknown is never read as "nothing moved".
@@ -154,6 +164,11 @@ export function App() {
         }
         return;
       }
+      if (link.kind === "pay") {
+        if (accounts.active()) go({ kind: "send", request: link });
+        else setPendingPay(link);
+        return;
+      }
       const pot = storedFromLink(link, fragment);
       if (accounts.active()) go({ kind: "pot", pot });
       else setPendingPot(pot);
@@ -182,6 +197,9 @@ export function App() {
     } else if (pendingPot) {
       go({ kind: "pot", pot: pendingPot });
       setPendingPot(null);
+    } else if (pendingPay) {
+      go({ kind: "send", request: pendingPay });
+      setPendingPay(null);
     }
   };
 
@@ -217,6 +235,12 @@ export function App() {
       />
     );
   }
+  if (active && !switching && screen.kind === "send") {
+    return <SendScreen key={active.address} account={active} request={screen.request} banner={banner} onClose={() => go({ kind: "home" })} />;
+  }
+  if (active && !switching && screen.kind === "receive") {
+    return <ReceiveScreen key={active.address} account={active} banner={banner} onClose={() => go({ kind: "home" })} />;
+  }
   if (active && !switching && screen.kind === "join") {
     return <JoinScreen account={active} invite={screen.invite} banner={banner} onClose={() => go({ kind: "home" })} />;
   }
@@ -232,6 +256,8 @@ export function App() {
           onSwitch={() => setSwitching(true)}
           onOpenDraft={(draftId) => go({ kind: "create", draftId })}
           onOpenPot={(pot) => go({ kind: "pot", pot })}
+          onSend={() => go({ kind: "send", request: null })}
+          onReceive={() => go({ kind: "receive" })}
         />
       ) : (
         <Welcome
@@ -436,9 +462,19 @@ function Home(props: {
   onSwitch: () => void;
   onOpenDraft: (draftId: Hex) => void;
   onOpenPot: (pot: StoredPot) => void;
+  onSend: () => void;
+  onReceive: () => void;
 }) {
   const { account, connection } = props;
   const [balances, setBalances] = useState<Balances | null>(null);
+  // A payment from this account still being confirmed: the Send screen follows it.
+  const [sendInFlight, setSendInFlight] = useState(false);
+  useEffect(() => {
+    void idbWriteStore
+      .get(account.address)
+      .then((w) => setSendInFlight(Boolean(w?.label.startsWith(`${SEND_LABEL} `))))
+      .catch(() => setSendInFlight(false));
+  }, [account.address]);
   const [amountText, setAmountText] = useState("1,000");
   const [step, setStep] = useState<Step | "landing" | null>(null);
   const [result, setResult] = useState<Notice | null>(null);
@@ -622,6 +658,19 @@ function Home(props: {
                 </span>
                 <span className="balance-amount">{formatAmount(balances.testDollars.balance, balances.testDollars.decimals, "cents")}</span>
               </div>
+            )}
+            <div className="money-actions">
+              <button type="button" className="btn primary" onClick={props.onSend}>
+                {copy.sendDollars}
+              </button>
+              <button type="button" className="btn" onClick={props.onReceive}>
+                {copy.receive}
+              </button>
+            </div>
+            {sendInFlight && (
+              <button type="button" className="btn ghost small" onClick={props.onSend}>
+                {copy.sendStillConfirming}
+              </button>
             )}
           </>
         )}

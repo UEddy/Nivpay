@@ -106,6 +106,25 @@ stays open. Nothing is sent.
 | --- | --- | --- |
 | 77 | One of those reads failed, so pots this account was added to may be missing for now. Pots already found stay listed, and the next read is 10 seconds later. | RPC reachability; Multicall3 at `0xcA11bde05977b3631167028862bE2a173976CA11` |
 
+## Sending and receiving dollars
+
+Send dollars moves the build's dollar (AUSD by default) from this account to
+another with a plain `transfer`, signed with the passkey and shown as sent
+only at Finalized. 80 to 84 are found before anything is signed, so they cost
+no gas grant and no passkey prompt. A payment that reverts or is replaced
+shows 52 or 53 with "That payment didn't go through. Nothing moved."; one
+that stalls shows 51 and can be retried on the same nonce.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 80 | The recipient is this same account. Nothing was sent. | The Account ID or request link used |
+| 81 | The recipient has code: a service such as a pots contract, not a person's account. Nothing was sent. | `eth_getCode` at the recipient |
+| 82 | No amount, or zero, was entered. Nothing was sent. | |
+| 83 | The amount is more than the account's balance at the finalized block. Nothing was sent. | `balanceOf` the account on the dollar |
+| 84 | The dollar refused the transfer when it was run as a call, most likely Agora's freeze on the sender or the recipient. Nothing was sent. | `eth_call` of `transfer` from the sender |
+| 85 | A request link made for the other deployment (AUSD or TESTUSD) was opened on this one. Nothing was sent. | The link's deployment byte and `VITE_NIVPAY_POTS` |
+| 86 | Reading incoming payments for the Receive view failed. The balance is unaffected and the next read is a second later. | `eth_getLogs` on the dollar, topic 2 the account; RPC reachability |
+
 ## Other
 
 | Code | What happened | Where to look |

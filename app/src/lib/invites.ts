@@ -26,7 +26,7 @@ import { LinkReader, LinkWriter } from "./links.ts";
 export const LINK_VERSION = 1;
 /** Pot links carry suggested shares from version 2. */
 export const POT_LINK_VERSION = 2;
-const KIND = { invite: 1, reply: 2, pot: 3 } as const;
+const KIND = { invite: 1, reply: 2, pot: 3, pay: 4 } as const;
 export const ROLE = { decider: 0, payee: 1 } as const;
 export type Role = (typeof ROLE)[keyof typeof ROLE];
 
@@ -65,7 +65,21 @@ export type PotLink = {
   signature: Hex;
 };
 
-export type Link = Invite | Reply | PotLink;
+/**
+ * A request to be paid: who to pay, the name they go by, and optionally how
+ * much. Unsigned, like an Account ID typed in: the sender's confirm sheet
+ * shows the account's last 4 characters before anything is signed.
+ */
+export type PayLink = {
+  kind: "pay";
+  deployment: Deployment;
+  account: Address;
+  name: string;
+  /** Base units; 0 means the sender chooses. */
+  amount: bigint;
+};
+
+export type Link = Invite | Reply | PotLink | PayLink;
 
 /** Text limits in links, so a crafted link can't carry a novel. */
 const MAX_TEXT = 64;
@@ -120,6 +134,9 @@ export function encodeLink(link: Link): string {
         for (const s of link.shares) w.account(s.account).uint(s.amount);
       } else if (link.shares.length) throw new Error("version 1 pot links carry no shares");
       w.hex(link.signature);
+      break;
+    case "pay":
+      w.uint(link.deployment === "ausd" ? 0 : 1).account(link.account).text(link.name).uint(link.amount);
       break;
   }
   return w.toFragment();
@@ -181,6 +198,10 @@ export function decodeLink(fragment: string): Link {
       shares,
       signature: fixedHex(r, 65),
     };
+  } else if (kind === KIND.pay) {
+    const d = Number(r.uint());
+    if (d !== 0 && d !== 1) throw new Error("link is damaged");
+    link = { kind: "pay", deployment: d === 0 ? "ausd" : "testusd", account: getAddress(r.account()), name: checkedText(r), amount: r.uint() };
   } else {
     throw new Error("link is damaged");
   }

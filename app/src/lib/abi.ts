@@ -26,6 +26,29 @@ export const ERC20_READ_ABI = [
   },
 ] as const;
 
+/** Moving dollars between accounts, and the event that records it. */
+export const ERC20_TRANSFER_ABI = [
+  {
+    type: "function",
+    name: "transfer",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    type: "event",
+    name: "Transfer",
+    inputs: [
+      { name: "from", type: "address", indexed: true },
+      { name: "to", type: "address", indexed: true },
+      { name: "value", type: "uint256", indexed: false },
+    ],
+  },
+] as const;
+
 export const TEST_DOLLAR_ABI = [
   { type: "function", name: "MAX_MINT", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   {

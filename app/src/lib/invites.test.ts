@@ -13,6 +13,7 @@ import {
   verifyLabels,
   verifyReply,
   type Invite,
+  type PayLink,
   type PotLink,
 } from "./invites.ts";
 import { LinkWriter } from "./links.ts";
@@ -164,4 +165,24 @@ test("damaged links are refused, not half read", () => {
   assert.throws(() => decodeLink(badZone), /damaged/);
   const badRole = new LinkWriter().uint(1).uint(1).hex(DRAFT).uint(5).hex(NO_SLOT).text("I").text("P").text("").toFragment();
   assert.throws(() => decodeLink(badRole), /damaged/);
+});
+
+test("a request to be paid round trips, with or without an amount, and is safe to paste in a chat", () => {
+  const ubong = getAddress("0x1111111111111111111111111111111111111111");
+  for (const link of [
+    { kind: "pay", deployment: "ausd", account: ubong, name: "Ubong", amount: 25_000_000n },
+    { kind: "pay", deployment: "testusd", account: ubong, name: "Ubong Ökpé", amount: 0n },
+  ] satisfies PayLink[]) {
+    const url = linkUrl("https://nivpay.vercel.app", link);
+    assertChatSafe(url);
+    assert.deepEqual(decodeLink(url.split("#")[1]!), link);
+  }
+});
+
+test("a damaged request to be paid is refused", () => {
+  const ubong = getAddress("0x1111111111111111111111111111111111111111");
+  const good = encodeLink({ kind: "pay", deployment: "ausd", account: ubong, name: "Ubong", amount: 1n });
+  assert.throws(() => decodeLink(good.slice(0, -3)), /damaged/);
+  assert.throws(() => decodeLink(`${good}aa`), /damaged/);
+  assert.throws(() => decodeLink(encodeLink({ kind: "pay", deployment: "ausd", account: ubong, name: "x".repeat(65), amount: 1n })), /damaged/);
 });
