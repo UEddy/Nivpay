@@ -358,6 +358,7 @@ export function PotMap(props: {
             <g key={`payee-${s.route}`} className="pop-in" style={{ animationDelay: `${600 + i * 100}ms` }}>
               <circle cx={s.x} cy={s.y} r="14" className={`payee-ping${state === "asked" ? " on" : ""}`} />
               <circle cx={s.x} cy={s.y} r="14" className={`payee-ring${state === "paid" ? " paid" : ""}`} />
+              <circle cx={s.x} cy={s.y} r="13.25" className={`payee-fill${state === "paid" ? " on" : ""}`} />
               <svg x={s.x - 8} y={s.y - 8} width="16" height="16" viewBox="0 0 24 24" className={`payee-icon${state === "paid" ? " paid" : ""}`}>
                 {payeeIcon(payees[i]!.name)}
               </svg>

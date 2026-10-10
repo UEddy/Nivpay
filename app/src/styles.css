@@ -137,10 +137,19 @@ h1 {
   height: 64px;
 }
 
+/*
+ * Reduced motion: no flights and no loops, and what changes cross-fades in
+ * 150ms. Only opacity may transition here: a bare duration would make every
+ * property of every element transition, layout and paint included.
+ */
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  *::before,
+  *::after {
     animation: none !important;
+    transition-property: opacity !important;
     transition-duration: 150ms !important;
+    transition-delay: 0s !important;
   }
 }
 
@@ -162,7 +171,6 @@ h1 {
   color: var(--ink);
   font: 600 16px/1.2 var(--font-body);
   cursor: pointer;
-  transition: background-color var(--dur-press) ease-out;
 }
 
 .btn.primary {
@@ -366,18 +374,34 @@ h2 {
   flex-shrink: 0;
 }
 
+/* A payment that just arrived: a tint behind the row fades out. Only its opacity moves. */
 .list-row.arrived {
+  position: relative;
+  isolation: isolate;
+}
+
+.list-row.arrived::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--chip);
+  opacity: 0;
+  pointer-events: none;
   animation: arrived 1.2s ease-out;
 }
 
 @keyframes arrived {
   from {
-    background: var(--chip);
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .list-row.arrived {
+  .list-row.arrived::before {
     animation: none;
   }
 }

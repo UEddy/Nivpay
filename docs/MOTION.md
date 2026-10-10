@@ -36,8 +36,8 @@ Rules:
 
 | Token | Duration | Easing | Used for |
 |---|---|---|---|
-| press | 120ms | ease-out | button darkens on press |
-| swap | 240ms | cubic-bezier(0.2, 0.8, 0.2, 1) | text and colour changes, sheets |
+| press | none | | button darkens on press, at once: a background colour is a paint property, so it does not transition |
+| swap | 240ms | cubic-bezier(0.2, 0.8, 0.2, 1) | sheets and text arriving (by opacity and transform); colours change at once |
 | enter | 500ms, 60 to 100ms stagger | cubic-bezier(0.2, 0.8, 0.2, 1) | screen content arriving |
 | flight | 900ms | cubic-bezier(0.65, 0, 0.35, 1) | coins and streams along routes |
 | fill | 750ms | cubic-bezier(0.34, 1.35, 0.64, 1) | a new layer rising (the small overshoot is the slosh) |
@@ -47,7 +47,7 @@ Rules:
 
 ## 4. Smooth on cheap Android phones
 
-- Animate only `transform`, `opacity` and SVG `stroke-dashoffset`. Never width, height, top, left or a path's `d`.
+- Animate only `transform`, `opacity` and SVG `stroke-dashoffset`. Never width, height, top, left or a path's `d`, and never a colour (`background`, `fill`, `stroke`, `color`, `border-color`): a colour that has to fade is its own layer whose opacity moves, as the payee's fill at Paid and the tint behind a payment that just arrived. Every transition names its properties; a bare duration would transition all of them. `app/src/motion.test.ts` checks every stylesheet and the screens' inline transitions.
 - Draw the map as one inline SVG with fewer than about 60 elements. No blur or drop-shadow filters on anything that moves.
 - The coin is a 0.1px dash with a round cap, moved along the route by `stroke-dashoffset`. The trail is the same path with its dash array set to the path length. Measure each route once on mount with `getTotalLength()`.
 - Pot layers are stacked rects inside a `clipPath`, scaled with `transform: scaleY()` from the bottom (`transform-box: fill-box; transform-origin: 50% 100%`). A payment scales the whole stack, so every layer shrinks by the same share, which is exactly how the contract splits a payment.
