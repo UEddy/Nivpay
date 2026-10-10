@@ -372,6 +372,9 @@ export function CloseScreen(props: {
             </div>
             <div className="share-amount">{fmt(tookAmount ?? myWorth)}</div>
             {tookAmount === null && <div className="share-why">{fraction ? copy.shareBecause(fmt(myPut, "auto"), fraction) : copy.shareFromShares}</div>}
+            {tookAmount === null && take.action === "exit" && (
+              <div className="share-why">{waitingPayment ? `${copy.exitWarning} ${copy.exitWithPaymentWaiting}` : copy.exitWarning}</div>
+            )}
           </div>
         )}
 
@@ -397,7 +400,7 @@ export function CloseScreen(props: {
         {shareNote && <p className="hint">{shareNote}</p>}
       </div>
 
-      <div className="screen-foot enter" style={{ animationDelay: "320ms" }}>
+      <div className="screen-foot compact-foot enter" style={{ animationDelay: "320ms" }}>
         <p className="sr-only" aria-live="polite">
           {announce}
         </p>
@@ -423,7 +426,6 @@ export function CloseScreen(props: {
                 </button>
               )
             )}
-            {take.action === "exit" && <p className="foot-hint">{waitingPayment ? `${copy.exitWarning} ${copy.exitWithPaymentWaiting}` : copy.exitWarning}</p>}
             {iDecide && !state.closed && !stuck && (
               <button type="button" className={`pill-btn outline${acting === "ask close" && busy ? " busy" : ""}`} disabled={busy} onClick={() => act("ask close", false)}>
                 {acting === "ask close" && step === "confirm" ? copy.stepConfirm : acting === "ask close" && step ? copy.asking : copy.askToCloseEarly}

@@ -1489,7 +1489,7 @@
   color: var(--primary-text);
 }
 
-.story-foot:empty {
+.compact-foot:empty {
   display: none;
 }
 
@@ -1568,18 +1568,23 @@
   font-size: 13.5px;
 }
 
-/* The list is what this screen is for: its footer buttons are the comp's lighter 52 and 46 px. */
-.story-foot {
+/* On the story and on close, the content is what the screen is for: footer buttons are the comp's lighter 52 and 46 px. */
+.compact-foot {
   gap: 6px;
   padding-top: 10px;
 }
 
-.story-foot .pill-btn {
+.compact-foot .pill-btn {
   min-height: 52px;
   font-size: 16px;
 }
 
-.story-foot .pill-btn.outline {
+.compact-foot .pill-btn.outline {
   min-height: 46px;
   font-size: 15px;
+}
+
+/* Closed: the way in fades, as in the comp, so the stream back to each city reads over it. */
+.route.shown.faded {
+  opacity: 0.3;
 }

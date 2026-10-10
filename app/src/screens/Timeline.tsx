@@ -307,7 +307,7 @@ export function TimelineScreen(props: {
         </ol>
       </div>
 
-      <div className="screen-foot story-foot enter" style={{ animationDelay: "300ms" }}>
+      <div className="screen-foot compact-foot enter" style={{ animationDelay: "300ms" }}>
         {iDecide && !state.closed && !state.frozen && (
           <button type="button" className="pill-btn" onClick={() => setAskOpen(true)}>
             {copy.askForPayment}

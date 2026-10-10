@@ -196,7 +196,7 @@ export function PotMap(props: {
                   d={s.route}
                   className={`route ${p.route === "solid" ? "solid" : "dots"}${p.route === "march" ? " march" : ""}${
                     p.route === "march" || p.route === "solid" ? " shown" : ""
-                  }`}
+                  }${p.split ? " faded" : ""}`}
                   style={{ stroke: color }}
                 />
                 {p.split && <path d={reverseRoute(s.route)} className="route split" style={{ stroke: color, animationDelay: `${i * 150}ms` }} />}
