@@ -532,8 +532,8 @@ finalized events; nothing lands before Finalized.
 
 | Screen | Where | Status |
 | --- | --- | --- |
-| Make a pot | `app/src/screens/Create.tsx` | Built and run on testnet (pot 0 on the AUSD pots) |
-| Pour in your share | `app/src/screens/ChipIn.tsx` | Built and run on testnet (pot 0 holds a pour) |
+| Make a pot | `app/src/screens/Create.tsx` | Built; pot 0 on the AUSD pots was made on testnet on 10 Oct 2026 |
+| Pour in your share | `app/src/screens/ChipIn.tsx` | Built; pot 0 holds a pour from a second account |
 | Ask for a payment, and say yes | `app/src/screens/Ask.tsx`, `Request.tsx` | Built, checked with unit and live read-only tests; needs the phone run. A named decider sees a request waiting for their yes on Home with no link. |
 | The pot's story | | Next |
 | Close and split | | After the story |
