@@ -602,8 +602,9 @@ pays the Caterer, Idara's yes pays the Event hall, Idara asks to close early
 and Ubong agrees, and each takes their share. Everyone claims test AUSD once
 (10,000 covers any share). Gas is from section 6 (AUSD) and, for the faucet
 claim, `eth_estimateGas` from a fresh account on 10 Oct 2026: 130,600. Price
-102 gwei. Closing and claiming are counted as one request each, as the
-contract needs, though their screens are not built yet.
+102 gwei. Closing and taking a share are one request each, as the contract
+needs; their screens are built since (section 13), and the count did not
+change. Recounted 10 Oct 2026 with every screen built: the same.
 
 | Account | Requests it sends | Count | Gas | MON | Grants |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -621,6 +622,8 @@ the cap: a retry on the same nonce uses none of them, but a request that
 reverts, or a faucet claim that loses the race (62), uses one. Asking
 without a yes (the asker's own counts) and the take back are the only new
 kinds of request, and neither is in the story; a take back costs 55,816 gas.
+Taking a share out before close instead of after is still one request
+(`exit` instead of `claim`), so it changes no count.
 
 ## 12. The pot's story, built (10 Oct 2026)
 
