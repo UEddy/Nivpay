@@ -686,9 +686,10 @@ These are limits of the design as built, stated so nobody relies on more.
   day in the maker's time zone. People elsewhere see the same moment in
   their own time.
 * **History is read from the public RPC, 101 blocks at a time.** A phone
-  opening an old pot for the first time shows its numbers at once and its
-  history newest first, but the oldest entries arrive last; see
-  `docs/APP-CONTRACT-MAP.md` section 12.
+  opening an old pot for the first time shows its numbers at once (1 s on
+  pot 0) and fills its history newest first, but the oldest entries arrive
+  last: pot 0, 167,624 blocks old with its only events at the start, took
+  11.6 minutes to complete. See `docs/APP-CONTRACT-MAP.md` section 12.
 
 ## Tests
 

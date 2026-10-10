@@ -657,11 +657,27 @@ in `app/src/lib/story.ts`.
   the contract's own conversion (offset 10**3, rounding down); a live test
   checks this equals `funderInfo` right after pot 0's pour. Hidden with
   reduced motion.
-* **Known limit, measured:** pot 0 was made 149,460 blocks before this was
-  written, about 1,480 pages, so a phone that has never opened it makes
-  about 3,000 log reads before its story is complete; at the measured
-  0.5 s a read and 4 pages at a time, a few minutes. Later opens read only
-  what is new. The fix is the snapshot planned in section 10.
+* **First open, measured 10 Oct 2026 on the public RPC.** A phone that has
+  never opened a pot starts at the finalized block and fills the history
+  below it newest first, two pages at a time with a 100 ms pause, about 5.6
+  requests a second (`app/src/lib/feed.ts`). Timed on pot 0, 167,624 blocks
+  old: the story screen was up after 0.68 s and the pot's numbers, read at
+  the finalized block, after 1.02 s. Its first history entry arrived after
+  696 s and the history was complete after 699 s, 11.6 minutes, 3,932 log
+  requests, with one batch read again and no rate limit hit. Pot 0 is the
+  worst case: its only two events are at the very bottom of its history, so
+  newest first gains it nothing. A pot with recent activity shows that
+  activity within the first pages, a second or two. Until the fill is done
+  the story says "Loading earlier history" and nothing that needs the whole
+  history is shown. A later open reads only what is new.
+* **Optional: a snapshot file.** A script run on the author's PC could read
+  every event of both pots contracts once (one `eth_getLogs` a page, no topic
+  filter: about 36,500 requests from the deploy blocks today, roughly an hour
+  under the rate limit) and commit them as static JSON, served by the app
+  from its own origin. Today that is a handful of events, under 10 KB; even a
+  busy month would be tens of KB. A phone would load it first and fill only
+  the blocks after it. It needs no server and no secret, and could be
+  refreshed before a demo. Not built.
 
 ## 13. Close and split, built (10 Oct 2026)
 
