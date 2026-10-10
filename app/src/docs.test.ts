@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { getAddress } from "viem";
 import { ERROR_CODES } from "./copy.ts";
+import { AUSD, AUSD_FAUCET, CTK, DEPLOY_BLOCK, POTS_AUSD, POTS_TESTUSD, SETTLEMENT_PAIR, SETTLEMENT_WHITELISTER, TESTUSD } from "./lib/config.ts";
 import { formatAmount } from "./lib/money.ts";
 import { feeFor } from "./lib/payout.ts";
 
@@ -9,7 +11,10 @@ import { feeFor } from "./lib/payout.ts";
  * docs/DEMO.md is read aloud on camera, so its numbers are checked against
  * the app's own arithmetic and the contract's share conversion, not trusted.
  */
-const DEMO = readFileSync(new URL("../../docs/DEMO.md", import.meta.url), "utf8");
+const doc = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+const DEMO = doc("docs/DEMO.md");
+const README = doc("README.md");
+const CODES_DOC = doc("docs/ERROR-CODES.md");
 
 const DECIMALS = 6;
 const usd = (dollars: number) => BigInt(Math.round(dollars * 100)) * 10n ** BigInt(DECIMALS - 2);
@@ -92,4 +97,48 @@ test("every code the demo names is a code the app can show", () => {
   const named = [...DEMO.matchAll(/Code (\d+)/g)].map((m) => Number(m[1]));
   assert.ok(named.length > 0);
   for (const n of named) assert.ok(known.has(n), `Code ${n}`);
+});
+
+test("docs/ERROR-CODES.md has a row for exactly the codes the app can show, each once", () => {
+  const rows = [...CODES_DOC.matchAll(/^\| (\d+) \|/gm)].map((m) => Number(m[1]));
+  assert.equal(new Set(rows).size, rows.length, "a code has two rows");
+  assert.deepEqual([...rows].sort((a, b) => a - b), [...new Set<number>(Object.values(ERROR_CODES))].sort((a, b) => a - b));
+});
+
+test("every contract in the README's address table is the one the app uses", () => {
+  const table = README.slice(README.indexOf("## Contract addresses"), README.indexOf("## What the contract can and cannot do"));
+  const expected: [string, string][] = [
+    ["NivPayPots on AUSD", POTS_AUSD],
+    ["NivPayPots on TESTUSD", POTS_TESTUSD],
+    ["NivPayTestDollar (TESTUSD)", TESTUSD],
+    ["AUSD (Agora)", AUSD],
+    ["Agora AUSD faucet", AUSD_FAUCET],
+    ["Agora Instant Settlement pair, AUSD and CTK", SETTLEMENT_PAIR],
+    ["Agora whitelister", SETTLEMENT_WHITELISTER],
+    ["CTK (ConstantToken)", CTK],
+  ];
+  for (const [name, address] of expected) {
+    const row = table.split("\n").find((l) => l.startsWith(`| ${name} |`));
+    assert.ok(row, name);
+    const [linked, shown] = [/address\/(0x[0-9a-fA-F]{40})\)/.exec(row)?.[1], /`(0x[0-9a-fA-F]{40})`/.exec(row)?.[1]];
+    assert.equal(linked, address, `${name} link`);
+    assert.equal(shown, address, `${name} text`);
+  }
+  // The pots deploy blocks the app starts its reads from are the ones in the receipts the README points to.
+  assert.equal(DEPLOY_BLOCK[POTS_AUSD], 66096162n);
+  assert.equal(DEPLOY_BLOCK[POTS_TESTUSD], 66096818n);
+});
+
+test("every transaction under Monad integration links to its own hash on MonadVision, and the missing ones are marked", () => {
+  const section = README.slice(README.indexOf("## Monad integration"), README.indexOf("## Contract addresses"));
+  const links = [...section.matchAll(/\[`(0x[0-9a-f]{64})`\]\(https:\/\/testnet\.monadvision\.com\/tx\/(0x[0-9a-f]{64})\)/g)];
+  for (const name of ["CreatePot, pot 0", "FundWithPermit, the first deposit in pot 0", "Add test dollars, a faucet claim"]) {
+    assert.match(section, new RegExp(`^\| ${name} \| \[\`0x[0-9a-f]{64}\`\]`, "m"), name);
+  }
+  assert.ok(links.length >= 5);
+  for (const [, shown, linked] of links) assert.equal(shown, linked);
+  assert.equal(new Set(links.map((l) => l[1])).size, links.length, "a hash is listed twice");
+  assert.equal([...section.matchAll(/\[PLACEHOLDER: fill in after the phone test\]/g)].length, 2);
+  // Accounts named there are written with their checksum, as the app shows them.
+  for (const [, a] of section.matchAll(/`(0x[0-9a-fA-F]{40})`/g)) assert.equal(a, getAddress(a!));
 });

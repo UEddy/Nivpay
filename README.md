@@ -171,6 +171,12 @@ the first payment, so here the split follows each contribution, with no dust
 left over. Each sibling has to claim; nothing is sent to them at close. The test asserts
 `paid out + fees + claimed == funded` exactly.
 
+The test deploys its own pots contract with a 1 percent fee, so its fees
+are 6 and 2.7. The deployed instances charge 0.5 percent (`feeBps` 50), and
+the recorded demo in `docs/DEMO.md` pays the hall $280 and closes early, so
+there the fees are $3.00 and $1.40 and the three shares of the $115.60 left
+are $57.80, $46.24 and $11.56.
+
 ## Why Monad
 
 **Finality.** A payment app has to choose between telling people their money
@@ -195,6 +201,50 @@ with Foundry under `network = "monad"` so gas, opcode pricing and size limits
 are Monad's. The app uses viem's `monadTestnet` chain. AUSD, Agora's dollar,
 is live on Monad testnet with permit support, which lets a person put money in
 with one signature.
+
+## Monad integration
+
+Everything the app does runs on Monad testnet (chain id `10143`) through the
+public RPC `https://testnet-rpc.monad.xyz`, with viem's `monadTestnet`
+chain:
+
+* **Accounts** are Mera passkeys whose key signs ordinary Monad
+  transactions on the phone (`app/src/lib/passkey.ts`, `keys.ts`).
+* **Reads** are at the `finalized` block only: balances, pots, limits and
+  requests through `eth_call` (Multicall3 for Home), history through
+  `eth_getLogs` in 101 block pages, the most the public RPC allows.
+* **Writes** are raw signed transactions sent with
+  `eth_sendRawTransaction`, saved before sending and followed until their
+  block is Finalized, about 0.6 s behind the newest block; only then does
+  the app say they happened (`app/src/lib/writes.ts`).
+* **Gas** is estimated per request and not padded, because Monad charges the
+  gas limit; a small grant of testnet MON from `/api/fund` pays for it.
+* **Money** is Agora's AUSD, put into pots with one EIP-2612 permit
+  signature (`fundWithPermit`), and delivered in another currency through
+  Agora's Instant Settlement pair.
+
+Real transactions from the app, each read back with `eth_getTransactionReceipt`
+on 10 Oct 2026: status success, and in a block below the finalized head.
+Pot 0's two were found from its events: `potCount()` bisected over past
+blocks to find the block where pot 0 appears, its `PotCreated` log in that
+block, then the first `Funded` log for pot 0 after it.
+
+| What | Transaction | Block | Time (UTC) | What it shows |
+| --- | --- | ---: | --- | --- |
+| Add test dollars, a faucet claim | [`0xcf032c4555429aa1dacf086276a7d880fa587ed3bfbc5457137697ed9bd6fcdf`](https://testnet.monadvision.com/tx/0xcf032c4555429aa1dacf086276a7d880fa587ed3bfbc5457137697ed9bd6fcdf) | 69,524,729 | 9 Oct 2026, 11:13:07 | `requestFunds` on Agora's faucet from the app account `0x725C9cd75b2C8C29AEbf6a14eE84a3b54C787bC1`, for itself: 10,000 AUSD |
+| CreatePot, pot 0 | [`0x6d1d6bdc5a942458c994e2735a684fb5b0665d77a692c3763c33f2962495199c`](https://testnet.monadvision.com/tx/0x6d1d6bdc5a942458c994e2735a684fb5b0665d77a692c3763c33f2962495199c) | 69,610,359 | 9 Oct 2026, 18:26:28 | `createPot` on the AUSD pots from the same account. Its `PotCreated` event names pot 0, "Anniversary", 2 of 2 deciders, one payee, closing 1 Nov 2026 |
+| FundWithPermit, the first deposit in pot 0 | [`0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe`](https://testnet.monadvision.com/tx/0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe) | 69,611,378 | 9 Oct 2026, 18:31:36 | `fundWithPermit` from a second app account, `0x97936c44214231002051A601e2065732382Df8b4`: the permit's `Approval`, the AUSD `Transfer` and `Funded` for $200, in one request |
+| Send dollars, a plain AUSD payment to another person | [PLACEHOLDER: fill in after the phone test] | | | |
+| Send in another currency, the exchange through Agora's pair | [PLACEHOLDER: fill in after the phone test] | | | |
+
+Pot 0 has had two more since, on 10 Oct 2026: a second $200 put in by its
+maker
+([`0xa5a64cabcf31608837fe03587734e94ad074548b78007f7e22054a6b4489d738`](https://testnet.monadvision.com/tx/0xa5a64cabcf31608837fe03587734e94ad074548b78007f7e22054a6b4489d738),
+08:32:17 UTC) and a request to pay its payee $100 with a $0.50 fee
+([`0xa8a0481a8a818baac227d4cf1662c6e3edca933291dce6ae65bff485d8eaeb9a`](https://testnet.monadvision.com/tx/0xa8a0481a8a818baac227d4cf1662c6e3edca933291dce6ae65bff485d8eaeb9a),
+08:34:05 UTC), which is waiting for its second yes. It holds $400. Neither
+account has sent a plain AUSD payment or used Agora's pair yet, so those two
+rows wait for the phone test.
 
 ## Contract addresses
 
@@ -295,7 +345,15 @@ Read from its verified source and its live state on 9 Oct 2026:
   proxies whose admin is `0x85f263d91f2706b32c85f22c681c0fe175eb48f2`, and
   that admin's only manager is the same
   `0x99B0E95Fa8F5C3b86e4d78ED715B475cFCcf6E97`. It can replace either
-  contract's code (`upgradeAndCall`).
+  contract's code (`upgradeAndCall`). [CHECK: who manages the admin
+  `0x85f2...48f2` was read on 9 Oct 2026 and not again: its `owner()`
+  reverts, so it was not re-checked on 10 Oct.]
+* **Read again on 10 Oct 2026:** the six roles above are still held by
+  `0x99B0...6E97` (and `WHITELISTER_ROLE` also by the whitelister), both
+  proxies' admin slot still holds `0x85f2...48f2`, the pair is not paused,
+  the price is 1 CTK per AUSD and the purchase fee is 0. The price and fee
+  bounds were not read again. [CHECK: the 0.9 to 1.1 price bounds and the 0
+  to 0.05 percent fee bounds, if they are stated anywhere public.]
 * **On testnet anyone may send through the pair**: the whitelister's
   `setApprovedSwapper` has no caller check, so the app's one-time setup grants
   the permission to the person's own account.
@@ -367,6 +425,7 @@ The documents behind the design:
 | `docs/BUILD-APP.md` | the app brief: accounts, gas, product language, phases |
 | `docs/MOTION.md` | animation rules |
 | `docs/ERROR-CODES.md` | every "Code N" the app can show |
+| `docs/DEMO.md` | the script for recording the demo on production, and the 2 minute bounty path |
 | `docs/BOUNTIES.md` | the Agora bounty and how the app meets it |
 | `docs/SUBMISSION.md` | the hackathon terms checklist |
 | `docs/design/` | the design comps for the core screens |
@@ -490,8 +549,9 @@ person's own. Sizes come from the gas measured in
 | Funder floor | 1 MON | granting stops before the funder can run dry |
 | Kill switch | `FUNDING_ENABLED` not `true` | answers "funding is paused" without reading the key |
 
-`GET /api/fund/status` returns only whether funding is on and the funder's
-balance. Each grant is logged with the address, the amount and the
+`GET /api/fund/status` returns only whether funding is on, whether the
+funder key derives `FUNDER_ADDRESS` (`keyMatches`, true or false, nothing
+else about the key), and the funder's balance. Each grant is logged with the address, the amount and the
 transaction hash; nothing else from the request is logged, and the key never
 is.
 
@@ -550,7 +610,8 @@ cast call 0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC "balanceOf(address)(uint256
 
 It was dry in Phase 0 (one base unit), which is why
 `test_fork_faucetDispensesAusd` skips rather than fails when it is. It has
-since been restocked: on 9 October 2026 it held 996,345,050 AUSD, and the app's
+since been restocked: on 9 October 2026 it held 996,345,050 AUSD (995,775,050
+on 10 October), and the app's
 "Add test dollars" now claims from it on the AUSD deployment.
 
 Its refusals, recovered from the bytecode and confirmed on a fork of the live
@@ -586,8 +647,8 @@ finalized events; nothing lands before Finalized.
 | Screen | Where | Status |
 | --- | --- | --- |
 | Make a pot | `app/src/screens/Create.tsx` | Built; pot 0 on the AUSD pots was made on testnet on 9 Oct 2026 |
-| Pour in your share | `app/src/screens/ChipIn.tsx` | Built; pot 0 holds a pour from a second account |
-| Ask for a payment, and say yes | `app/src/screens/Ask.tsx`, `Request.tsx` | Built, checked with unit and live read-only tests; needs the phone run. A named decider sees a request waiting for their yes on Home with no link. |
+| Pour in your share | `app/src/screens/ChipIn.tsx` | Built; pot 0 holds $400, a pour from each of two accounts |
+| Ask for a payment, and say yes | `app/src/screens/Ask.tsx`, `Request.tsx` | Built, checked with unit and live read-only tests. One request has been asked on testnet, on pot 0 on 10 Oct 2026 (see [Monad integration](#monad-integration)); a yes that pays still needs the phone run. A named decider sees a request waiting for their yes on Home with no link. |
 | The pot's story | `app/src/screens/Timeline.tsx`, `app/src/lib/story.ts` | Built, checked with unit and live read-only tests; needs the phone run. On a first open the history fills newest first in the background (see [Known limits](#known-limits)) |
 | Close and split | `app/src/screens/Close.tsx`, `app/src/lib/close.ts` | Built, checked with unit and live read-only tests; needs the phone run. Closing early is a request with yeses, like a payment; taking your share out works in every state the contract allows |
 
@@ -688,8 +749,8 @@ These are limits of the design as built, stated so nobody relies on more.
 * **History is read from the public RPC, 101 blocks at a time.** A phone
   opening an old pot for the first time shows its numbers at once (1 s on
   pot 0) and fills its history newest first, but the oldest entries arrive
-  last: pot 0, 167,624 blocks old with its only events at the start, took
-  11.6 minutes to complete. See `docs/APP-CONTRACT-MAP.md` section 12.
+  last: pot 0, 167,624 blocks old with its only events at the start when it was
+  timed on 10 Oct 2026, took 11.6 minutes to complete. See `docs/APP-CONTRACT-MAP.md` section 12.
 
 ## Tests
 
@@ -1288,7 +1349,7 @@ and still pass as part of the suite. Nothing in `NivPayPots` depends on them.
 
 **Nothing in this repository predates 1 Sep 2026.** The first commit,
 `e627991`, is dated 6 Sep 2026, and every commit on every branch was authored
-between 6 Sep and 9 Oct 2026. The history has not been rewritten or squashed.
+between 6 Sep and 10 Oct 2026. The history has not been rewritten or squashed.
 [CHECK]
 
 * The streaming benchmark (`StreamBench`, `MockStable`, `BENCHMARK.md`) was the

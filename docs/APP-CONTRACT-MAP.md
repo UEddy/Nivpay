@@ -19,7 +19,9 @@ Other constants read from the contract, never to be hardcoded either:
 `PROPOSAL_TTL` = 604800 (7 days), `MAX_APPROVERS` = 10, `MAX_DESTINATIONS` = 10,
 TESTUSD `MAX_MINT` = 100000000000 (100,000 TESTUSD per call).
 
-Neither instance has any pots yet (`potCount()` = 0 on both).
+Neither instance has any pots yet (`potCount()` = 0 on both). Since then:
+pot 0 on the AUSD instance was made on 9 Oct 2026 (README, Monad
+integration); the TESTUSD instance still has none.
 
 **Permit trap, AUSD.** `AUSD.name()` returns `"AUSD"`, but its EIP-712 permit
 domain name is `"Agora Dollar"` (version `"1"`). I recomputed the domain
@@ -284,9 +286,9 @@ block's timestamp is greater than start plus `PROPOSAL_TTL` read from the
 contract, the same `>` the contract uses in `approve`. The app shows
 "expired" from that alone, with no event needed. The time based close is
 derived the same way from `endTime` (closed when the finalized timestamp is
-at or past `endTime`, as `_isClosed` does). Optionally the app calls
+at or past `endTime`, as `_isClosed` does). The app could call
 `closePot` once after `endTime` (43,293 gas) so the story has a real `Closed`
-row.
+row; it does not (section 15).
 
 **G10. Notifications.** "Idara and Aniekan can see it now" and "invites went
 to" imply delivery. Nothing is pushed. People see changes when they open the
@@ -404,10 +406,10 @@ Notes:
 | Requirement | How the app meets it |
 | --- | --- |
 | A mobile application | The PWA, wrapped as an Android app with Bubblewrap (Trusted Web Activity) in a phase after Phase 4 |
-| Send AUSD to another person or across borders | Chipping in AUSD from London, Houston and Uyo into the AUSD pot, and the pot paying the Caterer, a real passkey account on the second phone. Both ends shown |
+| Send AUSD to another person or across borders | Send dollars: a plain AUSD `transfer` to another person's account, by their request link or a confirmed Account ID, and, through Agora's Instant Settlement, a payment delivered as CTK (built 9 Oct 2026). Also chipping in AUSD from London, Houston and Uyo into the AUSD pot, and the pot paying the Caterer, a real passkey account on the second phone |
 | Mera passkey onboarding | Sign up and sign in with Mera PRF passkeys, per BUILD-APP.md |
 | An AUSD balance | AUSD `balanceOf` at the finalized block, shown on the chip-in screen and home |
-| A completed send and receive settled instantly | The Caterer's phone shows AUSD arriving on the finalized `PayoutExecuted`; each receipt shows measured submit to finalized time. Finalized is about 0.6 s behind latest (measured above); the full submit to finalized time will be measured in Phase 2 with a real transaction |
+| A completed send and receive settled instantly | Send shows "Payment final" and the measured submit to finalized time only once the transfer's block is finalized; Receive lists each incoming payment once final, and the Caterer's phone shows AUSD arriving from the pot the same way. Finalized is about 0.6 s behind latest (measured above). No Send or exchange has been signed on testnet yet: the 2 minute path in `docs/DEMO.md` is for the phone test |
 | AUSD, not TESTUSD, in the demo | The demo uses the AUSD pot `0xB9E6...9EfB`. TESTUSD stays for testing |
 | Where test AUSD comes from | **Resolved.** Agora's faucet `0xd236...ee6C` is AUSD's faucet (`token()` = AUSD) and is called with `requestFunds(address)`: 10,000 AUSD per claim, one claim per 60 s across the whole faucet (not per account), refused once you hold 100,000. It was dry in Phase 0 and has been restocked (996,345,050 AUSD on 9 October 2026). On the AUSD deployment, "Add test dollars" claims from it with the person's own account, after a gas grant if needed. Refusals are codes 60 to 62 |
 | Agora's API, staging | Not built until you confirm staging access, as you said |
@@ -418,6 +420,7 @@ One more point on "send to another person": the pot can only pay destinations
 listed at creation. A plain AUSD transfer between two accounts (the token's
 own `transfer`) would be a simple "send to anyone" without touching the
 contracts, if you want one in the demo. I have not planned it in.
+(Since built as Send dollars and Receive, 9 Oct 2026.)
 
 ## 9. Decisions on writes, invites and accounts
 
@@ -522,7 +525,10 @@ contracts, if you want one in the demo. I have not planned it in.
   asks for that account's passkey. Keys are still never stored; only
   addresses are.
 
-## 10. History, planned for after Phase 3 (not built yet)
+## 10. History, planned for after Phase 3 (not built)
+
+Not built. The phone fills a pot's history newest first instead (section
+12), and an optional snapshot file is described there. The plan as it was:
 
 The 100 block `eth_getLogs` limit makes backfilling an old pot on a phone
 impractical (section 6). The plan:
@@ -664,9 +670,10 @@ in `app/src/lib/story.ts`.
   old: the story screen was up after 0.68 s and the pot's numbers, read at
   the finalized block, after 1.02 s. Its first history entry arrived after
   696 s and the history was complete after 699 s, 11.6 minutes, 3,932 log
-  requests, with one batch read again and no rate limit hit. Pot 0 is the
-  worst case: its only two events are at the very bottom of its history, so
-  newest first gains it nothing. A pot with recent activity shows that
+  requests, with one batch read again and no rate limit hit. Pot 0 was the
+  worst case: when it was timed, its only two events were at the very
+  bottom of its history, so newest first gained it nothing. (It has had two
+  more since, on 10 Oct 2026 at 08:32 and 08:34 UTC.) A pot with recent activity shows that
   activity within the first pages, a second or two. Until the fill is done
   the story says "Loading earlier history" and nothing that needs the whole
   history is shown. A later open reads only what is new.

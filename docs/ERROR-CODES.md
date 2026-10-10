@@ -93,7 +93,7 @@ a call before anything is signed, so these send nothing.
 | 53 | Its nonce was used by a different transaction. Nothing of this request moved. | The account's transactions |
 | 54 | A retry was refused because the earlier attempt may still go through. Wait. | The pending write |
 | 55 | Try again was pressed but there was nothing stuck to retry. | |
-| 56 | The node answered the broadcast and turned it down twice in a row (a JSON-RPC error other than a rate limit, an internal error, "already known" or "nonce too low"), and its nonce is still unused at finalized. Nothing moved; it can be retried on the same nonce. Shown when making a pot and when paying from a pot; elsewhere it shows as 51. | The pending write; the RPC's error for its raw bytes |
+| 56 | The node answered the broadcast and turned it down twice in a row (a JSON-RPC error other than a rate limit, an internal error, "already known" or "nonce too low"), and its nonce is still unused at finalized. Nothing moved; it can be retried on the same nonce. Shown when making a pot, paying from a pot, closing it and taking a share out; elsewhere (adding test dollars, putting money in, sending) it shows as 51. | The pending write; the RPC's error for its raw bytes |
 
 ## Adding test dollars on the AUSD deployment (Agora's faucet)
 
@@ -143,8 +143,13 @@ stays open. Nothing is sent.
 
 | Code | What happened | Where to look |
 | --- | --- | --- |
-| 78 | Reading the pot's history for its story failed (`eth_getLogs` from the saved place, in 101 block pages). Entries already read stay; the next read is a second later and resumes from the same place. | RPC reachability; the pot's cursor in IndexedDB, `nivpay` store, key `<pots>:<potId>` |
 | 77 | One of those reads failed, so pots this account was added to may be missing for now. Pots already found stay listed, and the next read is 10 seconds later. | RPC reachability; Multicall3 at `0xcA11bde05977b3631167028862bE2a173976CA11` |
+
+## The pot's story
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 78 | Reading the pot's history for its story failed (`eth_getLogs` from the saved place, in 101 block pages). Entries already read stay; the next read is a second later and resumes from the same place. | RPC reachability; the pot's cursor in IndexedDB, `nivpay` store, key `<pots>:<potId>` |
 
 ## Sending and receiving dollars
 
