@@ -20,6 +20,17 @@ export default defineConfig({
   build: {
     target: "es2022",
     sourcemap: false,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          // React in a chunk of its own: it is a third of the first screen and
+          // changes only with its version, so a phone keeps it across deploys
+          // while the app's own chunks change. Screens and the signing code
+          // load on demand (src/App.tsx).
+          groups: [{ name: "react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ }],
+        },
+      },
+    },
   },
   server: {
     port: 5173,

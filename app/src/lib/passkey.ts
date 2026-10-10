@@ -4,10 +4,8 @@ import type { Address, LocalAccount } from "viem";
 import { ERROR_CODES } from "../copy.ts";
 import { AppError, WrongPasskeyError } from "./errors.ts";
 import { checkPasskeyHost } from "./hosts.ts";
+import { PRODUCTION_HOSTNAME } from "./passkeyHost.ts";
 import { sessionAddress, sessionFromPrfOutput } from "./keys.ts";
-
-/** Empty until the final hostname is confirmed in Phase 4. */
-const PRODUCTION_HOSTNAME: string = import.meta.env.VITE_PRODUCTION_HOSTNAME ?? "";
 
 export class HostNotAllowedError extends AppError {}
 
@@ -17,9 +15,7 @@ function rpId(): string {
   return check.rpId;
 }
 
-export function hostCheck() {
-  return checkPasskeyHost(location.hostname, PRODUCTION_HOSTNAME);
-}
+export { hostCheck } from "./passkeyHost.ts";
 
 /** Makes a new passkey and returns the account's address. Nothing but the address leaves this function. */
 export async function signUp(name: string): Promise<Address> {

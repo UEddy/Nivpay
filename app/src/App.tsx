@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { encodeFunctionData, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES, offlineMessage } from "./copy.ts";
@@ -17,24 +17,27 @@ import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
 import { InvitedStore, matchInvites, type AnsweredInvite } from "./lib/invited.ts";
 import { decodeLink, type AskLink, type Invite, type PayLink, type PotLink } from "./lib/invites.ts";
 import { formatAmount, parseAmount } from "./lib/money.ts";
-import { hostCheck, signIn, signUp } from "./lib/passkey.ts";
+import { hostCheck } from "./lib/passkeyHost.ts";
 import { readClient } from "./lib/rpc.ts";
 import { prefersReducedMotion } from "./lib/reduced.ts";
 import { PotStore, rememberPotLink, type StoredPot } from "./lib/potstore.ts";
-import { retryStuckWrite, sendWrite, type Step } from "./lib/send.ts";
-import { acceptReply } from "./lib/replies.ts";
+import type { Step } from "./lib/send.ts";
 import { latestReceipt, receiptUrl, rememberReceipt } from "./lib/receipts.ts";
 import { CURRENCY_LABEL } from "./lib/settle.ts";
 import { SEND_LABEL } from "./lib/transfer.ts";
 import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
-import { ChipInScreen } from "./screens/ChipIn.tsx";
-import { CreateScreen } from "./screens/Create.tsx";
-import { JoinScreen } from "./screens/Join.tsx";
-import { ReceiveScreen } from "./screens/Receive.tsx";
-import { RequestScreen } from "./screens/Request.tsx";
-import { TimelineScreen } from "./screens/Timeline.tsx";
-import { CloseScreen } from "./screens/Close.tsx";
-import { SendScreen } from "./screens/Send.tsx";
+// Every screen but Home loads when it is first opened, and so does the code
+// that signs (passkeys, keys, signatures): the first screen stays small.
+const ChipInScreen = lazy(() => import("./screens/ChipIn.tsx").then((m) => ({ default: m.ChipInScreen })));
+const CreateScreen = lazy(() => import("./screens/Create.tsx").then((m) => ({ default: m.CreateScreen })));
+const JoinScreen = lazy(() => import("./screens/Join.tsx").then((m) => ({ default: m.JoinScreen })));
+const ReceiveScreen = lazy(() => import("./screens/Receive.tsx").then((m) => ({ default: m.ReceiveScreen })));
+const RequestScreen = lazy(() => import("./screens/Request.tsx").then((m) => ({ default: m.RequestScreen })));
+const TimelineScreen = lazy(() => import("./screens/Timeline.tsx").then((m) => ({ default: m.TimelineScreen })));
+const CloseScreen = lazy(() => import("./screens/Close.tsx").then((m) => ({ default: m.CloseScreen })));
+const SendScreen = lazy(() => import("./screens/Send.tsx").then((m) => ({ default: m.SendScreen })));
+const passkeys = () => import("./lib/passkey.ts");
+const sending = () => import("./lib/send.ts");
 import { formatDay, NoticeLine, phoneTimeZone, type Notice } from "./screens/ui.tsx";
 
 const accounts = new AccountStore(localStorage);
@@ -121,7 +124,16 @@ function TestModeBadge() {
   return <span className="badge">{copy.testMode}</span>;
 }
 
+/** A screen still loading shows the page's background, briefly; nothing on it claims anything. */
 export function App() {
+  return (
+    <Suspense fallback={<div className="page" aria-busy="true" />}>
+      <Screens />
+    </Suspense>
+  );
+}
+
+function Screens() {
   const [active, setActive] = useState<StoredAccount | undefined>(() => accounts.active());
   const [switching, setSwitching] = useState(false);
   const [screen, setScreen] = useState<Screen>({ kind: "home" });
@@ -173,6 +185,7 @@ export function App() {
       }
       if (link.kind === "reply") {
         try {
+          const { acceptReply } = await import("./lib/replies.ts");
           const { draft, text } = await acceptReply(drafts, POTS, link);
           // The reply belongs to whichever account on this phone is making that pot.
           if (accounts.list().some((a) => a.address === draft.owner)) {
@@ -378,6 +391,7 @@ function Welcome(props: {
     setError(null);
     setBusy(kind);
     try {
+      const { signIn, signUp } = await passkeys();
       if (kind === "up") props.onReady(await signUp(name.trim()), name.trim());
       else {
         const address = await signIn();
@@ -667,6 +681,7 @@ function Home(props: {
     setCooldownUntil(null);
     const label = formatAmount(amount, decimals, "auto");
     try {
+      const { retryStuckWrite, sendWrite } = await sending();
       if (balances.kind === "ausd") {
         const { faucet } = balances;
         const call = {
