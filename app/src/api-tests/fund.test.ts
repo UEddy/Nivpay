@@ -1,10 +1,15 @@
-import { test } from "node:test";
+import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { parseEther, type Address, type Hex } from "viem";
 import {
   FLOOR,
+  BLOCKS_PER_HOUR,
+  forgetRecentGrants,
   FundConfigError,
   GRANT,
+  GRANTS_PER_HOUR,
+  MAX_BODY_BYTES,
+  RECENT_MS,
   handleFund,
   MAX_SENT_TXS,
   normalizeFunderKey,
@@ -37,6 +42,9 @@ type Script = {
   funderBalance?: bigint;
   sent?: number;
   conflictsFirst?: number;
+  /** The funder's nonce about an hour ago; by default its starting nonce, so no grant counts against the hourly cap. */
+  nonceHourAgo?: number;
+  historyFails?: boolean;
 };
 
 function chain(s: Script = {}) {
@@ -50,6 +58,12 @@ function chain(s: Script = {}) {
     sentCount: async () => s.sent ?? 0,
     fees: async () => ({ maxFeePerGas: 107_000_000_000n, maxPriorityFeePerGas: 2_000_000_000n }),
     funderNonce: async () => nextNonce,
+    latestBlock: async () => 70_000_000n,
+    funderNonceAt: async (block) => {
+      assert.equal(block, 70_000_000n - BLOCKS_PER_HOUR);
+      if (s.historyFails) throw new Error("missing trie node");
+      return s.nonceHourAgo ?? 40;
+    },
     sendGrant: async (_to: Address, nonce: number) => {
       if (conflicts > 0) {
         conflicts--;
@@ -63,6 +77,8 @@ function chain(s: Script = {}) {
   };
   return { c, sentWith };
 }
+
+beforeEach(() => forgetRecentGrants());
 
 function capture() {
   const lines: Record<string, string>[] = [];
@@ -141,7 +157,8 @@ test("bad input is refused and not logged", async () => {
 });
 
 test("eligibility: chain, no code, under the threshold, fewer than 10 sent, funder above its floor", async () => {
-  const run = (s: Script) => handleFund(req({ address: USER }), env(), () => chain(s).c, () => {});
+  // Each run is a separate question about the same address, not a second grant moments after the first.
+  const run = (s: Script) => (forgetRecentGrants(), handleFund(req({ address: USER }), env(), () => chain(s).c, () => {}));
   assert.equal((await run({ chainId: 1 })).status, 503);
   assert.equal((await run({ code: true })).status, 409);
   assert.equal((await run({ userBalance: THRESHOLD })).status, 409);
@@ -291,4 +308,71 @@ test("a failed send answers 502 with a code, and logs the code without the key",
 test("safeDetail keeps one short line", () => {
   assert.equal(safeDetail({ shortMessage: "Nonce too low.\nDetails: x" }), "Nonce too low.");
   assert.ok(safeDetail(new Error("x".repeat(500))).length <= 120);
+});
+
+test("a body over 1 KB is refused unread, before the chain is touched", async () => {
+  let touched = false;
+  const big = new Request(`${SITE}/api/fund`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: SITE },
+    body: JSON.stringify({ address: USER, pad: "x".repeat(MAX_BODY_BYTES) }),
+  });
+  const res = await handleFund(big, env(), () => ((touched = true), chain().c));
+  assert.equal(res.status, 413);
+  assert.equal(touched, false);
+});
+
+test("an address granted a moment ago is refused on this instance until its grant has had time to land", async () => {
+  let t = 1_000_000;
+  const { c, sentWith } = chain();
+  const ask = () => handleFund(req({ address: USER }), env(), () => c, () => {}, () => t);
+  assert.equal((await ask()).status, 200);
+  const again = await ask();
+  assert.equal(again.status, 409);
+  assert.match(((await again.json()) as { error: string }).error, /just sent/);
+  t += RECENT_MS + 1;
+  assert.equal((await ask()).status, 200);
+  assert.equal(sentWith.length, 2);
+});
+
+test("at most GRANTS_PER_HOUR grants an hour in all, counted from the funder's own nonce", async () => {
+  // The funder's nonce is 40; an hour ago it was 40 - GRANTS_PER_HOUR: the cap is reached.
+  const full = await handleFund(req({ address: USER }), env(), () => chain({ nonceHourAgo: 40 - GRANTS_PER_HOUR }).c);
+  assert.equal(full.status, 503);
+  assert.match(((await full.json()) as { error: string }).error, /busy/);
+  const room = await handleFund(req({ address: USER }), env(), () => chain({ nonceHourAgo: 40 - GRANTS_PER_HOUR + 1 }).c);
+  assert.equal(room.status, 200);
+});
+
+test("if the funder's past nonce can't be read, nothing is granted", async () => {
+  const { c, sentWith } = chain({ historyFails: true });
+  const res = await handleFund(req({ address: USER }), env(), () => c, () => {});
+  assert.equal(res.status, 502);
+  assert.equal(((await res.json()) as { code: string }).code, "RPC_FAILED");
+  assert.equal(sentWith.length, 0);
+});
+
+test("an attacker with endless fresh addresses gets GRANTS_PER_HOUR an hour, not the whole funder", async () => {
+  // One hour, one instance, 200 fresh addresses asked one after another.
+  const sentWith: number[] = [];
+  const startNonce = 40;
+  let nonce = startNonce;
+  const c: FundChain = {
+    ...chain().c,
+    funderNonce: async () => nonce,
+    funderNonceAt: async () => startNonce,
+    sendGrant: async (_to, n) => {
+      sentWith.push(n);
+      nonce = n + 1;
+      return `0x${n.toString(16).padStart(64, "0")}` as Hex;
+    },
+  };
+  let granted = 0;
+  for (let i = 0; i < 200; i++) {
+    const address = `0x${(i + 1).toString(16).padStart(40, "0")}`;
+    const res = await handleFund(req({ address }), env(), () => c, () => {});
+    if (res.status === 200) granted++;
+  }
+  assert.equal(granted, GRANTS_PER_HOUR);
+  assert.equal(sentWith.length, GRANTS_PER_HOUR);
 });

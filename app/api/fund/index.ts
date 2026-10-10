@@ -14,7 +14,14 @@
 //  * Two requests for the same address on different server instances at the
 //    same moment can both pass the balance check, so one address can get two
 //    grants in a race. Nonces never clash: sends are serialized per instance
-//    and a nonce conflict is retried with a fresh nonce.
+//    and a nonce conflict is retried with a fresh nonce. On one instance, an
+//    address granted in the last RECENT_MS is refused while its grant lands.
+//  * At most GRANTS_PER_HOUR grants in all, counted from the funder's own
+//    nonce now and about an hour of blocks ago, so the limit holds across
+//    every instance with no storage. Fresh addresses can still take that
+//    many an hour, but no faster: draining the funder to its floor takes
+//    hours, not seconds, which leaves time for the kill switch.
+//  * Request bodies over MAX_BODY_BYTES are refused unread.
 //
 // The funder key is read only after every check has passed, never when
 // FUNDING_ENABLED is off, and never logged. Logs carry the address, the
@@ -40,6 +47,14 @@ export const THRESHOLD = parseEther("0.075");
 export const MAX_SENT_TXS = 10;
 export const FLOOR = parseEther("1");
 export const GRANT_GAS = 21_000n;
+/** The most grants in about an hour, from every instance together. A full demo take uses 5. */
+export const GRANTS_PER_HOUR = 20;
+/** About an hour of Monad testnet blocks, at 0.31 s a block (docs/APP-CONTRACT-MAP.md section 6). */
+export const BLOCKS_PER_HOUR = 11_600n;
+/** An address granted this recently is refused on the same instance while its grant lands. */
+export const RECENT_MS = 120_000;
+/** A request is one address in JSON: far under this. */
+export const MAX_BODY_BYTES = 1_024;
 
 export type FundEnv = {
   FUNDING_ENABLED?: string;
@@ -62,6 +77,10 @@ export interface FundChain {
   /** Sends GRANT from the funder with this nonce. Throws on a nonce conflict. */
   sendGrant(to: Address, nonce: number, fees: Fees): Promise<Hex>;
   funderNonce(): Promise<number>;
+  /** The newest block number. */
+  latestBlock(): Promise<bigint>;
+  /** Transactions the funder had sent by this block: past state, which the public RPC serves. */
+  funderNonceAt(block: bigint): Promise<number>;
 }
 
 export type Logger = (entry: Record<string, string>) => void;
@@ -97,12 +116,18 @@ function serialized<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 const inFlight = new Set<Address>();
+const recent = new Map<Address, number>();
+/** Clears the recent grants this instance remembers. For tests, which reuse addresses. */
+export function forgetRecentGrants(): void {
+  recent.clear();
+}
 
 export async function handleFund(
   request: Request,
   env: FundEnv,
   makeChain: (env: FundEnv) => FundChain,
   log: Logger = (e) => console.log(JSON.stringify(e)),
+  now: () => number = Date.now,
 ): Promise<Response> {
   if (request.method !== "POST") return json(405, { error: "use POST" });
 
@@ -111,9 +136,12 @@ export async function handleFund(
 
   if (!originAllowed(request, env)) return json(403, { error: "same origin only" });
 
+  if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return json(413, { error: "request too large" });
   let body: unknown;
   try {
-    body = await request.json();
+    const text = await request.text();
+    if (text.length > MAX_BODY_BYTES) return json(413, { error: "request too large" });
+    body = JSON.parse(text);
   } catch {
     return json(400, { error: "send JSON with an address" });
   }
@@ -130,6 +158,8 @@ export async function handleFund(
   if (address === "0x0000000000000000000000000000000000000000") return refuse(400, "not a valid address");
 
   if (inFlight.has(address)) return refuse(409, "a grant for this address is already on its way");
+  for (const [a, at] of recent) if (now() - at > RECENT_MS) recent.delete(a);
+  if (recent.has(address)) return refuse(409, "a grant for this address was just sent");
   inFlight.add(address);
   let stage: "checks" | "send" = "checks";
   try {
@@ -138,6 +168,10 @@ export async function handleFund(
     if (await chain.hasCode(address)) return refuse(409, "only personal accounts can be funded");
     if ((await chain.balance(address)) >= THRESHOLD) return refuse(409, "this account already has enough");
     if ((await chain.sentCount(address)) >= MAX_SENT_TXS) return refuse(409, "this account has reached its limit");
+    // Every instance together: grants in about the last hour, from the funder's own nonce.
+    const [latest, nowNonce] = await Promise.all([chain.latestBlock(), chain.funderNonce()]);
+    const hourAgo = latest > BLOCKS_PER_HOUR ? latest - BLOCKS_PER_HOUR : 0n;
+    if (nowNonce - (await chain.funderNonceAt(hourAgo)) >= GRANTS_PER_HOUR) return refuse(503, "funding is busy, try again later");
 
     const funder = env.FUNDER_ADDRESS && isAddress(env.FUNDER_ADDRESS) ? getAddress(env.FUNDER_ADDRESS) : undefined;
     if (!funder) return refuse(503, "funding is not configured");
@@ -160,6 +194,7 @@ export async function handleFund(
       throw lastError;
     });
 
+    recent.set(address, now());
     log({ event: "grant", address, amountWei: GRANT.toString(), hash });
     return json(200, { hash });
   } catch (error) {
@@ -223,6 +258,8 @@ export function liveChain(env: FundEnv): FundChain {
     balance: (a) => client.getBalance({ address: a }),
     sentCount: (a) => client.getTransactionCount({ address: a, blockTag: "pending" }),
     funderNonce: () => client.getTransactionCount({ address: funderAddress, blockTag: "pending" }),
+    latestBlock: () => client.getBlockNumber(),
+    funderNonceAt: (block) => client.getTransactionCount({ address: funderAddress, blockNumber: block }),
     fees: async () => {
       const [price, tip] = await Promise.all([client.getGasPrice(), client.estimateMaxPriorityFeePerGas()]);
       const maxFeePerGas = (price * 105n) / 100n;

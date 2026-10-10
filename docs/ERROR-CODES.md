@@ -21,13 +21,13 @@ means it was, and the app is still tracking it.
 | Code | What happened | Where to look |
 | --- | --- | --- |
 | 12 | The phone couldn't reach `/api/fund` at all. | Connection, Vercel status |
-| 13 | Funding is paused: `FUNDING_ENABLED` is off, or the funder is at its 1 MON floor. | `/api/fund/status` |
+| 13 | Funding is paused: `FUNDING_ENABLED` is off, the funder is at its 1 MON floor, or 20 grants were already made in about the last hour (`funding is busy, try again later`). | `/api/fund/status`; the funder's recent transactions |
 | 14 | The funder key is malformed or missing, or `FUNDER_ADDRESS` isn't set. | Vercel env vars; `keyMatches` in `/api/fund/status` |
 | 15 | The funder key doesn't belong to `FUNDER_ADDRESS`. | Vercel env vars; `keyMatches` in `/api/fund/status` |
 | 16 | The grant couldn't be sent (`SEND_FAILED`). | Vercel function log, `"event":"failed"` |
 | 17 | The service couldn't read the chain before granting (`RPC_FAILED`). | Vercel function log, RPC status |
 | 18 | The account has sent 10 or more transactions, the per-account limit. | Expected abuse limit |
-| 19 | The service refused for another reason: not a personal account, wrong chain, wrong origin, or not found. | Vercel function log, `"event":"refused"` |
+| 19 | The service refused for another reason: not a personal account, wrong chain, wrong origin, not found, a request over 1 KB, or this address was granted in the last 2 minutes on that server instance. | Vercel function log, `"event":"refused"` |
 | 20 | The grant was sent but wasn't final within 60 seconds. | Funder's recent transactions |
 | 21 | The grant was included but reverted. | The grant transaction |
 | 93 | The account holds more than the grant threshold (0.075 MON), so `/api/fund` won't top it up (`this account already has enough`), but less than this request needs. The threshold sits above the largest single action, the first payment in another currency (about 0.059 MON at 102 gwei), so this happens only if the network price rises above about 130 gwei. Nothing was sent. | The account's balance against the request's gas x max fee |

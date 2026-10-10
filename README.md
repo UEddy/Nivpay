@@ -555,6 +555,9 @@ person's own. Sizes come from the gas measured in
 | Only while the account has sent fewer than | 10 transactions | a full story is 5 or 6 per person, and the last grant is asked for by 3 sent (recounted in `docs/APP-CONTRACT-MAP.md` section 11) |
 | Only accounts with | no contract code | |
 | Funder floor | 1 MON | granting stops before the funder can run dry |
+| Grants an hour, from every server instance together | 20 | counted from the funder's own nonce now and about an hour of blocks ago (11,600), so it needs no storage; a full demo take uses 5. If the past nonce can't be read, nothing is granted |
+| The same address again, on the same instance | refused for 2 minutes after a grant | closes the window while the first grant is still landing |
+| Request body | 1 KB at most | refused unread above that |
 | Kill switch | `FUNDING_ENABLED` not `true` | answers "funding is paused" without reading the key |
 
 `GET /api/fund/status` returns only whether funding is on, whether the
@@ -566,8 +569,10 @@ is.
 **The honest limit.** These rules bound what one address can take, about 10
 grants or 1 MON if someone deliberately spends each grant away. They do not
 bound how many addresses someone can make, and new addresses cost nothing.
-A determined abuser can therefore drain the funder down to its 1 MON floor,
-where granting stops until it is refilled. The same-origin check only stops
+A determined abuser can therefore still drain the funder down to its 1 MON
+floor, where granting stops until it is refilled, but no faster than 20
+grants an hour: about 2 MON an hour instead of everything above the floor
+within a minute. That leaves time to turn `FUNDING_ENABLED` off. The same-origin check only stops
 other websites from using a visitor's browser; a script can send any Origin
 header it likes. Two requests for the same address that reach different
 server instances at the same moment can both be granted. None of this can
