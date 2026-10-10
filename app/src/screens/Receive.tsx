@@ -12,7 +12,8 @@ import { formatAmount, formatCurrency, parseAmount } from "../lib/money.ts";
 import { receiptUrl } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
 import { incomingFrom, incomingSource, RECEIVE_BACKLOG_BLOCKS, senderKind, withFloor, type Incoming } from "../lib/transfer.ts";
-import { Icon, NoticeLine, shareLink } from "./ui.tsx";
+import { Icon, NoticeLine, shareLink, useOnline } from "./ui.tsx";
+import { balanceNote } from "../lib/connection.ts";
 
 const finalized = async () => (await readClient.getBlock({ blockTag: "finalized" })).number;
 
@@ -45,6 +46,8 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
   const me = props.account.address;
   const [decimals, setDecimals] = useState<number | null>(null);
   const [balance, setBalance] = useState<bigint | null>(null);
+  const [balanceReadAt, setBalanceReadAt] = useState<number | null>(null);
+  const online = useOnline();
   const [payments, setPayments] = useState<Arrival[]>([]);
   const [currencies, setCurrencies] = useState<Record<string, Currency>>({});
   const [fresh, setFresh] = useState<Set<string>>(new Set());
@@ -67,6 +70,7 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
       if (alive.current) {
         setDecimals(d);
         setBalance(b);
+        setBalanceReadAt(Date.now());
       }
       return d;
     };
@@ -116,6 +120,7 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
     };
   }, [me]);
 
+  const stale = balanceNote(failed || !online, balanceReadAt);
   const requested = decimals === null ? null : parseAmount(amountText, decimals);
   const url = useMemo(
     () => linkUrl(location.origin, { kind: "pay", deployment: DEPLOYMENT, account: me, name: props.account.name, amount: requested ?? 0n }),
@@ -151,7 +156,8 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
         </p>
         <div className="card enter" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <p className="eyebrow">{copy.yourBalance}</p>
-          <p className="balance-amount">{balance === null || decimals === null ? "…" : formatAmount(balance, decimals, "cents")}</p>
+          <p className={`balance-amount${stale ? " stale" : ""}`}>{balance === null || decimals === null ? "…" : formatAmount(balance, decimals, "cents")}</p>
+          {stale && <p className="hint stale-note">{stale}</p>}
           <p className="hint">{copy.receiveHint}</p>
           <label className="field">
             <span>{copy.requestAmountOptional}</span>

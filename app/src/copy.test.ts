@@ -81,6 +81,7 @@ function allCopy(): [string, string][] {
     accountEnding: [SAMPLE_ID],
     claimAmountHint: ["$10,000", "$100,000"],
     errClaimCooldown: [42],
+    balanceNotLive: ["14:02"],
     errClaimCeiling: ["$100,000"],
     potRowDraft: [3],
     potRowMade: ["Thu 31 Dec 2026"],
@@ -342,11 +343,25 @@ test("no banned word in the page title, description or app manifest", () => {
 });
 
 test("'Nothing has moved' is only said when no request is in flight", () => {
-  assert.match(offlineMessage(0), /Nothing has moved/);
-  for (const unsure of [1, 3, undefined]) {
-    const text = offlineMessage(unsure);
-    assert.doesNotMatch(text, /nothing has moved/i, String(unsure));
-    assert.match(text, /sent and is still being confirmed/, String(unsure));
+  for (const offline of [false, true]) {
+    assert.match(offlineMessage(0, offline), /Nothing has moved/);
+    for (const unsure of [1, 3, undefined]) {
+      const text = offlineMessage(unsure, offline);
+      assert.doesNotMatch(text, /nothing has moved/i, String(unsure));
+      assert.match(text, /saved on this phone and isn't finished/, String(unsure));
+      assert.match(text, /Don't send it again/);
+    }
+  }
+});
+
+test("offline says so, and never calls a request in flight sent, paid or done", () => {
+  for (const n of [0, 1, undefined]) {
+    assert.match(offlineMessage(n, true), /^You're offline\./);
+    assert.doesNotMatch(offlineMessage(n, false), /offline/);
+    for (const offline of [false, true]) {
+      const text = offlineMessage(n, offline).replace("isn't finished", "");
+      assert.doesNotMatch(text, /\b(sent|paid|done|finished|confirmed|went through)\b/i, text);
+    }
   }
 });
 

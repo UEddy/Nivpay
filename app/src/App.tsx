@@ -38,7 +38,8 @@ const CloseScreen = lazy(() => import("./screens/Close.tsx").then((m) => ({ defa
 const SendScreen = lazy(() => import("./screens/Send.tsx").then((m) => ({ default: m.SendScreen })));
 const passkeys = () => import("./lib/passkey.ts");
 const sending = () => import("./lib/send.ts");
-import { formatDay, NoticeLine, phoneTimeZone, type Notice } from "./screens/ui.tsx";
+import { formatDay, NoticeLine, phoneTimeZone, useOnline, type Notice } from "./screens/ui.tsx";
+import { balanceNote } from "./lib/connection.ts";
 
 const accounts = new AccountStore(localStorage);
 const drafts = new DraftStore(localStorage);
@@ -89,9 +90,15 @@ function takeLinkFragment(): string | null {
   return fragment;
 }
 
-/** Connection health comes from real read failures, not navigator.onLine. */
+/**
+ * Connection health: real read failures, and the phone saying it is offline.
+ * Offline is certain when the phone says so; online is only proved by a read
+ * that comes back.
+ */
 function useConnection() {
-  const [down, setDown] = useState(false);
+  const online = useOnline();
+  const [failing, setDown] = useState(false);
+  const down = failing || !online;
   const track = useCallback(async <T,>(p: Promise<T>): Promise<T> => {
     try {
       const v = await p;
@@ -102,7 +109,7 @@ function useConnection() {
       throw e;
     }
   }, []);
-  return { down, track };
+  return { down, offline: !online, track };
 }
 
 function PotMark() {
@@ -254,7 +261,7 @@ function Screens() {
 
   const banner: ReactNode = connection.down && (
     <div className="banner" role="status">
-      {offlineMessage(inFlight)}
+      {offlineMessage(inFlight, connection.offline)}
     </div>
   );
 
@@ -521,9 +528,10 @@ type Holding = { decimals: number; balance: bigint };
  * On the AUSD deployment, "Add test dollars" claims test AUSD from Agora's
  * faucet and only Dollars are shown. On TESTUSD it mints test dollars.
  */
-type Balances =
+type Balances = (
   | { kind: "ausd"; dollars: Holding; faucet: FaucetTerms }
-  | { kind: "testusd"; dollars: Holding; testDollars: Holding; maxMint: bigint };
+  | { kind: "testusd"; dollars: Holding; testDollars: Holding; maxMint: bigint }
+) & { readAt: number };
 
 /** Claims are told apart from mints by their label, which survives a reload. */
 const CLAIM_LABEL = "claim";
@@ -541,14 +549,14 @@ async function readBalances(address: Address): Promise<Balances> {
   };
   if (DEPLOYMENT === "ausd") {
     const [dollars, faucet] = await Promise.all([holding(AUSD), readFaucetTerms(block.number)]);
-    return { kind: "ausd", dollars, faucet };
+    return { kind: "ausd", dollars, faucet, readAt: Date.now() };
   }
   const [testDollars, dollars, maxMint] = await Promise.all([
     holding(TESTUSD),
     holding(AUSD),
     readClient.readContract({ address: TESTUSD, abi: TEST_DOLLAR_ABI, functionName: "MAX_MINT", ...at }),
   ]);
-  return { kind: "testusd", testDollars, dollars, maxMint };
+  return { kind: "testusd", testDollars, dollars, maxMint, readAt: Date.now() };
 }
 
 const STEP_LABEL: Record<Step, string> = {
@@ -670,6 +678,8 @@ function Home(props: {
     });
   }, [account.address, land]);
 
+  // The last balance read stays on screen when reads stop, marked as not up to date.
+  const stale = balanceNote(connection.down, balances?.readAt ?? null);
   const decimals = balances?.kind === "testusd" ? balances.testDollars.decimals : (balances?.dollars.decimals ?? 6);
   const amount = balances?.kind === "ausd" ? balances.faucet.drip : parseAmount(amountText, decimals);
   const tooMuch = amount !== null && balances?.kind === "testusd" && amount > balances.maxMint;
@@ -740,8 +750,9 @@ function Home(props: {
 
       {props.notice && <NoticeLine notice={props.notice} />}
 
-      <section className="card balances" aria-live="polite">
+      <section className={`card balances${stale ? " stale" : ""}`} aria-live="polite">
         <p className="eyebrow">{copy.yourBalance}</p>
+        {stale && <p className="hint stale-note">{stale}</p>}
         {!balances ? (
           <p className="lede">{copy.readingBalance}</p>
         ) : (

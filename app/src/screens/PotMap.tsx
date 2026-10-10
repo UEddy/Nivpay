@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { copy } from "../copy.ts";
 import { loopsOn } from "../lib/loops.ts";
+import { useOnline } from "./ui.tsx";
 import { PERSON_COLORS, payeeSpots, personSpots, reverseRoute, VIEW } from "../lib/potmap.ts";
 
 /**
@@ -149,6 +150,9 @@ export function PotMap(props: {
   const { people, payees } = props;
   const card = useRef<HTMLDivElement>(null);
   const paused = usePausedLoops(card);
+  // Offline, nothing on the map is live: the badge says so and stops its ping.
+  const online = useOnline();
+  const live = props.badge === "live" && online;
   const spots = personSpots(people.length);
   const payeeAt = payeeSpots(payees.length);
   const routes = useRef<(SVGPathElement | null)[]>([]);
@@ -168,7 +172,7 @@ export function PotMap(props: {
     outside: Boolean(props.outsideLoop),
     asked,
     peopleMarch: people.some((p, i) => i < spots.length && p.route === "march"),
-    badgeLive: props.badge === "live" && !props.badgeText,
+    badgeLive: live && !props.badgeText,
   });
   const stream = props.stream && props.stream.payee < payeeAt.length ? props.stream : null;
   const streamLength = stream ? (payeeLengths[stream.payee] ?? 0) : 0;
@@ -441,12 +445,12 @@ export function PotMap(props: {
           )}
         </g>
       </svg>
-      <div className={`map-badge${props.badge === "live" ? " live" : ""}${loops.badgePing ? "" : " quiet"}`}>
+      <div className={`map-badge${live ? " live" : ""}${loops.badgePing ? "" : " quiet"}`}>
         <span className="dot">
           <span />
           <span className="ping" />
         </span>
-        {props.badgeText ?? (props.badge === "live" ? copy.live : copy.draft)}
+        {props.badgeText ?? (live ? copy.live : props.badge === "live" ? copy.notUpToDate : copy.draft)}
       </div>
       {props.children}
     </div>

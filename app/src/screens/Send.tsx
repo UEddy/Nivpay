@@ -18,7 +18,8 @@ import { assertSameQuote, fromCurrencyLabel, quote, received, settlementCalls, s
 import { readSettlement } from "../lib/settleLive.ts";
 import { checkSend, SEND_LABEL, transferData, transferRefused } from "../lib/transfer.ts";
 import { followSequence, followToFinality, type PendingWrite } from "../lib/writes.ts";
-import { Icon, NoticeLine, Sheet, type Notice } from "./ui.tsx";
+import { Icon, NoticeLine, Sheet, useOnline, type Notice } from "./ui.tsx";
+import { balanceNote } from "../lib/connection.ts";
 
 type Recipient = { account: Address; name: string };
 type Done = { to: Recipient; amount: bigint; settledMs: number; hash: Hex; received?: string; setupDone?: boolean };
@@ -57,7 +58,8 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
   const [idText, setIdText] = useState("");
   const [last4, setLast4] = useState("");
   const [amountText, setAmountText] = useState("");
-  const [holding, setHolding] = useState<{ balance: bigint; decimals: number } | null>(null);
+  const [holding, setHolding] = useState<{ balance: bigint; decimals: number; readAt: number } | null>(null);
+  const online = useOnline();
   const [confirming, setConfirming] = useState(false);
   const [step, setStep] = useState<Step | "landing" | null>(null);
   const [stuck, setStuck] = useState(false);
@@ -89,7 +91,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
       readClient.readContract({ address: DOLLAR, abi: ERC20_READ_ABI, functionName: "decimals", ...at }),
       readClient.readContract({ address: DOLLAR, abi: ERC20_READ_ABI, functionName: "balanceOf", args: [me], ...at }),
     ]);
-    if (alive.current) setHolding({ balance, decimals });
+    if (alive.current) setHolding({ balance, decimals, readAt: Date.now() });
   }, [me]);
   useEffect(() => {
     void readHolding().catch(() => {});
@@ -361,6 +363,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
                 </label>
                 {request && request.amount > 0n && <p className="hint">{copy.requestedAmount(money(request.amount))}</p>}
                 {holding && <p className="hint">{copy.yourBalanceIs(formatAmount(holding.balance, decimals, "cents"))}</p>}
+                {holding && !online && <p className="hint stale-note">{balanceNote(true, holding.readAt)}</p>}
                 {OTHER_CURRENCY && (
                   <div className="currency-choice" role="radiogroup" aria-label={copy.theyReceive}>
                     <span className="meta">{copy.theyReceive}</span>

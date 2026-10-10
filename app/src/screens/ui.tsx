@@ -1,7 +1,24 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { copy } from "../copy.ts";
 
 export type Notice = { tone: "ok" | "bad"; text: string; code?: number };
+
+/** Whether the phone says it is online, kept up to date. Offline is certain; online only means it may connect. */
+export function useOnline(): boolean {
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    setOnline(navigator.onLine);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+  return online;
+}
 
 /** A result line. Failures end with a neutral code people can read out to support. */
 export function NoticeLine({ notice }: { notice: Notice }) {

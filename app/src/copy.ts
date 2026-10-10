@@ -84,10 +84,17 @@ const words = {
   errClaimRefused: "Test dollars can't be added right now. Try again in a minute.",
   claimDidNotGoThrough: "That didn't go through. No test dollars moved. Try again in a minute.",
 
-  // Connection. "Nothing has moved" only when no request of ours is in flight.
+  // Connection. "Nothing has moved" only when no request of ours is in flight,
+  // and a request in flight is never called sent or finished: it may not have
+  // left the phone yet.
   offlineNothingInFlight: "Can't connect right now. Nothing has moved. Trying again.",
   offlineRequestInFlight:
-    "Can't connect right now. Your request was sent and is still being confirmed. Don't send it again. Trying again.",
+    "Can't connect right now. Your request is saved on this phone and isn't finished. NivPay keeps checking on it. Don't send it again.",
+  youreOffline: "You're offline. Nothing has moved. NivPay carries on when you're back online.",
+  youreOfflineRequestInFlight:
+    "You're offline. Your request is saved on this phone and isn't finished. NivPay checks on it again when you're back online. Don't send it again.",
+  balanceNotLive: (time: string) => `Not up to date. Last checked at ${time}.`,
+  notUpToDate: "Not up to date",
 
   // Hosts
   onlyAtHome: (home: string) => `Accounts can only be made and used at ${home}. This copy of NivPay is for testing and can't hold an account.`,
@@ -613,7 +620,8 @@ export const copy = withSentenceStarts(words);
  * The connection banner. "Nothing has moved" is only true when no request of
  * ours is in flight; when that is unknown, it is not claimed.
  */
-export function offlineMessage(requestsInFlight: number | undefined): string {
+export function offlineMessage(requestsInFlight: number | undefined, offline = false): string {
+  if (offline) return requestsInFlight === 0 ? copy.youreOffline : copy.youreOfflineRequestInFlight;
   return requestsInFlight === 0 ? copy.offlineNothingInFlight : copy.offlineRequestInFlight;
 }
 

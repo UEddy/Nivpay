@@ -451,3 +451,13 @@ h2 {
   font-weight: 600;
   color: var(--ink);
 }
+
+/* A balance from the last read that came back, while reads aren't: dimmed, with when it was read. */
+.balances.stale .balance-amount,
+.balance-amount.stale {
+  opacity: 0.55;
+}
+
+.stale-note {
+  margin: 4px 0 0;
+}
