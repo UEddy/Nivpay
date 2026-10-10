@@ -426,6 +426,7 @@ The documents behind the design:
 | `docs/MOTION.md` | animation rules |
 | `docs/ERROR-CODES.md` | every "Code N" the app can show |
 | `docs/DEMO.md` | the script for recording the demo on production, and the 2 minute bounty path |
+| `docs/PERF-S10.md` | measuring the motions at 60fps on a Galaxy S10 over USB, with laptop figures for comparison |
 | `docs/BOUNTIES.md` | the Agora bounty and how the app meets it |
 | `docs/SUBMISSION.md` | the hackathon terms checklist |
 | `docs/design/` | the design comps for the core screens |

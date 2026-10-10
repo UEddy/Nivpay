@@ -142,3 +142,13 @@ test("every transaction under Monad integration links to its own hash on MonadVi
   // Accounts named there are written with their checksum, as the app shows them.
   for (const [, a] of section.matchAll(/`(0x[0-9a-fA-F]{40})`/g)) assert.equal(a, getAddress(a!));
 });
+
+test("docs/PERF-S10.md covers the five motions, and every demo step it points to exists", () => {
+  const perf = doc("docs/PERF-S10.md");
+  const rows = [...perf.matchAll(/^\| (Timeline Replay|Close|Create|ChipIn|Approve) \|/gm)].map((m) => m[1]);
+  assert.deepEqual([...new Set(rows)].sort(), ["Approve", "ChipIn", "Close", "Create", "Timeline Replay"]);
+  const steps = [...perf.matchAll(/DEMO\.md step (\d+\.\d+)(?: or (\d+\.\d+))?|after step (\d+\.\d+)/g)].flatMap((m) => [m[1], m[2], m[3]].filter(Boolean) as string[]);
+  assert.ok(steps.length >= 5);
+  for (const s of steps) assert.match(DEMO, new RegExp(`^\| ${s.replace(".", "\.")} \|`, "m"), `DEMO.md step ${s}`);
+  assert.match(perf, /https:\/\/developer\.samsung\.com\/android-usb-driver/);
+});
