@@ -64,6 +64,7 @@ export function ChipInScreen(props: {
   onName: (name: string) => void;
   onOpenRequest: (proposalId: bigint) => void;
   onOpenStory: () => void;
+  onOpenClose: () => void;
   onClose: () => void;
 }) {
   const { account } = props;
@@ -494,9 +495,14 @@ export function ChipInScreen(props: {
             {copy.askForPayment}
           </button>
         )}
-        <button type="button" className="text-btn story-link" onClick={props.onOpenStory}>
-          {copy.openStory}
-        </button>
+        <div className="foot-row">
+          <button type="button" className="text-btn story-link" onClick={props.onOpenStory}>
+            {copy.openStory}
+          </button>
+          <button type="button" className="text-btn story-link" onClick={props.onOpenClose}>
+            {state.closed ? copy.seeTheSplit : copy.closeAndSplit}
+          </button>
+        </div>
         {!info.labelsOk && <p className="hint">{copy.namesUnchecked}</p>}
         {shareNote && <p className="hint">{shareNote}</p>}
       </div>

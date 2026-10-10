@@ -58,6 +58,7 @@ const ICONS = {
     </>
   ),
   chevron: <path d="M9 18l6-6-6-6" />,
+  check: <path d="M20 6L9 17l-5-5" />,
   more: (
     <>
       <circle cx="5" cy="12" r="1" />

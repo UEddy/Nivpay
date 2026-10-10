@@ -10,8 +10,8 @@ The map and the pot are how people see where their money is. Every animation sta
 | Someone chips in | their deposit event | coin flies from their city to the pot, a layer in their colour rises, the counter ticks up | 0.9s flight, then 0.75s fill |
 | Payment asked | proposal event, finalized | the vendor's route marches (dotted) and the vendor ring pulses until it is decided. Meanwhile the live badge stops its ping, so there are still two loops at most | loop |
 | Payment approved and paid | payout event, finalized; for your own yes, its finalized receipt | pot tilts, a stream runs down the vendor route, every layer drops by the same share, vendor fills with a check (`PAID_MOTION` in `app/src/lib/payout.ts`) | about 2.2s |
-| Pot closed | close event | dotted streams run from the pot to each city, each person's amount appears | about 1.2s |
-| Share taken | claim event | coin flies from the pot to that city, the city gets a check | 0.9s |
+| Pot closed | close event, finalized, or the pot found closed at its date | dotted streams run from the pot to each city, each person's amount appears, 150ms apart (`app/src/screens/Close.tsx`) | about 1.2s |
+| Share taken | your own: from the fingerprint, landing on the finalized receipt of the exit or claim | coin flies from the pot to that city and waits there pulsing until final, then the city gets a check; it flies back if it fails | 0.9s |
 | Story replay | tap Replay | the whole history in about 7s, list rows light up in step | about 7s |
 
 ## 2. Live, but honest

@@ -1489,3 +1489,55 @@
 .story-foot:empty {
   display: none;
 }
+
+/* Pot closed: dotted streams run from the pot to each city, then each amount appears, about 1.2 s in all. */
+.route.split {
+  stroke-width: 2.2;
+  stroke-dasharray: 1px 6px;
+  animation: lv-fade 400ms ease-out both;
+}
+
+.map-share {
+  font: 600 12px var(--font-display);
+  animation: lv-fade var(--dur-swap) ease-out both;
+}
+
+/* ------------------------------------------------------------------------
+ * Close and split (Live-Close)
+ * --------------------------------------------------------------------- */
+
+.share-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.share-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.share-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--person-2);
+  font-weight: 600;
+}
+
+.share-amount {
+  font: 600 32px/1.1 var(--font-display);
+}
+
+.share-why {
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}

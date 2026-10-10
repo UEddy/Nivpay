@@ -152,6 +152,21 @@ function allCopy(): [string, string][] {
     payeeReplyAdded: ["Chidi", "Caterer"],
     errOverLimit: ["$100", "Caterer"],
     errPotShort: ["$397.00"],
+    closesAt: ["Thu 31 Dec 2026, 23:59"],
+    closeSummary: ["$1,000", "$880", "$4.40", "$115.60"],
+    shareBecause: ["$500", "half"],
+    closedEarlyLine: ["14 Dec", "You", "Ubong"],
+    closedEarlyPlain: ["14 Dec"],
+    closedOnDateLine: ["31 Dec"],
+    closedBadge: ["14 Dec"],
+    takeMyShareOut: ["$57.80"],
+    takeMy: ["$57.80"],
+    tookLine: ["$57.80"],
+    tookOthers: ["Ubong and Aniekan"],
+    tookAnnounce: ["$57.80"],
+    mapClosed: ["$115.60", "$57.80 to Idara, $46.24 to Ubong"],
+    mapShare: ["Idara", "$57.80"],
+    mapOpenShares: ["$1,000"],
     fractionPercent: ["40"],
     wantsToClose: ["Idara"],
     moreYesCloses: [1],
@@ -250,6 +265,7 @@ test("a payment request reads in plain words: a yes, never an approval", () => {
   assert.equal(copy.yesPaysNow(2, 3, "Caterer"), "That's 2 of 3. Paying Caterer now.");
   assert.equal(copy.paidLine("$600", "Caterer", "$397.00"), "Paid $600 to Caterer. The pot has $397.00.");
   assert.equal(copy.needsYesesWithin(2, 7), "Requests need 2 yeses within 7 days, or they expire.");
+  assert.equal(copy.shareBecause("$500", "half"), "You put in $500, half of the pot, so half of what's left is yours.");
   assert.equal(copy.askCountsAsYes(1, "Caterer"), "Asking counts as your yes. 1 more yes pays Caterer.");
   assert.equal(copy.askCountsAsYes(2, "Caterer"), "Asking counts as your yes. 2 more yeses pay Caterer.");
   assert.equal(copy.askCountsAsYes(0, "Caterer"), "This pot needs only one yes, so asking pays Caterer straight away.");

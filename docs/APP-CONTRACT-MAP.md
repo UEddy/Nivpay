@@ -655,3 +655,39 @@ in `app/src/lib/story.ts`.
   about 3,000 log reads before its story is complete; at the measured
   0.5 s a read and 4 pages at a time, a few minutes. Later opens read only
   what is new. The fix is the snapshot planned in section 10.
+
+## 13. Close and split, built (10 Oct 2026)
+
+Screen 5 (`Live-Close`), `app/src/screens/Close.tsx`, rules in
+`app/src/lib/close.ts`, calls in `closeLive.ts`. Reached from the pot
+screen, the story's More options, its Take my share out button, and a close
+request once agreed.
+
+* **When it closes, from the source.** Closed is `closedFlag || block.timestamp
+  >= endTime` (`_isClosed`), so a pot is closed from its closing time on
+  whether or not anyone records it. Before that, only an agreed close
+  request (`proposeClose`, then yeses through the same request screen as a
+  payment) closes it. A pause does not stop a close request. `closePot` only
+  records a dated close as an event; the app does not send it, since claims
+  work without it.
+* **Nothing is sent at close.** Each person takes their own: `exit(potId,
+  sharesOf)` while open, in every state (paused, with a payment waiting,
+  after a payment), and `claim(potId)` once closed. An `exit` after close is
+  told as `Claimed`, as the contract emits it. The contract's own tests for
+  this pass: `test_exit_worksWhileFrozen`, `_worksWithAPendingProposal`,
+  `_worksAfterCloseAndEmitsClaimed`, `test_mamas60th_aniekanExitsMidway` and
+  the claim tests, 14 in all, run 10 Oct 2026.
+* **Each share before it happens:** `funderInfo(potId, person).redeemable`
+  at the finalized block for every named person, plus what is left for
+  anyone not named and rounding. These are the amounts the contract pays,
+  rounded down.
+* **The reason line is said only when true** (agreed 10 Oct 2026). The comp's
+  "You put in $500, half the pot, so half of what's left is yours" holds only
+  when this account's part of the shares equals its part of what was put in:
+  a pour after a payment buys shares at the lower value, and a share taken
+  out changes the parts. Otherwise: "Your share of what's left, worked out
+  from when you put money in."
+* **Refusals:** nothing to take (94), already closed (95), not closed yet
+  (96), anything else (97); asking to close as a non decider is 22. Each is
+  found by running the request as a call first. The usual write path after
+  that: resume on reload, retry on the same nonce, 52, 53, 56.

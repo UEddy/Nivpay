@@ -32,6 +32,7 @@ import { JoinScreen } from "./screens/Join.tsx";
 import { ReceiveScreen } from "./screens/Receive.tsx";
 import { RequestScreen } from "./screens/Request.tsx";
 import { TimelineScreen } from "./screens/Timeline.tsx";
+import { CloseScreen } from "./screens/Close.tsx";
 import { SendScreen } from "./screens/Send.tsx";
 import { formatDay, NoticeLine, phoneTimeZone, type Notice } from "./screens/ui.tsx";
 
@@ -48,6 +49,7 @@ type Screen =
   | { kind: "pot"; pot: StoredPot }
   | { kind: "request"; pot: StoredPot; proposalId: bigint }
   | { kind: "story"; pot: StoredPot }
+  | { kind: "close"; pot: StoredPot }
   | { kind: "send"; request: PayLink | null }
   | { kind: "receive" };
 
@@ -268,6 +270,7 @@ export function App() {
         onName={(name) => screen.pot.fragment && pots.put({ ...screen.pot, name })}
         onOpenRequest={(proposalId) => go({ kind: "request", pot: screen.pot, proposalId })}
         onOpenStory={() => go({ kind: "story", pot: screen.pot })}
+        onOpenClose={() => go({ kind: "close", pot: screen.pot })}
         onClose={() => go({ kind: "home" })}
       />
     );
@@ -281,6 +284,27 @@ export function App() {
         banner={banner}
         onBack={() => go({ kind: "pot", pot: screen.pot })}
         onOpenRequest={(proposalId) => go({ kind: "request", pot: screen.pot, proposalId })}
+        onOpenClose={() => go({ kind: "close", pot: screen.pot })}
+        footer={(state) => {
+          const worth = state.held[active.address.toLowerCase()] ?? 0n;
+          return worth > 0n ? (
+            <button type="button" className="pill-btn outline" onClick={() => go({ kind: "close", pot: screen.pot })}>
+              {state.closed ? copy.takeMy(formatAmount(worth, state.decimals, "cents")) : copy.takeMyShareOut(formatAmount(worth, state.decimals, "cents"))}
+            </button>
+          ) : null;
+        }}
+      />
+    );
+  }
+  if (active && !switching && screen.kind === "close") {
+    return (
+      <CloseScreen
+        key={screen.pot.potId + ":" + active.address}
+        account={active}
+        pot={screen.pot}
+        banner={banner}
+        onBack={() => go({ kind: "story", pot: screen.pot })}
+        onOpenRequest={(proposalId) => go({ kind: "request", pot: screen.pot, proposalId })}
       />
     );
   }
@@ -293,6 +317,7 @@ export function App() {
         proposalId={screen.proposalId}
         banner={banner}
         onClose={() => go({ kind: "pot", pot: screen.pot })}
+        onOpenClose={() => go({ kind: "close", pot: screen.pot })}
       />
     );
   }

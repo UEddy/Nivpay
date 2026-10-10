@@ -29,6 +29,13 @@ export type MapPerson = {
   check?: boolean;
   ping?: boolean;
   route: "pencil" | "march" | "solid" | "none";
+  /**
+   * The pot is closed: a dotted stream runs from the pot back to this city,
+   * and `share` (their amount) appears beside it, a little after the one
+   * before (docs/MOTION.md, "Pot closed").
+   */
+  split?: boolean;
+  share?: string;
 };
 
 /**
@@ -192,6 +199,7 @@ export function PotMap(props: {
                   }`}
                   style={{ stroke: color }}
                 />
+                {p.split && <path d={reverseRoute(s.route)} className="route split" style={{ stroke: color, animationDelay: `${i * 150}ms` }} />}
               </g>
             );
           })}
@@ -369,6 +377,17 @@ export function PotMap(props: {
                 <text x={s.label.x} y={s.label.y} className="map-city" textAnchor={s.label.anchor}>
                   {p.city}
                 </text>
+                {p.share && (
+                  <text
+                    x={s.label.x}
+                    y={s.label.y + 29}
+                    className="map-share"
+                    textAnchor={s.label.anchor}
+                    style={{ fill: PERSON_COLORS[i]!.text, animationDelay: `${300 + i * 150}ms` }}
+                  >
+                    {p.share}
+                  </text>
+                )}
                 <text
                   x={s.label.x}
                   y={s.label.y + 13}

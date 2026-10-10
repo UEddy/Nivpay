@@ -36,7 +36,7 @@ phone or a decision.
 | Pour in your share | Done | Pot 0 holds a pour from a second account. |
 | Ask for a payment, and say yes | Built, needs the phone test | `app/src/screens/Ask.tsx`, `Request.tsx`, `app/src/lib/payout.ts`, `waiting.ts`. Unit tests for every state; live read-only tests against pot 0. Nothing has been signed on testnet with it yet. |
 | The pot's story | Built, needs the phone test | `app/src/screens/Timeline.tsx`, `app/src/lib/story.ts`, `blockTimes.ts`. Unit tests for every row kind, ordering and the replay; a live read-only test checks the replay's arithmetic against `funderInfo` on pot 0. A phone that has never opened pot 0 reads about 1,480 pages of history the first time. |
-| Close and split | Not built yet | |
+| Close and split | Built, needs the phone test | `app/src/screens/Close.tsx`, `app/src/lib/close.ts`, `closeLive.ts`. Unit tests for every state; live read-only tests on pot 0 run its holder's exit, a stranger's, a claim before close and a close request as calls. The contract's own exit and claim tests pass (14). Nothing has been signed on testnet with it yet. |
 
 ## Agora bounty: Best Cross-Border Payments App on Monad
 

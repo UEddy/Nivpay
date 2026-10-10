@@ -536,7 +536,7 @@ finalized events; nothing lands before Finalized.
 | Pour in your share | `app/src/screens/ChipIn.tsx` | Built; pot 0 holds a pour from a second account |
 | Ask for a payment, and say yes | `app/src/screens/Ask.tsx`, `Request.tsx` | Built, checked with unit and live read-only tests; needs the phone run. A named decider sees a request waiting for their yes on Home with no link. |
 | The pot's story | `app/src/screens/Timeline.tsx`, `app/src/lib/story.ts` | Built, checked with unit and live read-only tests; needs the phone run. Reading a pot's whole history is slow the first time (see Known limits below) |
-| Close and split | | After the story |
+| Close and split | `app/src/screens/Close.tsx`, `app/src/lib/close.ts` | Built, checked with unit and live read-only tests; needs the phone run. Closing early is a request with yeses, like a payment; taking your share out works in every state the contract allows |
 
 Deciders "say yes"; the app never shows the word "approve", which the
 product language check (`app/src/copy.test.ts`) refuses everywhere people

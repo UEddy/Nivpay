@@ -60,7 +60,15 @@ export function layersOf(people: Who[], state: PotState): Layer[] {
 }
 
 /** A payment request: say yes, take a yes back, or follow it (docs/design/Live-Approve.dc.html). */
-export function RequestScreen(props: { account: StoredAccount; pot: StoredPot; proposalId: bigint; banner: ReactNode; onClose: () => void }) {
+export function RequestScreen(props: {
+  account: StoredAccount;
+  pot: StoredPot;
+  proposalId: bigint;
+  banner: ReactNode;
+  onClose: () => void;
+  /** Close and split, once a request to close early is agreed. */
+  onOpenClose?: () => void;
+}) {
   const me = props.account.address;
   const { proposalId } = props;
   const link = useMemo(() => linkFor(props.pot), [props.pot]);
@@ -526,9 +534,15 @@ export function RequestScreen(props: { account: StoredAccount; pot: StoredPot; p
               </svg>
               {doneLine}
             </p>
-            <button type="button" className="pill-btn" onClick={props.onClose}>
-              {copy.done}
-            </button>
+            {closing && props.onOpenClose ? (
+              <button type="button" className="pill-btn" onClick={props.onOpenClose}>
+                {copy.seeTheSplit}
+              </button>
+            ) : (
+              <button type="button" className="pill-btn" onClick={props.onClose}>
+                {copy.done}
+              </button>
+            )}
           </>
         ) : (
           <>
