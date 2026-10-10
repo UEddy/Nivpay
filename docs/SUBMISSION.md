@@ -38,6 +38,20 @@ phone or a decision.
 | The pot's story | Built, browser checked, needs the phone test | `app/src/screens/Timeline.tsx`, `app/src/lib/story.ts`, `blockTimes.ts`. Unit tests for every row kind, ordering and the replay; a live read-only test checks the replay's arithmetic against `funderInfo` on pot 0. A phone that has never opened pot 0 reads about 1,480 pages of history the first time. |
 | Close and split | Built, browser checked, needs the phone test | `app/src/screens/Close.tsx`, `app/src/lib/close.ts`, `closeLive.ts`. Unit tests for every state; live read-only tests on pot 0 run its holder's exit, a stranger's, a claim before close and a close request as calls. The contract's own exit and claim tests pass (14). Nothing has been signed on testnet with it yet. |
 
+## The closing date, stated exactly
+
+The contract enforces the closing time (`endTime`, fixed when the pot is
+made): from that second nothing can go in, no payment can be asked for or
+paid, and no early close can be asked for, whether or not anyone does
+anything. Taking your own share out works before and after; taking a share
+of what is left needs the pot closed. Nothing is sent to anyone at close:
+each person takes their own share, with no deadline, and a share nobody
+takes stays in the contract. The app only turns the chosen day into the end
+of that day in the maker's time zone, refuses a time under 10 minutes away,
+and shows it; it does not enforce the date. Full table: README, The rules,
+and `docs/APP-CONTRACT-MAP.md` section 15. Any pitch or video line must not
+say the money "goes back" by itself.
+
 ## Agora bounty: Best Cross-Border Payments App on Monad
 
 Requirements as given: passkey onboarding, an AUSD balance, and a completed

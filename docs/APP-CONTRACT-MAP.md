@@ -179,7 +179,7 @@ All current numbers are view calls at the `finalized` block. History is events.
 | all | token label and symbol | `token()` then the token's `symbol()` and `decimals()` |
 | Create | "up to $700", "up to $300" | inputs; after creation `getDestinations(potId)[i].cap` |
 | Create | "2 of 3" | `getPot.threshold`, `getPot.approverCount` |
-| Create | "Closes Thu 31 Dec 2026" | `getPot.endTime`, formatted with `Intl.DateTimeFormat` |
+| Create | "Closes at the end of Thu 31 Dec 2026" | the chosen day; `endTime` is the end of that day in the maker's time zone, and after creation `getPot.endTime`, formatted in the viewer's own time |
 | Chip in | "Idara $500" per person | sum of `Funded.assets` per funder from events |
 | Chip in | "Aniekan not yet" | no `Funded` event from that address |
 | Chip in | "From your balance of $620.00" | token `balanceOf(me)` at finalized |
@@ -207,7 +207,7 @@ All current numbers are view calls at the `finalized` block. History is events.
 | Close | "$4.40 went on fees" | sum of `PayoutExecuted.fee` |
 | Close | "The last $115.60" | `Closed.remainingAssets`, or `getPot.totalAssets` before anyone claims |
 | Close | "$57.80, $46.24, $11.56" | `funderInfo(potId, person).redeemable` per person, then `Claimed.assets` once taken |
-| Close | "You put in $500, half the pot" | your `Funded` sum over the total `Funded` sum, adjusted for exits |
+| Close | "You put in $500, half of the pot" | said only when your part of `totalShares` equals your part of the `Funded` sum and nobody has taken a share out (section 13); else no reason is given |
 | Close | "Your share, In your balance" | `Claimed` event for you, then token `balanceOf(me)` |
 
 ## 5. Gaps and how to handle each without changing the contracts
@@ -723,3 +723,49 @@ out) was not run in the browser.
 
 Headless Chromium on a laptop is not an S10; the real frame budget is for
 the phone test. What the check found is fixed in `89ed338`, `3247dd4` and `ff77eff`.
+
+## 15. The closing time, exactly (10 Oct 2026)
+
+Read from `src/NivPayPots.sol`. "Closed" is `_isClosed`: `closedFlag ||
+block.timestamp >= endTime`. `endTime` is set by `createPot`, must be in the
+future then (`EndTimeInPast`), and no function changes it.
+
+| | Before the closing time | From the closing time on | Who |
+| --- | --- | --- | --- |
+| Put money in (`fund`, `fundWithPermit`) | yes, unless paused | refused, `PotClosed` | anyone |
+| Ask for a payment (`proposePayout`) | yes, unless paused | refused, `PotClosed` | a decider |
+| A yes that pays (`approve` reaching the rule) | pays, in that request | refused, `PotClosed`; nothing is paid | a decider |
+| A yes short of the rule (`approve`) | recorded | still recorded, but it can never pay | a decider |
+| Ask to close early (`proposeClose`), and the yes that closes | yes, even while paused | refused, `PotClosed` | deciders |
+| Take your own share out (`exit`) | yes, in every state | yes, told as `Claimed` | whoever holds shares |
+| Take your share of what is left (`claim`) | refused, `PotNotClosed` | yes, whenever you like, no deadline | whoever holds shares |
+| Record the close as an event (`closePot`) | refused, `PotNotClosed` | once, by anyone; it changes nothing else | anyone |
+| Take back a yes, withdraw a request, pause | yes | yes, though there is nothing left for them to change | deciders, the asker |
+| Change the closing time | never | never | nobody |
+
+**If nobody does anything on the date,** the pot is closed anyway, from the
+first block whose timestamp reaches `endTime`: every view reports it closed
+and every call above behaves as closed. Nothing is sent to anyone and no
+event is emitted. The money stays in the contract, each person's share stays
+theirs, and each takes it whenever they like, with no deadline and no sweep:
+a share nobody claims stays in the contract for good. Payment requests still
+open can never pay, and expire on their own 7 days after they were asked.
+
+**What only the app does:**
+
+* It turns the chosen day into the exact second: `endTime` is the end of
+  that day in the maker's time zone (`endTimeFor` in `app/src/lib/draft.ts`).
+  Someone in another time zone sees the same second in their own time, which
+  may be a different date. The contract only ever sees the second.
+* It refuses a closing time less than 10 minutes away. The contract only
+  requires it to be in the future when the pot is made (`EndTimeInPast`).
+* It reads "closed" at the finalized block's time, about a second behind the
+  newest block, so for about a second either side of the closing time the
+  app and the contract can disagree. The contract's answer is the one that
+  counts.
+* It never calls `closePot`, so a pot closed by its date has no `Closed`
+  event: the story shows no row for it, and close and split says it closed
+  on its date from `endTime` alone.
+
+The app does not enforce the date. The contract does, on every call above,
+and would do so with the app gone.

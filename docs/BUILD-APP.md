@@ -6,9 +6,9 @@ Read first, in this order: `CLAUDE.md` if it exists (its rules win over this fil
 
 ## What NivPay is
 
-A group purse for one purpose that no single person can pocket. A pot has fixed destinations with limits, a rule for how many deciders must approve a payment (for example 2 of 3), and a closing date. Invited people chip in. Money only leaves as an approved payment to a listed destination or as a person's own share. Whatever is left goes back to each person in proportion to what they put in.
+A group purse for one purpose that no single person can pocket. A pot has fixed destinations with limits, a rule for how many deciders must approve a payment (for example 2 of 3), and a closing date. Invited people chip in. Money only leaves as an approved payment to a listed destination or as a person's own share. From the closing date nothing more can go in or be paid out, and whatever is left belongs to each person by their share (in proportion to what they put in when everyone puts in before any payment); each takes their own, since the contract sends nothing at close.
 
-The demo story (for the demo video only; never hardcode it in the app): "Mama's 60th". Idara in London, Ubong in Houston, Aniekan in Uyo. The pot pays only the Caterer (limit $700) and the Event hall (limit $300). 2 of 3 must approve. It closes Thu 31 Dec 2026. Idara puts in $500, Ubong $400, Aniekan $100. The Caterer gets $600 (fee $3.00) and the hall $280 (fee $1.40). $115.60 is left, which splits $57.80, $46.24 and $11.56.
+The demo story (for the demo video only; never hardcode it in the app): "Mama's 60th". Idara in London, Ubong in Houston, Aniekan in Uyo. The pot pays only the Caterer (limit $700) and the Event hall (limit $300). 2 of 3 must approve. It closes at the end of Thu 31 Dec 2026 in Idara's time zone (London): from then nothing more can go in or be paid out. Idara puts in $500, Ubong $400, Aniekan $100. The Caterer gets $600 (fee $3.00) and the hall $280 (fee $1.40). $115.60 is left. Nobody is sent anything at close: each takes their own share whenever they like, $57.80, $46.24 and $11.56, which follow what each put in only because everyone put in before the first payment.
 
 ## Fixed facts
 

@@ -3,9 +3,10 @@
 **A pot is a group purse for one purpose that no single person can pocket.**
 
 Money goes in from anyone. It can only come out to destinations fixed when the
-pot was created, and only when enough of the named approvers agree. When the
-pot ends, whatever is left goes back to the people who put it in, split by what
-they contributed.
+pot was created, and only when enough of the named approvers agree. From its
+closing time nothing more can go in or be paid out, and whatever is left
+belongs to the people with money in it, by their share; each takes their own
+whenever they like. Nothing is sent to anyone automatically.
 
 Built for the Monad Metropolis hackathon, Consumer Products and Payments
 track. [CHECK: the track name matches the one you enter on the submission
@@ -67,6 +68,57 @@ proposal, or an approver who has stopped cooperating.**
 proposal. After close there is no funding and no payout, and funders claim
 their share whenever they like. Claims are pulled, never pushed in a loop.
 
+What the contract enforces about the closing time (`endTime`, fixed when the
+pot is made and never changeable), read from `src/NivPayPots.sol`. "Closed"
+is `_isClosed`: `closedFlag || block.timestamp >= endTime`.
+
+| | Before the closing time | From the closing time on | Who |
+| --- | --- | --- | --- |
+| Put money in (`fund`, `fundWithPermit`) | yes, unless paused | refused, `PotClosed` | anyone |
+| Ask for a payment (`proposePayout`) | yes, unless paused | refused, `PotClosed` | a decider |
+| A yes that pays (`approve` reaching the rule) | pays, in that request | refused, `PotClosed`; nothing is paid | a decider |
+| A yes short of the rule (`approve`) | recorded | still recorded, but it can never pay | a decider |
+| Ask to close early (`proposeClose`), and the yes that closes | yes, even while paused | refused, `PotClosed` | deciders |
+| Take your own share out (`exit`) | yes, in every state | yes, told as `Claimed` | whoever holds shares |
+| Take your share of what is left (`claim`) | refused, `PotNotClosed` | yes, whenever you like, no deadline | whoever holds shares |
+| Record the close as an event (`closePot`) | refused, `PotNotClosed` | once, by anyone; it changes nothing else | anyone |
+| Take back a yes, withdraw a request, pause | yes | yes, though there is nothing left for them to change | deciders, the asker |
+| Change the closing time | never | never | nobody |
+
+**If nobody does anything on the date,** the pot is closed anyway, from the
+first block whose timestamp reaches `endTime`: every view reports it closed
+and every call above behaves as closed. Nothing is sent to anyone and no
+event is emitted. The money stays in the contract, each person's share stays
+theirs, and each takes it whenever they like, with no deadline and no sweep:
+a share nobody claims stays in the contract for good. Payment requests still
+open can never pay, and expire on their own 7 days after they were asked.
+
+**What only the app does:**
+
+* It turns the chosen day into the exact second: `endTime` is the end of
+  that day in the maker's time zone (`endTimeFor` in `app/src/lib/draft.ts`).
+  Someone in another time zone sees the same second in their own time, which
+  may be a different date. The contract only ever sees the second.
+* It refuses a closing time less than 10 minutes away. The contract only
+  requires it to be in the future when the pot is made (`EndTimeInPast`).
+* It reads "closed" at the finalized block's time, about a second behind the
+  newest block, so for about a second either side of the closing time the
+  app and the contract can disagree. The contract's answer is the one that
+  counts.
+* It never calls `closePot`, so a pot closed by its date has no `Closed`
+  event: the story shows no row for it, and close and split says it closed
+  on its date from `endTime` alone.
+
+The app does not enforce the date. The contract does, on every call above,
+and would do so with the app gone.
+
+**What a share is.** Shares are minted at the value per share when money
+goes in, and a payment lowers the value of every share alike. So a share of
+what is left follows what each person put in only when everyone put in
+before any payment and nobody took a share out early. Otherwise the
+contract's split is still exact and fair (a later funder never pays for
+spending before they joined), but it is not "by what each put in".
+
 **Freezing.** Any single approver can freeze a pot. That halts payouts and new
 funding and nothing else. Unfreezing needs a threshold approved proposal. A
 freeze never touches exits or claims.
@@ -114,8 +166,9 @@ the event hall, each with its own cap.
 | Pot reaches its end time and closes | | 121.3 |
 | Each sibling claims | 60.65, 48.52, 12.13 | 0 |
 
-878.7 of the 1000 leaves the pot and 121.3 remains, split by contribution with
-no dust left over. The test asserts
+878.7 of the 1000 leaves the pot and 121.3 remains. Everyone put in before
+the first payment, so here the split follows each contribution, with no dust
+left over. Each sibling has to claim; nothing is sent to them at close. The test asserts
 `paid out + fees + claimed == funded` exactly.
 
 ## Why Monad
@@ -535,7 +588,7 @@ finalized events; nothing lands before Finalized.
 | Make a pot | `app/src/screens/Create.tsx` | Built; pot 0 on the AUSD pots was made on testnet on 9 Oct 2026 |
 | Pour in your share | `app/src/screens/ChipIn.tsx` | Built; pot 0 holds a pour from a second account |
 | Ask for a payment, and say yes | `app/src/screens/Ask.tsx`, `Request.tsx` | Built, checked with unit and live read-only tests; needs the phone run. A named decider sees a request waiting for their yes on Home with no link. |
-| The pot's story | `app/src/screens/Timeline.tsx`, `app/src/lib/story.ts` | Built, checked with unit and live read-only tests; needs the phone run. Reading a pot's whole history is slow the first time (see Known limits below) |
+| The pot's story | `app/src/screens/Timeline.tsx`, `app/src/lib/story.ts` | Built, checked with unit and live read-only tests; needs the phone run. On a first open the history fills newest first in the background (see [Known limits](#known-limits)) |
 | Close and split | `app/src/screens/Close.tsx`, `app/src/lib/close.ts` | Built, checked with unit and live read-only tests; needs the phone run. Closing early is a request with yeses, like a payment; taking your share out works in every state the contract allows |
 
 Deciders "say yes"; the app never shows the word "approve", which the
@@ -613,6 +666,29 @@ instance bound to a worthless test token is described under
   tokens, verified with a token that actually attempts reentry.
 * No owner, no upgradeability, no delegatecall, no global pause. All loops are
   bounded by `MAX_APPROVERS` and `MAX_DESTINATIONS`, both 10.
+
+## Known limits
+
+These are limits of the design as built, stated so nobody relies on more.
+
+* **The closing time is enforced by the contract, not by the app**, and only
+  as the table under [The rules](#the-rules) says. Nothing happens on the
+  date by itself: nobody is paid, and each person has to take their own
+  share. The app is not a safety net for the date; it only shows it.
+* **A share nobody takes stays in the contract for good.** There is no
+  deadline, no sweep and no recovery. A person who loses the passkey that
+  holds their account can never take their share; nobody else can take it
+  for them, and no admin can move it.
+* **Payment requests that never reach the rule expire after 7 days** and are
+  never paid after close. A request that is still open keeps any yes it has
+  until then.
+* **The closing day is the maker's day.** `endTime` is the end of the chosen
+  day in the maker's time zone. People elsewhere see the same moment in
+  their own time.
+* **History is read from the public RPC, 101 blocks at a time.** A phone
+  opening an old pot for the first time shows its numbers at once and its
+  history newest first, but the oldest entries arrive last; see
+  `docs/APP-CONTRACT-MAP.md` section 12.
 
 ## Tests
 
