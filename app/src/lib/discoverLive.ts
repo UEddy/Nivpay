@@ -2,6 +2,7 @@ import { getAddress, numberToHex, pad, parseEventLogs, toEventSelector, type Add
 import { ERC20_READ_ABI, POTS_ABI, POTS_READ_ABI } from "./abi.ts";
 import type { PotsReader } from "./discover.ts";
 import type { CreatorReader } from "./invited.ts";
+import type { AskReader } from "./waiting.ts";
 import { fromText32 } from "./text32.ts";
 
 /** Calls per Multicall3 batch, so one slow or oversized request never holds up the rest. */
@@ -101,5 +102,35 @@ export function creatorReader(readClient: Pick<PublicClient, "getBlock" | "readC
     },
 
     members: async (potId, at) => (await members([Number(potId)], at))[0]!,
+  };
+}
+
+/** Requests waiting for a yes (waiting.ts): proposalInfo for many numbers in one Multicall3 batch at a finalized block. */
+export function askReader(readClient: Pick<PublicClient, "getBlock" | "readContract" | "multicall">, pots: Address): AskReader {
+  return {
+    async finalized() {
+      const b = await readClient.getBlock({ blockTag: "finalized" });
+      return { number: b.number, timestamp: b.timestamp };
+    },
+    proposalCount: async (at) => Number(await readClient.readContract({ address: pots, abi: POTS_ABI, functionName: "proposalCount", blockNumber: at })),
+    infos: (ids, at) =>
+      inChunks(ids, async (chunk) => {
+        const rows = await readClient.multicall({
+          allowFailure: false,
+          blockNumber: at,
+          contracts: chunk.map((id) => ({ address: pots, abi: POTS_ABI, functionName: "proposalInfo", args: [BigInt(id)] }) as const),
+        });
+        return rows.map((r) => ({
+          potId: r.potId,
+          kind: r.kind,
+          status: r.status,
+          payee: r.destIndex,
+          amount: r.amount,
+          asker: getAddress(r.proposer),
+          expiresAt: r.expiresAt,
+          yes: r.approvedBy.map((a) => getAddress(a)),
+          threshold: r.threshold,
+        }));
+      }),
   };
 }

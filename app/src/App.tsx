@@ -9,7 +9,8 @@ import { AUSD, AUSD_FAUCET, TESTUSD } from "./lib/config.ts";
 import { DEPLOYMENT, POTS, POTS_DEPLOY_BLOCK } from "./lib/deployment.ts";
 import { DraftStore, newDraft } from "./lib/draft.ts";
 import { findPots, ScanStore, type FoundPot, type Role, type ScanState } from "./lib/discover.ts";
-import { creatorReader, potsReader } from "./lib/discoverLive.ts";
+import { askReader, creatorReader, potsReader } from "./lib/discoverLive.ts";
+import { AskScanStore, findOpenRequests, learnPotBlocks, needingMyYes, PotBlocks, type AskScan } from "./lib/waiting.ts";
 import { AppError, describeFailure, SendFailure } from "./lib/errors.ts";
 import { checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
 import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
@@ -37,6 +38,7 @@ const accounts = new AccountStore(localStorage);
 const drafts = new DraftStore(localStorage);
 const pots = new PotStore(localStorage);
 const invited = new InvitedStore(localStorage);
+const potBlocks = new PotBlocks(localStorage, DEPLOYMENT);
 
 type Screen =
   | { kind: "home" }
@@ -302,6 +304,7 @@ export function App() {
           onSwitch={() => setSwitching(true)}
           onOpenDraft={(draftId) => go({ kind: "create", draftId })}
           onOpenPot={(pot) => go({ kind: "pot", pot })}
+          onOpenRequest={(pot, proposalId) => go({ kind: "request", pot, proposalId })}
           onSend={() => go({ kind: "send", request: null })}
           onReceive={() => go({ kind: "receive" })}
         />
@@ -508,6 +511,7 @@ function Home(props: {
   onSwitch: () => void;
   onOpenDraft: (draftId: Hex) => void;
   onOpenPot: (pot: StoredPot) => void;
+  onOpenRequest: (pot: StoredPot, proposalId: bigint) => void;
   onSend: () => void;
   onReceive: () => void;
 }) {
@@ -722,7 +726,7 @@ function Home(props: {
         )}
       </section>
 
-      <YourPots account={account} connection={props.connection} onOpen={props.onOpenDraft} onOpenPot={props.onOpenPot} />
+      <YourPots account={account} connection={props.connection} onOpen={props.onOpenDraft} onOpenPot={props.onOpenPot} onOpenRequest={props.onOpenRequest} />
 
       <section className="card">
         <p className="eyebrow">{copy.addTestDollars}</p>
@@ -783,6 +787,7 @@ function Home(props: {
 const FIND_POTS_EVERY_MS = 10_000;
 const livePots = potsReader(readClient, POTS);
 const liveCreators = creatorReader(readClient, POTS);
+const liveAsks = askReader(readClient, POTS);
 
 /**
  * Pots this account is named on, found from the chain (lib/discover.ts), so
@@ -797,11 +802,16 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
   const [scan, setScan] = useState<ScanState>(() => store.load());
   const [failed, setFailed] = useState(false);
   const [answeredInvites, setAnswered] = useState<AnsweredInvite[]>(() => invited.forAccount(DEPLOYMENT, account, Date.now()));
+  const askStore = useMemo(() => new AskScanStore(localStorage, DEPLOYMENT, account), [account]);
+  const [asks, setAsks] = useState<AskScan>(() => askStore.load());
+  const [starts, setStarts] = useState<Record<string, string>>(() => potBlocks.all());
   const { track } = connection;
   useEffect(() => {
     let live = true;
     let state = store.load();
+    let askState = askStore.load();
     setScan(state);
+    setAsks(askState);
     let running = false;
     const poll = async () => {
       if (running) return;
@@ -819,6 +829,16 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
         if (!live) return;
         for (const row of matched) invited.put(row);
         setAnswered(invited.forAccount(DEPLOYMENT, account, Date.now()));
+        // Requests waiting for this account's yes, on pots it decides on: no link needed.
+        const decides = new Set(next.found.filter((p) => p.roles.includes("decides")).map((p) => p.potId));
+        const nextAsks = await track(findOpenRequests(liveAsks, askState, decides));
+        if (!live) return;
+        askState = nextAsks;
+        askStore.save(nextAsks);
+        setAsks(nextAsks);
+        // So every pot found opens with no link: its creation block, found once.
+        await learnPotBlocks(potBlocks, next.found.map((p) => p.potId), liveCreators, POTS_DEPLOY_BLOCK).catch(() => {});
+        if (live) setStarts(potBlocks.all());
       } catch {
         if (live) setFailed(true);
       } finally {
@@ -835,8 +855,8 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
       clearInterval(t);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [account, store, track]);
-  return { scan, failed, answered: answeredInvites };
+  }, [account, store, askStore, track]);
+  return { scan, failed, answered: answeredInvites, asks, starts };
 }
 
 const ROLE_TEXT: Record<Role, string> = {
@@ -845,11 +865,28 @@ const ROLE_TEXT: Record<Role, string> = {
   putIn: copy.foundRolePutIn,
 };
 
-/** A pot found from the chain whose link hasn't been opened on this phone: live numbers, no names yet. */
-function FoundPotRow(props: { pot: FoundPot; decimals: number | null }) {
+/**
+ * A pot found from the chain whose link hasn't been opened on this phone:
+ * live numbers, no names yet. Once its creation block is known it opens
+ * here with no link, people shown by the end of their account.
+ */
+function FoundPotRow(props: { pot: FoundPot; decimals: number | null; onOpen?: () => void }) {
   const [open, setOpen] = useState(false);
   const { pot } = props;
   const holds = props.decimals === null ? "…" : formatAmount(BigInt(pot.totalAssets), props.decimals, "auto");
+  if (props.onOpen) {
+    return (
+      <button type="button" className="home-pot" onClick={props.onOpen}>
+        <span className="grow">
+          <span className="name">{pot.name || copy.unnamedPot}</span>
+          <span className="meta">{copy.addedToAPot}</span>
+          <span className="meta">{copy.foundMeta(pot.roles.map((r) => ROLE_TEXT[r]), holds)}</span>
+          <span className="meta">{copy.foundOpens}</span>
+        </span>
+        <span className={`tag${pot.closed ? "" : " live"}`}>{pot.closed ? copy.closedTag : copy.live}</span>
+      </button>
+    );
+  }
   return (
     <>
       <button type="button" className="home-pot" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
@@ -913,8 +950,9 @@ function YourPots(props: {
   connection: ReturnType<typeof useConnection>;
   onOpen: (draftId: Hex) => void;
   onOpenPot: (pot: StoredPot) => void;
+  onOpenRequest: (pot: StoredPot, proposalId: bigint) => void;
 }) {
-  const { scan, failed, answered } = useFoundPots(props.account.address, props.connection);
+  const { scan, failed, answered, asks, starts } = useFoundPots(props.account.address, props.connection);
   const mine = drafts.forOwner(props.account.address).filter((d) => !d.made?.fragment);
   // Pots made before the pot list existed are added to it once.
   for (const d of drafts.forOwner(props.account.address)) {
@@ -929,6 +967,14 @@ function YourPots(props: {
   const matched = answered.filter((r) => r.match && !linked.has(r.match.potId));
   const matchedIds = new Set(matched.map((r) => r.match!.potId));
   const found = scan.found.filter((p) => !linked.has(p.potId) && !matchedIds.has(p.potId));
+  /** The pot to open for a pot number: its link on this phone, else its matched invite, else its creation block alone. */
+  const storedFor = (potId: string): StoredPot | null => {
+    const known = pots.get(DEPLOYMENT, potId);
+    if (known) return known;
+    const block = answered.find((r) => r.match?.potId === potId)?.match?.block ?? starts[potId];
+    return block ? { deployment: DEPLOYMENT, potId, block, fragment: "", name: "", addedAt: 0 } : null;
+  };
+  const waitingMine = needingMyYes(asks, props.account.address).filter((r) => r.kind === 0);
   const start = () => {
     const draft = newDraft(props.account.address, phoneTimeZone(), Date.now(), (n) => crypto.getRandomValues(new Uint8Array(n)));
     drafts.put(draft);
@@ -938,6 +984,28 @@ function YourPots(props: {
     <section className="card">
       <p className="eyebrow">{copy.yourPots}</p>
       {mine.length + opened.length + found.length + answered.length === 0 && <p className="hint">{copy.noPotsYet}</p>}
+      {waitingMine.length > 0 && <p className="eyebrow">{copy.waitingForYourYes}</p>}
+      {waitingMine.map((r) => {
+        const stored = storedFor(r.potId);
+        const name = scan.found.find((p) => p.potId === r.potId)?.name || stored?.name || copy.unnamedPot;
+        const amount = scan.decimals === null ? "…" : formatAmount(BigInt(r.amount), scan.decimals, "auto");
+        return (
+          <button
+            type="button"
+            className="home-pot"
+            key={`ask-${r.proposalId}`}
+            disabled={!stored}
+            onClick={() => stored && props.onOpenRequest(stored, BigInt(r.proposalId))}
+          >
+            <span className="grow">
+              <span className="name">{name}</span>
+              <span className="meta">{copy.homeAskMeta(amount, r.yes.length, r.threshold)}</span>
+              {!stored && <span className="meta">{copy.gettingReadyToOpen}</span>}
+            </span>
+            <span className="tag live">{copy.yourYesTag}</span>
+          </button>
+        );
+      })}
       {matched.map((r) => (
         <MatchedRow
           key={`matched-${r.match!.potId}`}
@@ -951,9 +1019,10 @@ function YourPots(props: {
       {waiting.map((r) => (
         <WaitingRow key={`invited-${r.draftId}-${r.role}-${r.slot}`} row={r} decimals={scan.decimals} />
       ))}
-      {found.map((p) => (
-        <FoundPotRow key={`found-${p.potId}`} pot={p} decimals={scan.decimals} />
-      ))}
+      {found.map((p) => {
+        const stored = storedFor(p.potId);
+        return <FoundPotRow key={`found-${p.potId}`} pot={p} decimals={scan.decimals} onOpen={stored ? () => props.onOpenPot(stored) : undefined} />;
+      })}
       {opened.map((p) => (
         <button
           type="button"

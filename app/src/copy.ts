@@ -273,6 +273,11 @@ export const copy = {
     const who = new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" }).format(roles);
     return `${who.charAt(0).toUpperCase()}${who.slice(1)}. Holds ${holds}.`;
   },
+  foundOpens: "Open it here, no link needed. Names show once someone shares the pot's link.",
+  waitingForYourYes: "Waiting for your yes",
+  yourYesTag: "Your yes",
+  homeAskMeta: (amount: string, k: number, n: number) => `A payment of ${amount} needs your yes. ${k} of ${n} so far.`,
+  gettingReadyToOpen: "Getting it ready to open…",
   foundNeedsLink: "Ask whoever made this pot to send you its link. Then you'll see everyone's names and can add your share.",
   closedTag: "Closed",
   errFindPots: "Couldn't check for pots you've been added to. Trying again.",

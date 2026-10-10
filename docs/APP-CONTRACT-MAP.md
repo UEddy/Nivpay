@@ -481,8 +481,9 @@ contracts, if you want one in the demo. I have not planned it in.
   pages of 101 blocks per poll. A matched pot opens on the pot screen with
   no link: names are unsigned there, so people show as "account ending"
   until a pot link is opened. Rows still waiting after 14 days are dropped.
-  Not measured yet: how far back the public RPC serves `eth_call` state,
-  which decides whether the quick or the slow path runs.
+  Measured 10 Oct 2026: the public RPC serves `eth_call` state at every
+  block back to the AUSD pots deploy (3.66 million blocks, about 13 days),
+  so the quick path runs.
 * **One group link.** After the pot is made, the creator's screen names the
   people who already have the pot on their Home and offers one "Share the
   pot" link for everyone else and for anyone who wants names. There is no
@@ -570,6 +571,14 @@ screens in `app/src/screens/Ask.tsx` and `Request.tsx`.
   nothing; the screen reads everything from `proposalInfo` at the finalized
   block, and names from the pot link already on that phone. The asker shares
   it from the request screen. The signed note of gap G2 is not built yet.
+* **No link needed.** A named decider sees a request waiting for their yes
+  on Home with no link (`app/src/lib/waiting.ts`): each poll reads
+  `proposalInfo` for request numbers not seen yet, through Multicall3 at the
+  finalized block, keeps the ones on pots the account decides on, and reads
+  the open ones again until they are paid, withdrawn or expired. A pot found
+  this way opens on its pot screen or request screen with no link: its
+  creation block is found once by bisecting `potCount()` over past state and
+  kept on the phone. The share button is only a nudge.
 * **Saying yes, taking it back.** "Approve" is never shown; deciders say yes.
   The yes that reaches the rule reads "Say yes and pay Caterer". Not yet
   sends nothing (G3). A yes can be taken back until the payment is made,

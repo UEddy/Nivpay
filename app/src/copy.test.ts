@@ -152,6 +152,7 @@ function allCopy(): [string, string][] {
     payeeReplyAdded: ["Chidi", "Caterer"],
     errOverLimit: ["$100", "Caterer"],
     errPotShort: ["$397.00"],
+    homeAskMeta: ["$600", 1, 2],
     payeeLeft: ["$700", "$700"],
     askCountsAsYes: [1, "Caterer"],
     askAction: ["$600", "Caterer"],
