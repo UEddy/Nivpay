@@ -281,6 +281,15 @@ test("a sentence that starts with an unnamed person starts with a capital, and o
   assert.equal(copy.tookLine("$5"), "Your $5 is in your balance.");
 });
 
+test("nothing the app says about closing claims more than the contract does", () => {
+  // At close the contract sends nobody anything: each takes their own share (claim). And a share is shares, not dollars put in.
+  for (const [key, text] of allCopy()) {
+    assert.doesNotMatch(text, /goes back to|comes back to you|back to each of you/i, `copy.${key}: leftovers are taken, never sent`);
+    assert.doesNotMatch(text, /in proportion to what each put in|split by what/i, `copy.${key}: a share follows shares`);
+  }
+  assert.match(copy.closesLede, /Nothing is sent to anyone then/);
+});
+
 test("vendors and people are shown as 'account ending', never a 0x form", () => {
   assert.equal(copy.accountEnding(SAMPLE_ID), "account ending 7bC1");
 });

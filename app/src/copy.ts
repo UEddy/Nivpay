@@ -143,7 +143,7 @@ const words = {
   poursOnlyTo: "Pours only to",
   closes: "Closes",
   leftover: "Leftover",
-  leftoverValue: "Back to each of you, by share",
+  leftoverValue: "Each takes their own share back",
   ofN: (k: number, n: number) => `${k} of ${n}`,
   justYouSoFar: "Just you so far",
   addWhereItPays: "Add where it can pay",
@@ -235,10 +235,11 @@ const words = {
   useThisAccount: "Use this account",
   replyLinkField: "Got a reply link? Paste it here",
   addReply: "Add their reply",
-  closesLede: "At the end of this day, in your time, nobody can put more in or pay from it. What's left goes back to each of you.",
+  closesLede:
+    "From the end of this day, in your time, nobody can put more in or pay from it. Nothing is sent to anyone then: what's left stays in the pot until each of you takes your share.",
   leftoverLede:
-    "When the pot closes, whatever is left goes back to everyone who put money in, in proportion to what each put in. " +
-    "Anyone can also take their own share out before then.",
+    "When the pot closes, what's left belongs to everyone with money in it, by their share, and each takes their own whenever they like. " +
+    "A share follows what you put in when everyone puts in before any payment. Anyone can also take their own share out before then.",
   checkBeforeYouMakeIt: "Check it before you make it",
   noneCanChange: "None of this can ever change, not even by you.",
   decidesLine: "Decides",
@@ -258,7 +259,7 @@ const words = {
   exactAmount: "Exact amount",
   chipPoursOnlyTo: (names: string) => `Pours only to ${names}`,
   chipRule: (k: number, n: number) => `${k} of ${n} must agree`,
-  chipLeftover: "Leftover comes back to you",
+  chipLeftover: "You can take your share back",
   pourIn: (amount: string) => `Pour in ${amount}`,
   pouringIn: "Pouring in…",
   fromYourBalance: (amount: string) => `From your balance of ${amount}.`,
@@ -384,11 +385,11 @@ const words = {
   closeTitleClosed: "The pot is closed. Here's what's left.",
   closesAt: (when: string) => `Closes ${when}.`,
   whatHappensAtClose:
-    "When it closes, nothing more can go in or be paid out, and what's left goes back to each person by their share. Each takes their own; nothing is sent by itself.",
+    "When it closes, nothing more can go in or be paid out. What's left is each person's by their share, to take whenever they like; nothing is sent by itself.",
   ifClosedNow: "If it closed now",
   othersAndRounding: "Anyone else, and rounding",
   closeSummary: (wentIn: string, paid: string, fees: string, left: string) =>
-    `${wentIn} went in. ${paid} was paid out and ${fees} went on fees. The last ${left} goes back to everyone who put money in, by share.`,
+    `${wentIn} went in. ${paid} was paid out and ${fees} went on fees. The last ${left} is for everyone with money in it to take, by share.`,
   yourShare: "Your share",
   inYourBalance: "In your balance",
   shareBecause: (put: string, fraction: string) => `You put in ${put}, ${fraction} of the pot, so ${fraction} of what's left is yours.`,
