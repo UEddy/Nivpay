@@ -722,5 +722,4 @@ out) was not run in the browser.
 | Frames, production build, CPU 4 times slower | no long task; worst frame 12 ms in the replay and 7 ms in the close |
 
 Headless Chromium on a laptop is not an S10; the real frame budget is for
-the phone test. What the check found is fixed in the commits that follow
-`3247dd4` back to `89ed338`.
+the phone test. What the check found is fixed in `89ed338`, `3247dd4` and `ff77eff`.
