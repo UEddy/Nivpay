@@ -57,6 +57,7 @@ const refuse = {
   expired: () => new AppError(copy.errRequestExpired, ERROR_CODES.REQUEST_EXPIRED),
   decided: () => new AppError(copy.errRequestDecided, ERROR_CODES.REQUEST_DECIDED),
   other: () => new AppError(copy.errRequestRefused, ERROR_CODES.REQUEST_REFUSED),
+  alreadyClosed: () => new AppError(copy.errAlreadyClosed, ERROR_CODES.POT_ALREADY_CLOSED),
 };
 
 const isDecider = (pot: PotFacts, me: Address) => pot.deciders.some((d) => isAddressEqual(d, me));
@@ -160,17 +161,22 @@ export type RequestView = {
   refusal: AppError | null;
 };
 
-/** The request screen, from what was read at one finalized block. */
+/**
+ * The request screen, from what was read at one finalized block. A request
+ * to close early (kind 1) moves no money: a pause doesn't stop it, only the
+ * pot being closed already does, and nothing is checked against a limit.
+ */
 export function requestView(request: RequestFacts, pot: PotFacts, me: Address, nowSeconds: bigint): RequestView {
   const iSaid = request.yes.some((a) => isAddressEqual(a, me));
   const needed = Math.max(0, request.threshold - request.yes.length);
   const payee = pot.payees[request.payee];
   const expired = isExpired(request, nowSeconds);
+  const closing = request.kind === 1;
   const base = {
     needed,
     paysOnMyYes: !iSaid && needed === 1,
-    leftAfter: pot.totalAssets - request.amount - request.fee,
-    limitAfter: (payee?.spent ?? 0n) + (request.status === "paid" ? 0n : request.amount),
+    leftAfter: closing ? pot.totalAssets : pot.totalAssets - request.amount - request.fee,
+    limitAfter: closing ? 0n : (payee?.spent ?? 0n) + (request.status === "paid" ? 0n : request.amount),
     canTakeBack: iSaid && request.status === "waiting" && !expired,
   };
   const at = (stage: RequestStage, refusal: AppError | null = null): RequestView => ({ ...base, stage, refusal });
@@ -178,9 +184,10 @@ export function requestView(request: RequestFacts, pot: PotFacts, me: Address, n
   if (request.status === "withdrawn") return at("withdrawn", refuse.decided());
   if (expired) return at("expired", refuse.expired());
   if (!isDecider(pot, me)) return at("watching", refuse.notDecider());
-  if (pot.closed || pot.frozen) return at("stopped", refuse.stopped());
+  if (closing && pot.closed) return at("stopped", refuse.alreadyClosed());
+  if (!closing && (pot.closed || pot.frozen)) return at("stopped", refuse.stopped());
   if (iSaid) return at("said-yes", refuse.decided());
-  if (base.paysOnMyYes) {
+  if (base.paysOnMyYes && !closing) {
     const blocked = payable(pot, request.payee, request.amount, request.fee);
     if (blocked) return at("cannot-pay-yet", blocked);
   }
@@ -191,7 +198,8 @@ export function requestView(request: RequestFacts, pot: PotFacts, me: Address, n
  * The code for a request the contract refused when it was run as a call.
  * Only the contract's own error names come in here; anything else is 29.
  */
-export function refusalFor(errorName: string | undefined, pot?: PotFacts, request?: Pick<RequestFacts, "payee">): AppError {
+export function refusalFor(errorName: string | undefined, pot?: PotFacts, request?: Pick<RequestFacts, "payee"> & { kind?: number }): AppError {
+  if (errorName === "PotClosed" && request?.kind === 1) return refuse.alreadyClosed();
   switch (errorName) {
     case "NotApprover":
       return refuse.notDecider();
@@ -217,9 +225,11 @@ export function refusalFor(errorName: string | undefined, pot?: PotFacts, reques
   }
 }
 
-/** A payment request as the pot's event feed tells it, from finalized blocks only. */
+/** A payment request, or a request to close early, as the pot's event feed tells it, from finalized blocks only. */
 export type AskedRequest = {
   proposalId: bigint;
+  /** 0 a payment, 1 closing early. */
+  kind: number;
   payee: number;
   amount: bigint;
   asker: Address;
@@ -233,18 +243,29 @@ export type AskedRequest = {
 };
 
 /**
- * Every payment request in a pot's history, newest first. Who said yes is
- * the Approved events less the ApprovalRevoked ones (gap G11).
+ * Every payment request and request to close early in a pot's history,
+ * newest first. Who said yes is the Approved events less the ApprovalRevoked
+ * ones (gap G11). Closed names no request: the one it ended is the one the
+ * yes in the same transaction was for.
  */
 export function requestsFrom(events: PotEvent[]): AskedRequest[] {
   const byId = new Map<bigint, AskedRequest>();
+  const yesIn = new Map<Hex, bigint>();
   for (const e of events) {
+    if (e.name === "Closed" && e.args.viaProposal) {
+      const closing = byId.get(yesIn.get(e.tx) ?? -1n);
+      if (closing) closing.status = "paid";
+      continue;
+    }
     const id = e.args.proposalId as bigint | undefined;
     if (id === undefined) continue;
+    if (e.name === "Approved") yesIn.set(e.tx, id);
     if (e.name === "Proposed") {
-      if (Number(e.args.kind) !== 0) continue;
+      const kind = Number(e.args.kind);
+      if (kind > 1) continue;
       byId.set(id, {
         proposalId: id,
+        kind,
         payee: Number(e.args.destIndex),
         amount: e.args.amount as bigint,
         asker: e.args.proposer as Address,

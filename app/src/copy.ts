@@ -359,6 +359,19 @@ export const copy = {
   errLowLiquidity: "Agora can't settle that much in this currency right now. Try a smaller amount. Nothing was sent.",
   errNotEnoughForFees: "Your account can't cover the processing for this yet, and can't be topped up while it holds what it has. Send a smaller payment first, or try again later. Nothing was sent.",
 
+  // Asking to close early: a request like a payment, that moves no money
+  wantsToClose: (who: string) => `${who} wants to close the pot early`,
+  youAskedToClose: "You asked to close the pot early",
+  leftToShare: "Left to share",
+  closeRequestLine: "Once it closes, nothing more can go in or be paid out. Each person takes their share of what's left, by share.",
+  moreYesCloses: (more: number) => (more === 1 ? "1 more yes closes it straight away." : `${more} more yeses close it.`),
+  yesClosesNow: (k: number, n: number) => `That's ${k} of ${n}. Closing the pot now.`,
+  sayYesAndClose: "Say yes and close it",
+  closingNow: "Closing…",
+  closedLine: (left: string) => `The pot is closed. ${left} is left to share.`,
+  requestRowClose: (who: string) => `${who} asked to close the pot early`,
+  homeAskCloseMeta: (k: number, n: number) => `A request to close it early needs your yes. ${k} of ${n} so far.`,
+
   // Asking for a payment, from the pot screen
   askForPayment: "Ask for a payment",
   askLede: "The pot can only pay these, each up to its limit. Asking counts as your yes.",
@@ -492,6 +505,7 @@ export const copy = {
   errRequestExpired: "This request has expired. Ask again if it's still needed. Nothing was sent.",
   errRequestDecided: "This request isn't waiting for that any more: it's paid, withdrawn, or your answer already counts. Nothing was sent.",
   errRequestRefused: "This can't go through as things stand. Nothing was sent.",
+  errAlreadyClosed: "This pot is already closed. Nothing was sent.",
   errRequestNotFound: "This payment request couldn't be found on this pot. Ask for the link again.",
 
   // Joining from an invite
@@ -556,6 +570,7 @@ export const ERROR_CODES = {
   REQUEST_EXPIRED: 27,
   REQUEST_DECIDED: 28,
   REQUEST_REFUSED: 29,
+  POT_ALREADY_CLOSED: 95,
   PASSKEY_CANCELLED: 30,
   PASSKEY_UNSUPPORTED: 31,
   BROWSER_MISSING_FEATURE: 32,

@@ -989,7 +989,7 @@ function YourPots(props: {
     const block = answered.find((r) => r.match?.potId === potId)?.match?.block ?? starts[potId];
     return block ? { deployment: DEPLOYMENT, potId, block, fragment: "", name: "", addedAt: 0 } : null;
   };
-  const waitingMine = needingMyYes(asks, props.account.address).filter((r) => r.kind === 0);
+  const waitingMine = needingMyYes(asks, props.account.address);
   const start = () => {
     const draft = newDraft(props.account.address, phoneTimeZone(), Date.now(), (n) => crypto.getRandomValues(new Uint8Array(n)));
     drafts.put(draft);
@@ -1014,7 +1014,7 @@ function YourPots(props: {
           >
             <span className="grow">
               <span className="name">{name}</span>
-              <span className="meta">{copy.homeAskMeta(amount, r.yes.length, r.threshold)}</span>
+              <span className="meta">{r.kind === 1 ? copy.homeAskCloseMeta(r.yes.length, r.threshold) : copy.homeAskMeta(amount, r.yes.length, r.threshold)}</span>
               {!stored && <span className="meta">{copy.gettingReadyToOpen}</span>}
             </span>
             <span className="tag live">{copy.yourYesTag}</span>

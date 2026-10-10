@@ -68,7 +68,7 @@ export async function readRequest(client: Client, pots: Address, potId: bigint, 
     if (reverted(e)) throw new AppError(copy.errRequestNotFound, ERROR_CODES.LINK_DAMAGED);
     throw e;
   }
-  if (info.potId !== potId || info.kind !== 0) throw new AppError(copy.errRequestNotFound, ERROR_CODES.LINK_DAMAGED);
+  if (info.potId !== potId || info.kind > 1) throw new AppError(copy.errRequestNotFound, ERROR_CODES.LINK_DAMAGED);
   return {
     request: {
       proposalId,
@@ -92,9 +92,12 @@ export async function readRequest(client: Client, pots: Address, potId: bigint, 
 
 export type PotCall =
   | { functionName: "proposePayout"; args: readonly [bigint, number, bigint] }
+  | { functionName: "proposeClose"; args: readonly [bigint] }
   | { functionName: "approve"; args: readonly [bigint] }
   | { functionName: "revokeApproval"; args: readonly [bigint] };
 
+export const askCloseData = (potId: bigint): Hex => encodeFunctionData({ abi: POTS_ABI, functionName: "proposeClose", args: [potId] });
+export const askCloseCall = (potId: bigint): PotCall => ({ functionName: "proposeClose", args: [potId] });
 export const askCall = (potId: bigint, payee: number, amount: bigint): PotCall => ({ functionName: "proposePayout", args: [potId, payee, amount] });
 export const yesCall = (proposalId: bigint): PotCall => ({ functionName: "approve", args: [proposalId] });
 export const takeBackCall = (proposalId: bigint): PotCall => ({ functionName: "revokeApproval", args: [proposalId] });
@@ -103,7 +106,7 @@ export const takeBackCall = (proposalId: bigint): PotCall => ({ functionName: "r
  * Runs a request from `from` as a call against the latest state. Null when the
  * contract would take it; the refusal, with its code, when it wouldn't.
  */
-export async function refusalOf(client: Client, pots: Address, from: Address, call: PotCall, pot?: PotFacts, request?: Pick<RequestFacts, "payee">): Promise<AppError | null> {
+export async function refusalOf(client: Client, pots: Address, from: Address, call: PotCall, pot?: PotFacts, request?: Pick<RequestFacts, "payee"> & { kind?: number }): Promise<AppError | null> {
   try {
     await client.simulateContract({ account: from, address: pots, abi: POTS_ABI, ...call } as Parameters<Client["simulateContract"]>[0]);
     return null;

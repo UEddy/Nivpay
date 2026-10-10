@@ -231,7 +231,11 @@ export function WaitingRequests(props: {
       {props.requests.map((r) => (
         <button type="button" className="row-btn" key={r.proposalId.toString()} onClick={() => props.onOpen(r.proposalId)}>
           <span className="row-text">
-            <span className="v">{copy.requestRow(isAddressEqual(r.asker, props.me) ? copy.youCap : props.nameOf(r.asker), fmt(r.amount), props.facts.payees[r.payee]?.name ?? "")}</span>
+            <span className="v">
+              {r.kind === 1
+                ? copy.requestRowClose(isAddressEqual(r.asker, props.me) ? copy.youCap : props.nameOf(r.asker))
+                : copy.requestRow(isAddressEqual(r.asker, props.me) ? copy.youCap : props.nameOf(r.asker), fmt(r.amount), props.facts.payees[r.payee]?.name ?? "")}
+            </span>
             <span className="k">{copy.requestRowMeta(r.yes.length, props.facts.threshold)}</span>
           </span>
           <Icon name="chevron" size={18} className="row-chevron" />

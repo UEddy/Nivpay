@@ -55,6 +55,17 @@ stalls shows 51 and can be retried on the same nonce.
 | 28 | The request isn't waiting for that any more: paid, withdrawn, a yes already given, or no yes to take back (`ProposalNotPending`, `AlreadyApproved`, `NotApproved`). | `proposalInfo(id)`, `hasApproved(id, account)` |
 | 29 | The contract refused the call for any other reason, such as the dollar refusing the transfer to the payee. | `eth_call` of the request from the account |
 
+## Closing and taking your share out
+
+Closing early is a request like a payment (`proposeClose`, then yeses), and
+moves no money: a pause doesn't stop it. Taking your share out works in every
+state the contract allows (`exit` before close, `claim` after). Each is run as
+a call before anything is signed, so these send nothing.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 95 | The pot is already closed (`PotClosed` on `proposeClose` or a closing yes), by request or because its closing date has passed. | `getPot(potId).closed`, `.endTime` |
+
 ## Passkey
 
 | Code | What happened | Where to look |

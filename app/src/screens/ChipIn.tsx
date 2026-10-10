@@ -420,7 +420,7 @@ export function ChipInScreen(props: {
   const others = people.filter((p) => !p.me).map((p) => p.name);
   const facts = factsOf(state);
   const waiting = waitingRequests(requestsFrom(events), state.now);
-  const askedFor = new Map(waiting.map((r) => [r.payee, r.amount]));
+  const askedFor = new Map(waiting.filter((r) => r.kind === 0).map((r) => [r.payee, r.amount]));
   const iDecide = state.deciders.some((a) => isAddressEqual(a, me));
   const mapPayees: MapPayee[] = state.payees.map((p, i) => {
     if (motion.payee === i) return { name: p.name, sub: copy.payeeSubPaid(fmt(p.spent)), state: motion.arrived ? "paid" : "paying" };

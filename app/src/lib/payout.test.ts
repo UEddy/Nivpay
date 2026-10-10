@@ -222,8 +222,9 @@ test("requests are read from the feed: who said yes, taken back, paid with its f
     ev("Proposed", 31, 0, { proposalId: 3n, proposer: UBONG, kind: 0, destIndex: 1, amount: $(1), expiresAt: ASKED + TTL }),
     ev("ProposalCancelled", 32, 0, { proposalId: 3n, proposer: UBONG }),
   ];
-  const all = requestsFrom(events);
-  assert.deepEqual(all.map((r) => r.proposalId), [3n, 2n, 0n], "payments only, newest first; the close request is left out");
+  const everything = requestsFrom(events);
+  assert.deepEqual(everything.map((r) => [r.proposalId, r.kind]), [[3n, 0], [2n, 0], [1n, 1], [0n, 0]], "newest first, the request to close included");
+  const all = everything.filter((r) => r.kind === 0);
   const [withdrawn, waiting, paid] = all;
   assert.equal(withdrawn!.status, "withdrawn");
   assert.equal(waiting!.status, "waiting");
@@ -234,6 +235,7 @@ test("requests are read from the feed: who said yes, taken back, paid with its f
   assert.deepEqual(paid!.yes, [ANIEKAN, UBONG], "Idara's yes was taken back");
   assert.equal(paid!.paidIn, "0xabc0000000000000000000000000000000000000000000000000000000000000");
   assert.deepEqual(waitingRequests(all, ASKED).map((r) => r.proposalId), [2n]);
+  assert.deepEqual(waitingRequests(everything, ASKED).map((r) => r.proposalId), [2n, 1n]);
   assert.deepEqual(waitingRequests(all, ASKED + TTL + 1n), [], "expired requests stop marching");
 });
 
@@ -251,4 +253,37 @@ test("the paid motion: the check lands as the stream arrives, the drain ends bef
   assert.ok(m.stream + m.drain <= m.done, "the level has settled before the line says so");
   assert.ok(m.upright > m.check && m.upright < m.done);
   assert.ok(m.done >= 2_000 && m.done <= 2_400, "about 2.2 s");
+});
+
+test("closing early: a pause doesn't stop it, being closed already does, and no limit or fee applies", () => {
+  const close = request({ kind: 1, payee: 0, amount: 0n, fee: 0n, asker: IDARA, yes: [IDARA] });
+  const v = requestView(close, pot({ frozen: true, totalAssets: $(500) }), UBONG, ASKED);
+  assert.equal(v.stage, "can-say-yes", "closing works while paused");
+  assert.equal(v.paysOnMyYes, true);
+  assert.equal(v.leftAfter, $(500), "nothing leaves the pot");
+  assert.equal(requestView(close, pot({ totalAssets: 0n }), UBONG, ASKED).stage, "can-say-yes", "an empty pot can still close");
+  const closed = requestView(close, pot({ closed: true }), UBONG, ASKED);
+  assert.equal(closed.stage, "stopped");
+  assert.equal(closed.refusal?.code, ERROR_CODES.POT_ALREADY_CLOSED);
+  assert.equal(refusalFor("PotClosed", pot(), { payee: 0, kind: 1 }).code, ERROR_CODES.POT_ALREADY_CLOSED);
+  assert.equal(refusalFor("PotClosed", pot(), { payee: 0, kind: 0 }).code, ERROR_CODES.PAY_POT_STOPPED);
+});
+
+test("a request to close is told by the feed, and is done once the yes that closes it lands", () => {
+  const events: PotEvent[] = [
+    ev("Proposed", 40, 0, { proposalId: 5n, proposer: IDARA, kind: 1, destIndex: 0, amount: 0n, expiresAt: ASKED + TTL }),
+    ev("Approved", 40, 1, { proposalId: 5n, approver: IDARA, approvals: 1 }),
+    ev("Proposed", 41, 0, { proposalId: 6n, proposer: IDARA, kind: 2, destIndex: 0, amount: 0n, expiresAt: ASKED + TTL }),
+  ];
+  const [open] = requestsFrom(events);
+  assert.equal(open!.kind, 1);
+  assert.equal(open!.status, "waiting");
+  assert.equal(requestsFrom(events).length, 1, "lifting a pause is not listed");
+  const closedTx: Hex = "0xc105ed0000000000000000000000000000000000000000000000000000000000";
+  const done = requestsFrom([
+    ...events,
+    ev("Approved", 42, 0, { proposalId: 5n, approver: UBONG, approvals: 2 }, closedTx),
+    ev("Closed", 42, 1, { viaProposal: true, remainingAssets: $(115.6) }, closedTx),
+  ]);
+  assert.equal(done.find((r) => r.proposalId === 5n)!.status, "paid");
 });

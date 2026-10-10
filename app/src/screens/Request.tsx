@@ -207,7 +207,7 @@ export function RequestScreen(props: { account: StoredAccount; pot: StoredPot; p
           if (!alive.current) return;
           setStep(null);
           setActing(null);
-          if (action === "yes" && next.r.request.status === "paid") showPaid(next);
+          if (action === "yes" && next.r.request.status === "paid" && next.r.request.kind === 0) showPaid(next);
           else {
             setReq(next.r);
             setState(next.s);
@@ -305,6 +305,7 @@ export function RequestScreen(props: { account: StoredAccount; pot: StoredPot; p
   }
 
   const { request } = req;
+  const closing = request.kind === 1;
   const d = state.decimals;
   const fmt = (v: bigint, style: "auto" | "cents" = "auto") => formatAmount(v, d, style);
   const facts = factsOf(state);
@@ -321,10 +322,19 @@ export function RequestScreen(props: { account: StoredAccount; pot: StoredPot; p
   const running = motion.payee !== null && !paidNow && motion.payee === request.payee && !motion.arrived;
 
   const saidYes = (a: Address) => request.yes.some((y) => isAddressEqual(y, a));
-  const payeeState: MapPayee["state"] =
-    motion.payee === request.payee ? (motion.arrived ? "paid" : "paying") : request.status === "paid" ? "paid" : request.status === "waiting" && !isExpired(request, req.now) ? "asked" : undefined;
+  const payeeState: MapPayee["state"] = closing
+    ? undefined
+    : motion.payee === request.payee
+      ? motion.arrived
+        ? "paid"
+        : "paying"
+      : request.status === "paid"
+        ? "paid"
+        : request.status === "waiting" && !isExpired(request, req.now)
+          ? "asked"
+          : undefined;
   const mapPayees: MapPayee[] = state.payees.map((p, i) =>
-    i === request.payee
+    i === request.payee && !closing
       ? { name: p.name, sub: payeeState === "paid" ? copy.payeeSubPaid(fmt(request.amount)) : payeeState ? copy.payeeSubAsked(fmt(request.amount)) : copy.upTo(fmt(p.cap)), state: payeeState }
       : { name: p.name, sub: copy.upTo(fmt(p.cap)) },
   );
@@ -343,8 +353,9 @@ export function RequestScreen(props: { account: StoredAccount; pot: StoredPot; p
       route: inPot ? "solid" : "pencil",
     };
   });
-  const mapLabel =
-    request.status === "paid"
+  const mapLabel = closing
+    ? copy.mapHolds(fmt(state.totalAssets))
+    : request.status === "paid"
       ? copy.mapPaid(fmt(state.totalAssets), fmt(request.amount), payeeLabel)
       : copy.mapAsked(fmt(state.totalAssets), askerName, fmt(request.amount), payeeLabel);
 
@@ -361,6 +372,12 @@ export function RequestScreen(props: { account: StoredAccount; pot: StoredPot; p
 
   const otherNames = people.filter((p) => !p.me && !isAddressEqual(p.account, request.asker)).map((p) => p.name);
   const voteText = (() => {
+    if (closing) {
+      if (request.status === "paid") return copy.closedLine(fmt(state.totalAssets, "cents"));
+      if (myFinalYes) return copy.yesClosesNow(request.threshold, state.deciders.length);
+      if (view.stage === "said-yes") return copy.yourYesCounts(view.needed);
+      return copy.moreYesCloses(Math.max(view.needed, 1));
+    }
     if (paidNow || (request.status === "paid" && !running)) return otherNames.length ? copy.paidSeen(andList(otherNames)) : copy.paidAlone;
     if (myFinalYes || running) return copy.yesPaysNow(request.threshold, state.deciders.length, payeeLabel);
     if (view.stage === "said-yes") return copy.yourYesCounts(view.needed);
@@ -374,7 +391,9 @@ export function RequestScreen(props: { account: StoredAccount; pot: StoredPot; p
       : view.stage === "expired"
         ? { tone: "bad", text: copy.requestExpiredLine(days), code: ERROR_CODES.REQUEST_EXPIRED }
         : view.stage === "stopped"
-          ? { tone: "bad", text: state.closed ? copy.requestClosedLine : copy.requestPausedLine, code: ERROR_CODES.PAY_POT_STOPPED }
+          ? closing
+            ? { tone: "bad", text: copy.errAlreadyClosed, code: ERROR_CODES.POT_ALREADY_CLOSED }
+            : { tone: "bad", text: state.closed ? copy.requestClosedLine : copy.requestPausedLine, code: ERROR_CODES.PAY_POT_STOPPED }
           : view.stage === "watching"
             ? { tone: "bad", text: copy.requestWatching, code: ERROR_CODES.NOT_DECIDER }
             : view.stage === "cannot-pay-yet" && view.refusal
@@ -397,13 +416,18 @@ export function RequestScreen(props: { account: StoredAccount; pot: StoredPot; p
           ? copy.stepGettingReady
           : acting === "yes" && step
             ? view.paysOnMyYes
-              ? copy.payingNow(payeeLabel)
+              ? closing
+                ? copy.closingNow
+                : copy.payingNow(payeeLabel)
               : copy.sayingYes
             : view.paysOnMyYes
-              ? copy.sayYesAndPay(payeeLabel)
+              ? closing
+                ? copy.sayYesAndClose
+                : copy.sayYesAndPay(payeeLabel)
               : copy.sayYes;
   const takeBackText = acting === "take back" && step === "confirm" ? copy.stepConfirm : acting === "take back" && step ? copy.takingBack : copy.takeBackYes;
   const finished = paidNow || (request.status === "paid" && !running);
+  const doneLine = closing ? copy.closedLine(fmt(state.totalAssets, "cents")) : copy.paidLine(fmt(request.amount), payeeLabel, fmt(state.totalAssets, "cents"));
 
   return (
     <div className="screen">
@@ -426,7 +450,13 @@ export function RequestScreen(props: { account: StoredAccount; pot: StoredPot; p
         />
 
         <h1 className="request-title enter" style={{ animationDelay: "120ms" }}>
-          {asker?.me ? copy.youAskedToPay(fmt(request.amount), payeeLabel) : copy.wantsToPay(askerName, fmt(request.amount), payeeLabel)}
+          {closing
+            ? asker?.me
+              ? copy.youAskedToClose
+              : copy.wantsToClose(askerName)
+            : asker?.me
+              ? copy.youAskedToPay(fmt(request.amount), payeeLabel)
+              : copy.wantsToPay(askerName, fmt(request.amount), payeeLabel)}
         </h1>
 
         <div className="ask-bubble enter" style={{ animationDelay: "200ms" }}>
@@ -435,6 +465,15 @@ export function RequestScreen(props: { account: StoredAccount; pot: StoredPot; p
             : copy.askedLine(askerName, askedAt(request.createdAt, askerZone))}
         </div>
 
+        {closing ? (
+          <div className="money-rows enter" style={{ animationDelay: "280ms" }}>
+            <div>
+              <span>{copy.leftToShare}</span>
+              <strong>{fmt(state.totalAssets, "cents")}</strong>
+            </div>
+            <p className="hint">{copy.closeRequestLine}</p>
+          </div>
+        ) : (
         <div className="money-rows enter" style={{ animationDelay: "280ms" }}>
           <div>
             <span>{copy.nivpayFee}</span>
@@ -451,6 +490,7 @@ export function RequestScreen(props: { account: StoredAccount; pot: StoredPot; p
             </div>
           )}
         </div>
+        )}
 
         <div className="vote-row enter" style={{ animationDelay: "360ms" }}>
           {deciders.map((v) => (
@@ -484,7 +524,7 @@ export function RequestScreen(props: { account: StoredAccount; pot: StoredPot; p
               <svg width="18" height="18" viewBox="0 0 24 24" className="ico check-ico" aria-hidden="true">
                 <path d="M20 6L9 17l-5-5" />
               </svg>
-              {copy.paidLine(fmt(request.amount), payeeLabel, fmt(state.totalAssets, "cents"))}
+              {doneLine}
             </p>
             <button type="button" className="pill-btn" onClick={props.onClose}>
               {copy.done}
