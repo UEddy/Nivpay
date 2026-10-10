@@ -13,7 +13,7 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "test": "node --test \"src/**/*.test.ts\"",
-    "test:live": "node --test \"src/lib/*.live-test.ts\""
+    "test:live": "node --test --test-concurrency=1 \"src/lib/*.live-test.ts\""
   },
   "dependencies": {
     "@category-labs/mera": "0.2.0",
