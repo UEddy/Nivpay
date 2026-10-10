@@ -16,6 +16,7 @@ import {
   statusFrom,
   takeBackLabel,
   ttlDays,
+  PAID_MOTION,
   waitingRequests,
   yesLabel,
   type PotFacts,
@@ -241,4 +242,13 @@ test("times show in each person's own zone", () => {
   assert.equal(askedAt(t, "Africa/Lagos"), "14 Oct, 09:12");
   assert.equal(askedAt(t, "America/Chicago"), "14 Oct, 03:12");
   assert.equal(localTime(Date.UTC(2026, 9, 14, 11, 40), "Europe/London"), "12:40");
+});
+
+test("the paid motion: the check lands as the stream arrives, the drain ends before the line, about 2.2 s in all", () => {
+  const m = PAID_MOTION;
+  assert.ok(m.stream + m.flight <= m.check, "the payee is checked only once the stream reaches it");
+  assert.ok(m.check - (m.stream + m.flight) <= 100, "and right then");
+  assert.ok(m.stream + m.drain <= m.done, "the level has settled before the line says so");
+  assert.ok(m.upright > m.check && m.upright < m.done);
+  assert.ok(m.done >= 2_000 && m.done <= 2_400, "about 2.2 s");
 });

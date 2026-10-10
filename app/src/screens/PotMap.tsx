@@ -33,10 +33,10 @@ export type MapPerson = {
 
 /**
  * asked: a payment to it is waiting for a yes, so its route marches and its
- * ring pulses until it is decided. paid: paid at Finalized, so it is filled
- * and checked.
+ * ring pulses until it is decided. paying: final, and the stream is on its
+ * way. paid: the stream has arrived, so it is filled and checked.
  */
-export type MapPayee = { name: string; sub: string; state?: "asked" | "paid" };
+export type MapPayee = { name: string; sub: string; state?: "asked" | "paying" | "paid" };
 
 /** Money running from the pot down a payee's route. "start": not yet left. "end": arrived. */
 export type Stream = { payee: number; at: "start" | "end" };
@@ -193,7 +193,7 @@ export function PotMap(props: {
           })}
           {payeeAt.map((s, i) => {
             const state = payees[i]!.state;
-            const look = props.payeeRoutes === "pencil" ? "pencil" : `payee shown${state === "asked" ? " march" : ""}${state === "paid" ? " gone" : ""}`;
+            const look = props.payeeRoutes === "pencil" ? "pencil" : `payee shown${state === "asked" ? " march" : ""}${state === "paid" || state === "paying" ? " gone" : ""}`;
             return (
               <g key={s.route}>
                 <path

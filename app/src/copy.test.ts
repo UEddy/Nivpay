@@ -152,6 +152,30 @@ function allCopy(): [string, string][] {
     payeeReplyAdded: ["Chidi", "Caterer"],
     errOverLimit: ["$100", "Caterer"],
     errPotShort: ["$397.00"],
+    wantsToPay: ["Aniekan", "$600", "Caterer"],
+    youAskedToPay: ["$600", "Caterer"],
+    askedLine: ["Aniekan", "14 Oct, 09:12"],
+    askedLineIn: ["Aniekan", "14 Oct, 09:12", "Uyo"],
+    payeeLimit: ["Caterer"],
+    limitOf: ["$600", "$700"],
+    moreYesPays: [1, "Caterer"],
+    yesPaysNow: [2, 3, "Caterer"],
+    yourYesCounts: [1],
+    paidSeen: ["Idara"],
+    paidLine: ["$600", "Caterer", "$397.00"],
+    sayYesAndPay: ["Caterer"],
+    payingNow: ["Caterer"],
+    needsYesesWithin: [2, 7],
+    requestExpiredLine: [7],
+    cannotPayShort: ["$500.00"],
+    cannotPayLimit: ["Caterer", "$100"],
+    paymentRequestShareText: ["Mama\u2019s 60th"],
+    personTime: ["Idara", "12:40"],
+    personAsked: ["Aniekan"],
+    payeeSubAsked: ["$600"],
+    payeeSubPaid: ["$600"],
+    mapAsked: ["$1,000", "Aniekan", "$600", "Caterer"],
+    mapPaid: ["$397", "$600", "Caterer"],
   };
   return Object.entries(copy).map(([key, value]) => {
     if (typeof value === "string") return [key, value];
@@ -178,6 +202,15 @@ test("after a pot is made, the screen says named people already have it, and off
   const create = readFileSync(new URL("./screens/Create.tsx", import.meta.url), "utf8");
   assert.equal(create.match(/copy\.shareThePot\b/g)?.length, 1, "one Share the pot button");
   assert.doesNotMatch(create, /send-btn|sendTo\(/, "no button per person");
+});
+
+test("a payment request reads in plain words: a yes, never an approval", () => {
+  assert.equal(copy.wantsToPay("Aniekan", "$600", "Caterer"), "Aniekan wants to pay $600 to Caterer");
+  assert.equal(copy.moreYesPays(1, "Caterer"), "1 more yes pays Caterer straight away.");
+  assert.equal(copy.moreYesPays(2, "Caterer"), "2 more yeses pay Caterer.");
+  assert.equal(copy.yesPaysNow(2, 3, "Caterer"), "That's 2 of 3. Paying Caterer now.");
+  assert.equal(copy.paidLine("$600", "Caterer", "$397.00"), "Paid $600 to Caterer. The pot has $397.00.");
+  assert.equal(copy.needsYesesWithin(2, 7), "Requests need 2 yeses within 7 days, or they expire.");
 });
 
 test("vendors and people are shown as 'account ending', never a 0x form", () => {

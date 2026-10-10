@@ -29,6 +29,7 @@ import { ChipInScreen } from "./screens/ChipIn.tsx";
 import { CreateScreen } from "./screens/Create.tsx";
 import { JoinScreen } from "./screens/Join.tsx";
 import { ReceiveScreen } from "./screens/Receive.tsx";
+import { RequestScreen } from "./screens/Request.tsx";
 import { SendScreen } from "./screens/Send.tsx";
 import { formatDay, NoticeLine, phoneTimeZone, type Notice } from "./screens/ui.tsx";
 
@@ -42,6 +43,7 @@ type Screen =
   | { kind: "create"; draftId: Hex }
   | { kind: "join"; invite: Invite }
   | { kind: "pot"; pot: StoredPot }
+  | { kind: "request"; pot: StoredPot; proposalId: bigint }
   | { kind: "send"; request: PayLink | null }
   | { kind: "receive" };
 
@@ -122,6 +124,7 @@ export function App() {
   const [pendingInvite, setPendingInvite] = useState<Invite | null>(null);
   const [pendingPot, setPendingPot] = useState<StoredPot | null>(null);
   const [pendingPay, setPendingPay] = useState<PayLink | null>(null);
+  const [pendingRequest, setPendingRequest] = useState<Extract<Screen, { kind: "request" }> | null>(null);
   const connection = useConnection();
   // Requests from this phone still in flight. Unknown until checked, and
   // unknown is never read as "nothing moved".
@@ -188,9 +191,9 @@ export function App() {
           return;
         }
         // Names come from the pot link already on this phone, if there is one.
-        const pot = potForRequest(link);
-        if (accounts.active()) go({ kind: "pot", pot });
-        else setPendingPot(pot);
+        const request = { kind: "request", pot: potForRequest(link), proposalId: link.proposalId } as const;
+        if (accounts.active()) go(request);
+        else setPendingRequest(request);
         return;
       }
       const pot = storedFromLink(link, fragment);
@@ -224,6 +227,9 @@ export function App() {
     } else if (pendingPay) {
       go({ kind: "send", request: pendingPay });
       setPendingPay(null);
+    } else if (pendingRequest) {
+      go(pendingRequest);
+      setPendingRequest(null);
     }
   };
 
@@ -260,6 +266,18 @@ export function App() {
       />
     );
   }
+  if (active && !switching && screen.kind === "request") {
+    return (
+      <RequestScreen
+        key={screen.pot.potId + ":" + screen.proposalId + ":" + active.address}
+        account={active}
+        pot={screen.pot}
+        proposalId={screen.proposalId}
+        banner={banner}
+        onClose={() => go({ kind: "pot", pot: screen.pot })}
+      />
+    );
+  }
   if (active && !switching && screen.kind === "send") {
     return <SendScreen key={active.address} account={active} request={screen.request} banner={banner} onClose={() => go({ kind: "home" })} />;
   }
@@ -290,7 +308,7 @@ export function App() {
         <Welcome
           known={accounts.list()}
           current={active}
-          note={pendingInvite ? copy.joinNeedsAccount(pendingInvite.from) : pendingPot ? copy.potNeedsAccount : undefined}
+          note={pendingInvite ? copy.joinNeedsAccount(pendingInvite.from) : pendingPot || pendingRequest ? copy.potNeedsAccount : undefined}
           onReady={choose}
           onCancel={active ? () => setSwitching(false) : undefined}
         />

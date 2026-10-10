@@ -297,3 +297,12 @@ export function askedAt(seconds: bigint, timeZone: string): string {
 export function localTime(nowMs: number, timeZone: string): string {
   return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone }).format(new Date(nowMs));
 }
+
+/**
+ * "Payment approved and paid" (docs/MOTION.md), started only once the payment
+ * is final: the pot tips, then a stream runs down the payee's route (850 ms)
+ * while every layer drains (1,100 ms), the payee fills with a check when the
+ * stream arrives, the pot rights itself, and the line saying it is paid shows
+ * at about 2.2 s. Milliseconds from the start.
+ */
+export const PAID_MOTION = { stream: 350, flight: 850, drain: 1_100, check: 1_250, upright: 1_600, done: 2_200 } as const;

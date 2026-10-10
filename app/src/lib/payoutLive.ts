@@ -84,6 +84,10 @@ export type PotCall =
   | { functionName: "approve"; args: readonly [bigint] }
   | { functionName: "revokeApproval"; args: readonly [bigint] };
 
+export const askCall = (potId: bigint, payee: number, amount: bigint): PotCall => ({ functionName: "proposePayout", args: [potId, payee, amount] });
+export const yesCall = (proposalId: bigint): PotCall => ({ functionName: "approve", args: [proposalId] });
+export const takeBackCall = (proposalId: bigint): PotCall => ({ functionName: "revokeApproval", args: [proposalId] });
+
 /**
  * Runs a request from `from` as a call against the latest state. Null when the
  * contract would take it; the refusal, with its code, when it wouldn't.
