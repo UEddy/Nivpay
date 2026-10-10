@@ -550,3 +550,65 @@ impractical (section 6). The plan:
   scheduled workflow is paused after 60 days without repository activity.
   The job uses the public RPC and needs no secret, only permission to push to
   its data branch.
+
+## 11. Paying from a pot, built (10 Oct 2026)
+
+Screen 3 (`Live-Approve`) and asking for a payment, from the pot screen.
+Rules in `app/src/lib/payout.ts`, chain reads in `app/src/lib/payoutLive.ts`,
+screens in `app/src/screens/Ask.tsx` and `Request.tsx`.
+
+* **Asking.** Only a decider on an open, unpaused pot sees Ask for a
+  payment. The sheet lists the pot's own payees with what is left of each
+  limit. Before the asker signs, it shows the NivPay fee (worked out exactly
+  as `_feeOn`, from `feeBps()` and `feeCap()`; a live check compares it with
+  `feeOn` on both deployments), what the pot keeps after, the limit used, and
+  that asking counts as their yes. Gap G8 is closed on the phone: over the
+  limit (24) or more than the pot holds with the fee (25) is refused before
+  anything is signed.
+* **The request link.** A fifth link kind, `ask`: deployment, pot, creation
+  block and request number, in lowercase base32. It is unsigned and claims
+  nothing; the screen reads everything from `proposalInfo` at the finalized
+  block, and names from the pot link already on that phone. The asker shares
+  it from the request screen. The signed note of gap G2 is not built yet.
+* **Saying yes, taking it back.** "Approve" is never shown; deciders say yes.
+  The yes that reaches the rule reads "Say yes and pay Caterer". Not yet
+  sends nothing (G3). A yes can be taken back until the payment is made,
+  also while paused. Withdrawing a request (`cancelProposal`) and pausing
+  (`freeze`) are not on this screen yet.
+* **Every request is run as a call first** (`simulateContract` at latest),
+  so a refusal shows its code, 22 to 29, with no gas grant and no passkey
+  prompt. Then the usual write path: signed once, saved, followed to
+  Finalized, resumed after a reload, retried only on the same nonce, 56 when
+  the node turns it down twice.
+* **Motion.** "Payment asked" starts from the finalized `Proposed` event:
+  the payee's route marches and its ring pulses until decided, and the live
+  badge stops its own ping so no more than two loops run. "Approved and
+  paid" starts only once the paying yes is final: tip, stream, drain, check,
+  about 2.2 s (`PAID_MOTION`). Expiry is judged at the finalized block's time.
+
+### Requests per account for the full Mama's 60th run, recounted
+
+The story as the comps tell it: Aniekan asks for both payments, Ubong's yes
+pays the Caterer, Idara's yes pays the Event hall, Idara asks to close early
+and Ubong agrees, and each takes their share. Everyone claims test AUSD once
+(10,000 covers any share). Gas is from section 6 (AUSD) and, for the faucet
+claim, `eth_estimateGas` from a fresh account on 10 Oct 2026: 130,600. Price
+102 gwei. Closing and claiming are counted as one request each, as the
+contract needs, though their screens are not built yet.
+
+| Account | Requests it sends | Count | Gas | MON | Grants |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Idara (makes the pot) | claim, make the pot, put in $500, the yes that pays the hall, ask to close, take her share | 6 | 1,282,524 | 0.131 | 2, at 0 and 3 sent |
+| Ubong | claim, put in $400, the yes that pays the Caterer, the yes that closes, take his share | 5 | 765,392 | 0.078 | 1, at 0 sent |
+| Aniekan | claim, put in $100, ask to pay the Caterer, ask to pay the hall, take his share | 5 | 762,093 | 0.078 | 1, at 0 sent |
+| Caterer, Event hall | nothing: replies are links, and being paid sends nothing | 0 | 0 | 0 | 0 |
+
+**It fits the 10 transaction cap.** The most any account sends is 6, and the
+last grant anyone needs is asked for with 3 sent, far under 10. Idara's
+second grant comes because her first three requests use 0.084 of the 0.1 and
+the paying yes needs 0.023 at the max fee; she then holds 0.016, under the
+0.075 threshold, so it is granted. Each person has 4 spare requests before
+the cap: a retry on the same nonce uses none of them, but a request that
+reverts, or a faucet claim that loses the race (62), uses one. Asking
+without a yes (the asker's own counts) and the take back are the only new
+kinds of request, and neither is in the story; a take back costs 55,816 gas.

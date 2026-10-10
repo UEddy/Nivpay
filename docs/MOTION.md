@@ -8,8 +8,8 @@ The map and the pot are how people see where their money is. Every animation sta
 |---|---|---|---|
 | Pot created | create tx finalized and the pot's number read from its PotCreated event | lid drops, lock pops onto the pot, invites fly out to each city. Until then the lid sits open beside the pot, there is no lock, and the screen says "Draft, not made yet" (`app/src/lib/createStage.ts`) | about 1.8s |
 | Someone chips in | their deposit event | coin flies from their city to the pot, a layer in their colour rises, the counter ticks up | 0.9s flight, then 0.75s fill |
-| Payment asked | proposal event | the vendor's route marches (dotted) and the vendor ring pulses until it is decided | loop |
-| Payment approved and paid | payout event | pot tilts, a stream runs down the vendor route, every layer drops by the same share, vendor fills with a check | about 2.2s |
+| Payment asked | proposal event, finalized | the vendor's route marches (dotted) and the vendor ring pulses until it is decided. Meanwhile the live badge stops its ping, so there are still two loops at most | loop |
+| Payment approved and paid | payout event, finalized; for your own yes, its finalized receipt | pot tilts, a stream runs down the vendor route, every layer drops by the same share, vendor fills with a check (`PAID_MOTION` in `app/src/lib/payout.ts`) | about 2.2s |
 | Pot closed | close event | dotted streams run from the pot to each city, each person's amount appears | about 1.2s |
 | Share taken | claim event | coin flies from the pot to that city, the city gets a check | 0.9s |
 | Story replay | tap Replay | the whole history in about 7s, list rows light up in step | about 7s |
