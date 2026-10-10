@@ -524,6 +524,17 @@ contracts, if you want one in the demo. I have not planned it in.
   The app stores a list of addresses, one per passkey, and "Switch account"
   asks for that account's passkey. Keys are still never stored; only
   addresses are.
+* **The account's own name** (10 Oct 2026). What the person asked to be
+  called, kept with the address in `nivpay.accounts.v1` on this phone only,
+  cleaned of control and invisible formatting characters and cut to 40
+  (`cleanName`, `app/src/lib/accounts.ts`), and shown only as text. It is
+  never written on chain and never sent to `/api`; it also goes into the
+  passkey's label in the password manager at sign up. A passkey brings its
+  account back on another phone but not the name, so Home asks once there,
+  with Skip falling back to "Account 7bC1"; Account details can change it.
+  It is a label nobody checks. Pots and invites keep the names people were
+  given in links, and matching a pot to an invite uses accounts only, so
+  the name changes neither.
 
 ## 10. History, planned for after Phase 3 (not built)
 

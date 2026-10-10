@@ -3,7 +3,7 @@ import { createSchedule, prefersReducedMotion } from "../lib/reduced.ts";
 import { encodeFunctionData, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import { POTS_ABI } from "../lib/abi.ts";
-import type { StoredAccount } from "../lib/accounts.ts";
+import { shownName, type StoredAccount } from "../lib/accounts.ts";
 import { liveWriteChain, waitForFinalized } from "../lib/chain.ts";
 import { createView, type Phase } from "../lib/createStage.ts";
 import { DEPLOYMENT, POTS } from "../lib/deployment.ts";
@@ -252,7 +252,7 @@ export function CreateScreen(props: {
   }, [account.address, draftId, drafts, failed, finish, land]);
   useEffect(checkOnIt, [checkOnIt]);
 
-  const people = useMemo(() => (draft ? allDeciders(draft, account.name) : []), [draft, account.name]);
+  const people = useMemo(() => (draft ? allDeciders(draft, shownName(account)) : []), [draft, account]);
 
   if (!draft) {
     return (
@@ -282,7 +282,7 @@ export function CreateScreen(props: {
     setResult(null);
     setShareNote(null);
     setStuck(false);
-    const signedPeople = allDeciders(draft, account.name);
+    const signedPeople = allDeciders(draft, shownName(account));
     const shares = signedShares(draft);
     const call = {
       from: account.address,

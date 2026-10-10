@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MeraError } from "@category-labs/mera";
-import { AccountStore, defaultAccountName } from "./accounts.ts";
+import { AccountStore, cleanName, defaultAccountName, NAME_MAX, shownName } from "./accounts.ts";
 import { checkPasskeyHost } from "./hosts.ts";
 import { describeFailure, WrongPasskeyError } from "./errors.ts";
 
@@ -43,11 +43,12 @@ test("corrupt storage reads as no accounts rather than throwing", () => {
   assert.deepEqual(new AccountStore(kv).list().map((a) => a.name), ["ok"]);
 });
 
-test("an account with no name is named by its last four characters, never a 0x form", () => {
+test("an account with no name is shown by its last four characters, never a 0x form, and the fallback is never kept as a name", () => {
   assert.equal(defaultAccountName(B), "Account 9B20");
   const store = new AccountStore(memory());
   store.upsert({ address: B, name: "" });
-  assert.equal(store.list()[0]?.name, "Account 9B20");
+  assert.equal(store.list()[0]?.name, "");
+  assert.equal(shownName(store.list()[0]!), "Account 9B20");
 });
 
 test("passkeys only on localhost and the production hostname", () => {
@@ -69,4 +70,54 @@ test("Mera errors become plain words with a code, and never claim anything about
   assert.match(describeFailure(new MeraError("PRF_UNAVAILABLE", "x")).text, /Google Password Manager/);
   assert.match(describeFailure(new MeraError("PRF_UNAVAILABLE", "x")).text, /Samsung Pass/);
   assert.match(describeFailure(new WrongPasskeyError()).text, /different NivPay account/);
+});
+
+test("a fallback saved as a name by an earlier version reads as no name, so the person is asked once", () => {
+  const kv = memory();
+  kv.setItem("nivpay.accounts.v1", JSON.stringify([{ address: B, name: "Account 9B20" }]));
+  const store = new AccountStore(kv);
+  assert.equal(store.list()[0]?.name, "");
+  assert.equal(store.needsName(B), true);
+});
+
+test("asked once: Skip is remembered for that account on this phone, and a name ends the asking", () => {
+  const store = new AccountStore(memory());
+  store.upsert({ address: A as `0x${string}`, name: "" });
+  store.upsert({ address: B, name: "" });
+  store.skipName(A as `0x${string}`);
+  assert.equal(store.needsName(A as `0x${string}`), false);
+  assert.equal(store.needsName(B), true);
+  assert.equal(store.rename(B, "  Ubong  "), true);
+  assert.equal(store.needsName(B), false);
+  assert.equal(store.list().find((a) => a.address === B)?.name, "Ubong");
+});
+
+test("a name can be changed but not blanked, and only for an account this phone knows", () => {
+  const store = new AccountStore(memory());
+  store.upsert({ address: B, name: "Ubong" });
+  assert.equal(store.rename(B, "\u200b \u202e "), false);
+  assert.equal(store.list()[0]?.name, "Ubong");
+  assert.equal(store.rename(A as `0x${string}`, "Idara"), false);
+  assert.equal(store.list().length, 1);
+});
+
+test("a name is plain text: controls, direction overrides and zero-width characters go, spaces are tidied, length is capped", () => {
+  assert.equal(cleanName("  Idara   Udo \n"), "Idara Udo");
+  // U+202E would show "Idara" as "aradI"-looking text; U+200B and U+FEFF make two names look the same.
+  assert.equal(cleanName("Id\u202eara\u200b\ufeff"), "Idara");
+  assert.equal(cleanName("Ubong\u0000\u0007\u001b[31m"), "Ubong[31m");
+  assert.equal(cleanName("<img src=x onerror=alert(1)>"), "<img src=x onerror=alert(1)>", "kept as text; React shows it as text");
+  assert.equal(Array.from(cleanName("\u00e9".repeat(100))).length, NAME_MAX);
+  assert.equal(cleanName("e\u0301"), "\u00e9", "normalised, so the same name is stored the same way");
+  assert.equal(cleanName("\u2066\u2069\u200d"), "");
+});
+
+test("whatever is typed, only an address and a cleaned name are kept", () => {
+  const kv = memory();
+  const store = new AccountStore(kv);
+  store.upsert({ address: B, name: "Aniekan\u202e<script>" });
+  store.skipName(B);
+  const parsed = JSON.parse(kv.raw.get("nivpay.accounts.v1") ?? "[]") as Record<string, string>[];
+  assert.deepEqual(parsed, [{ address: B, name: "Aniekan<script>" }]);
+  assert.deepEqual(JSON.parse(kv.raw.get("nivpay.nameSkipped.v1") ?? "[]"), [B]);
 });

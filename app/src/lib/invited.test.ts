@@ -268,3 +268,19 @@ test("a matched pot reads as invited, with everyone else by the end of their acc
   assert.equal(copy.invitedBy("Idara"), "Invited by Idara. Open it here, no link needed.");
   assert.equal(copy.alsoInIt([copy.accountEnding(IDARA), copy.accountEnding(CATERER)]), `Also in it: account ending ${IDARA.slice(-4)} and account ending ${CATERER.slice(-4)}.`);
 });
+
+test("the name an account calls itself on this phone changes no invite and no match", async () => {
+  const { AccountStore } = await import("./accounts.ts");
+  const kv = new Map<string, string>();
+  const accounts = new AccountStore({ getItem: (k) => kv.get(k) ?? null, setItem: (k, v) => void kv.set(k, v) });
+  const pots: FakePot[] = [{ creator: IDARA, block: 5_432n, deciders: [IDARA, UBONG, ANIEKAN], payees: [CATERER] }];
+  const rows = [waitingFor({}, { block: 5_000n, potCount: 0 })];
+  accounts.upsert({ address: UBONG, name: "Ubong" });
+  const before = await matchInvites(rows, [foundPot(0, ["decides"])], fakeChain(pots).reader, DEPLOYED);
+  accounts.rename(UBONG, "Someone else entirely");
+  const after = await matchInvites(rows, [foundPot(0, ["decides"])], fakeChain(pots).reader, DEPLOYED);
+  assert.equal(before[0]!.match?.potId, "0", "the invite is matched to the pot");
+  assert.deepEqual(after, before);
+  assert.equal(after[0]!.from, invite.from, "the inviter's name is the one in the invite");
+  assert.ok(!JSON.stringify(after).includes("Someone else"));
+});

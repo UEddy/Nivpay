@@ -82,6 +82,7 @@ function allCopy(): [string, string][] {
     claimAmountHint: ["$10,000", "$100,000"],
     errClaimCooldown: [42],
     balanceNotLive: ["14:02"],
+    accountIdLine: ["0x725C9cd75b2C8C29AEbf6a14eE84a3b54C787bC1"],
     errClaimCeiling: ["$100,000"],
     potRowDraft: [3],
     potRowMade: ["Thu 31 Dec 2026"],

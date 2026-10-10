@@ -461,3 +461,15 @@ h2 {
 .stale-note {
   margin: 4px 0 0;
 }
+
+/* The short Account ID under the name in Home's header. */
+.account-line {
+  margin: 2px 0 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.name-form {
+  display: flex;
+  flex-direction: column;
+}

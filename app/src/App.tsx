@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { flushSync } from "react-dom";
 import { encodeFunctionData, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES, offlineMessage } from "./copy.ts";
-import { AccountStore, type StoredAccount } from "./lib/accounts.ts";
+import { AccountStore, cleanName, NAME_MAX, shownName, type StoredAccount } from "./lib/accounts.ts";
 import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
 import { AUSD, AUSD_FAUCET, TESTUSD } from "./lib/config.ts";
@@ -262,6 +262,11 @@ function Screens() {
     }
   };
 
+  const renameActive = (name: string) => {
+    if (active) accounts.rename(active.address, name);
+    setActive(accounts.active());
+  };
+
   const banner: ReactNode = connection.down && (
     <div className="banner" role="status">
       {offlineMessage(inFlight, connection.offline)}
@@ -370,6 +375,7 @@ function Screens() {
           onOpenRequest={(pot, proposalId) => go({ kind: "request", pot, proposalId })}
           onSend={() => go({ kind: "send", request: null })}
           onReceive={() => go({ kind: "receive" })}
+          onRename={renameActive}
         />
       ) : (
         <Welcome
@@ -402,7 +408,7 @@ function Welcome(props: {
     setBusy(kind);
     try {
       const { signIn, signUp } = await passkeys();
-      if (kind === "up") props.onReady(await signUp(name.trim()), name.trim());
+      if (kind === "up") props.onReady(await signUp(cleanName(name)), cleanName(name));
       else {
         const address = await signIn();
         props.onReady(address, props.known.find((a) => a.address === address)?.name ?? "");
@@ -436,7 +442,7 @@ function Welcome(props: {
               <p className="eyebrow">{copy.accountsOnThisPhone}</p>
               {props.known.map((a) => (
                 <div className="row" key={a.address}>
-                  <span className="value">{a.name}</span>
+                  <span className="value">{shownName(a)}</span>
                   <span className="label">{copy.accountEnding(a.address)}</span>
                 </div>
               ))}
@@ -455,11 +461,12 @@ function Welcome(props: {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoComplete="given-name"
-                maxLength={40}
+                maxLength={NAME_MAX * 2}
                 placeholder={copy.namePlaceholder}
               />
             </label>
-            <button className="btn primary" disabled={busy !== null || !name.trim()} onClick={() => run("up")}>
+            <p className="hint">{copy.nameHint}</p>
+            <button className="btn primary" disabled={busy !== null || !cleanName(name)} onClick={() => run("up")}>
               {busy === "up" ? copy.waitingForPasskey : copy.createAccount}
             </button>
             <p className="hint">{copy.createAccountHint}</p>
@@ -484,8 +491,9 @@ function Welcome(props: {
 }
 
 /** Account details: the only place the Account ID appears, for support. */
-function AccountSheet(props: { account: StoredAccount; onSwitch: () => void; onClose: () => void }) {
+function AccountSheet(props: { account: StoredAccount; onSwitch: () => void; onClose: () => void; onRename: (name: string) => void }) {
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
   const receipt = latestReceipt(props.account.address);
   const copyId = () => {
     navigator.clipboard
@@ -497,7 +505,22 @@ function AccountSheet(props: { account: StoredAccount; onSwitch: () => void; onC
     <div className="sheet-backdrop" role="presentation" onClick={props.onClose}>
       <section className="sheet" role="dialog" aria-modal="true" aria-label={copy.accountDetails} onClick={(e) => e.stopPropagation()}>
         <p className="eyebrow">{copy.accountDetails}</p>
-        <h2>{props.account.name}</h2>
+        <h2>{shownName(props.account)}</h2>
+        {editing ? (
+          <NameForm
+            initial={props.account.name}
+            onSave={(name) => {
+              props.onRename(name);
+              setEditing(false);
+            }}
+            onSkip={() => setEditing(false)}
+            skipLabel={copy.back}
+          />
+        ) : (
+          <button className="btn" onClick={() => setEditing(true)}>
+            {copy.changeName}
+          </button>
+        )}
         <div className="field">
           <span>{copy.accountId}</span>
           <code className="account-id">{props.account.address}</code>
@@ -523,6 +546,37 @@ function AccountSheet(props: { account: StoredAccount; onSwitch: () => void; onC
         </button>
       </section>
     </div>
+  );
+}
+
+/**
+ * Asks what to call the person. The name is cleaned (lib/accounts.ts) and
+ * rendered only as text. It stays on this phone: never on chain, never sent
+ * to /api.
+ */
+function NameForm(props: { initial: string; onSave: (name: string) => void; onSkip: () => void; skipLabel: string }) {
+  const [name, setName] = useState(props.initial);
+  const clean = cleanName(name);
+  return (
+    <form
+      className="name-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (clean) props.onSave(clean);
+      }}
+    >
+      <label className="field">
+        <span>{copy.yourName}</span>
+        <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" maxLength={NAME_MAX * 2} placeholder={copy.namePlaceholder} />
+      </label>
+      <p className="hint">{copy.nameHint}</p>
+      <button type="submit" className="btn primary" disabled={!clean}>
+        {copy.saveName}
+      </button>
+      <button type="button" className="btn ghost" onClick={props.onSkip}>
+        {props.skipLabel}
+      </button>
+    </form>
   );
 }
 
@@ -579,8 +633,16 @@ function Home(props: {
   onOpenRequest: (pot: StoredPot, proposalId: bigint) => void;
   onSend: () => void;
   onReceive: () => void;
+  onRename: (name: string) => void;
 }) {
   const { account, connection } = props;
+  // A passkey brings back its account but not its name: ask once, on this phone.
+  const [askName, setAskName] = useState(() => accounts.needsName(account.address));
+  useEffect(() => setAskName(accounts.needsName(account.address)), [account.address]);
+  const skipAsking = () => {
+    accounts.skipName(account.address);
+    setAskName(false);
+  };
   const [balances, setBalances] = useState<Balances | null>(null);
   // A payment from this account still being confirmed: the Send screen follows it.
   const [sendInFlight, setSendInFlight] = useState(false);
@@ -743,7 +805,8 @@ function Home(props: {
     <>
       <header className="top">
         <div>
-          <h1>{account.name}</h1>
+          <h1>{shownName(account)}</h1>
+          {account.name && <p className="account-line">{copy.accountIdLine(account.address)}</p>}
           <TestModeBadge />
         </div>
         <button className="btn ghost small" onClick={() => setDetails(true)}>
@@ -752,6 +815,24 @@ function Home(props: {
       </header>
 
       {props.notice && <NoticeLine notice={props.notice} />}
+
+      {askName && (
+        <section className="card" aria-labelledby="ask-name">
+          <p className="eyebrow" id="ask-name">
+            {copy.yourName}
+          </p>
+          <p className="hint">{copy.askNameLede}</p>
+          <NameForm
+            initial=""
+            onSave={(name) => {
+              props.onRename(name);
+              setAskName(false);
+            }}
+            onSkip={skipAsking}
+            skipLabel={copy.skipName}
+          />
+        </section>
+      )}
 
       <section className={`card balances${stale ? " stale" : ""}`} aria-live="polite">
         <p className="eyebrow">{copy.yourBalance}</p>
@@ -842,6 +923,7 @@ function Home(props: {
       {details && (
         <AccountSheet
           account={account}
+          onRename={props.onRename}
           onClose={() => setDetails(false)}
           onSwitch={() => {
             setDetails(false);

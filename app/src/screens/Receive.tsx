@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Address, Log } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
-import type { StoredAccount } from "../lib/accounts.ts";
+import { shownName, type StoredAccount } from "../lib/accounts.ts";
 import { ERC20_READ_ABI } from "../lib/abi.ts";
 import { CTK, LOG_PAGE_BLOCKS, POTS_AUSD, POTS_TESTUSD, SETTLEMENT_PAIR } from "../lib/config.ts";
 import { DEPLOYMENT, DOLLAR } from "../lib/deployment.ts";
@@ -123,13 +123,13 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
   const stale = balanceNote(failed || !online, balanceReadAt);
   const requested = decimals === null ? null : parseAmount(amountText, decimals);
   const url = useMemo(
-    () => linkUrl(location.origin, { kind: "pay", deployment: DEPLOYMENT, account: me, name: props.account.name, amount: requested ?? 0n }),
-    [me, props.account.name, requested],
+    () => linkUrl(location.origin, { kind: "pay", deployment: DEPLOYMENT, account: me, name: shownName(props.account), amount: requested ?? 0n }),
+    [me, props.account, requested],
   );
 
   const share = async () => {
     setNote(null);
-    const how = await shareLink(url, copy.requestShareText(props.account.name));
+    const how = await shareLink(url, copy.requestShareText(shownName(props.account)));
     if (how === "copied") setNote(copy.linkCopied);
     if (how === "failed") setNote(copy.copyFailed);
   };
