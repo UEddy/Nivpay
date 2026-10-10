@@ -73,6 +73,9 @@ export type PotState = {
   myBalance: bigint;
   /** What each listed account could take out now (funderInfo.redeemable), by lowercase account. */
   held: Record<string, bigint>;
+  /** Each listed account's shares (funderInfo.shares), by lowercase account, and the pot's total. */
+  shares: Record<string, bigint>;
+  totalShares: bigint;
 };
 
 export async function readPotState(potId: bigint, accounts: Address[], me: Address): Promise<PotState> {
@@ -105,6 +108,8 @@ export async function readPotState(potId: bigint, accounts: Address[], me: Addre
     decimals,
     myBalance,
     held: Object.fromEntries(unique.map((a, i) => [a.toLowerCase(), (infos[i] as readonly [bigint, bigint])[1]])),
+    shares: Object.fromEntries(unique.map((a, i) => [a.toLowerCase(), (infos[i] as readonly [bigint, bigint])[0]])),
+    totalShares: pot.totalShares,
   };
 }
 

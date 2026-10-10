@@ -152,6 +152,7 @@ function allCopy(): [string, string][] {
     payeeReplyAdded: ["Chidi", "Caterer"],
     errOverLimit: ["$100", "Caterer"],
     errPotShort: ["$397.00"],
+    fractionPercent: ["40"],
     wantsToClose: ["Idara"],
     moreYesCloses: [1],
     yesClosesNow: [2, 3],

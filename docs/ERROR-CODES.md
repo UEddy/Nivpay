@@ -64,7 +64,10 @@ a call before anything is signed, so these send nothing.
 
 | Code | What happened | Where to look |
 | --- | --- | --- |
+| 94 | Nothing to take out: this account holds no shares in the pot, or fewer than it asked to take (`ZeroShares`, `InsufficientShares`). | `funderInfo(potId, account)` |
 | 95 | The pot is already closed (`PotClosed` on `proposeClose` or a closing yes), by request or because its closing date has passed. | `getPot(potId).closed`, `.endTime` |
+| 96 | The pot isn't closed yet (`PotNotClosed`): what's left can be shared out only after close, and its close can be recorded only after its date. Taking your own share out works any time. | `getPot(potId).closed`, `.endTime` |
+| 97 | The contract refused taking a share out for another reason, such as the dollar refusing the transfer to this account. | `eth_call` of `exit` or `claim` from the account |
 
 ## Passkey
 
