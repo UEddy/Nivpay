@@ -11,7 +11,24 @@
  * details sheet shows the account's identifier so support can find it.
  */
 
-export const copy = {
+/**
+ * A person without a signed name is "account ending 7bC1". Where that starts
+ * a sentence, it starts with a capital: "Account ending 7bC1 added $100".
+ */
+export function sentenceStarts(text: string): string {
+  return text.replace(/(^|[.!?]\s+)account ending/g, "$1Account ending");
+}
+
+/** These make the name itself, which goes in the middle of sentences too. */
+const NAME_MAKERS = new Set(["accountEnding", "mapEnding"]);
+
+function withSentenceStarts<T extends Record<string, unknown>>(words: T): T {
+  return Object.fromEntries(
+    Object.entries(words).map(([k, v]) => [k, typeof v === "function" && !NAME_MAKERS.has(k) ? (...a: unknown[]) => sentenceStarts((v as (...x: unknown[]) => string)(...a)) : v]),
+  ) as T;
+}
+
+const words = {
   appName: "NivPay",
   tagline: "A group purse for one purpose that no single person can pocket.",
   testMode: "Test mode",
@@ -585,6 +602,8 @@ export const copy = {
   /** How a vendor or person is shown when a name alone isn't enough. */
   accountEnding: (id: string) => `account ending ${id.slice(-4)}`,
 } as const;
+
+export const copy = withSentenceStarts(words);
 
 /**
  * The connection banner. "Nothing has moved" is only true when no request of

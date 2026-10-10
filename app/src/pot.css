@@ -1544,3 +1544,42 @@
   line-height: 1.4;
   color: var(--muted);
 }
+
+/* The story at 320 to 360 px: the heading stays on one line beside a compact control. */
+.story-head {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.story-head h2 {
+  white-space: nowrap;
+}
+
+.story-head .seg {
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+}
+
+.story-head .seg-btn {
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 13.5px;
+}
+
+/* The list is what this screen is for: its footer buttons are the comp's lighter 52 and 46 px. */
+.story-foot {
+  gap: 6px;
+  padding-top: 10px;
+}
+
+.story-foot .pill-btn {
+  min-height: 52px;
+  font-size: 16px;
+}
+
+.story-foot .pill-btn.outline {
+  min-height: 46px;
+  font-size: 15px;
+}

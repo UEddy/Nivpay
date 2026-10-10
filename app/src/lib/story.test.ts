@@ -131,7 +131,7 @@ test("a yes on its own, a yes taken back, a request still waiting and one expire
       ["yes", "Ubong said yes", "To pay $50.00 to Caterer"],
       ["took-back", "Ubong took back their yes", "To pay $50.00 to Caterer"],
       ["took-out", "Ubong took $400.00 out", "Their share, before the pot closed"],
-      ["share", "account ending 4444 took their share, $1.00", "What was left, by share"],
+      ["share", "Account ending 4444 took their share, $1.00", "What was left, by share"],
     ],
   );
   assert.equal(storyRows(extra, { ...names, now: T0 + TTL + 1n })[4]!.sub, "Expired. Nothing moved.");

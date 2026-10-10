@@ -273,6 +273,13 @@ test("a payment request reads in plain words: a yes, never an approval", () => {
   assert.equal(copy.askCountsAsYes(0, "Caterer"), "This pot needs only one yes, so asking pays Caterer straight away.");
 });
 
+test("a sentence that starts with an unnamed person starts with a capital, and only then", () => {
+  assert.equal(copy.storyAdded("account ending 8C9D", "$100.00"), "Account ending 8C9D added $100.00");
+  assert.equal(copy.wantsToPay("account ending 8C9D", "$600", "Caterer"), "Account ending 8C9D wants to pay $600 to Caterer");
+  assert.equal(copy.storyPaidBy("account ending 8C9D", "account ending 1a2b", "$3.00"), "Account ending 8C9D asked, account ending 1a2b said yes · fee $3.00");
+  assert.equal(copy.tookLine("$5"), "Your $5 is in your balance.");
+});
+
 test("vendors and people are shown as 'account ending', never a 0x form", () => {
   assert.equal(copy.accountEnding(SAMPLE_ID), "account ending 7bC1");
 });

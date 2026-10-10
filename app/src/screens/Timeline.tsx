@@ -140,7 +140,6 @@ export function TimelineScreen(props: {
   }, [events]);
 
   const people = info && state ? peopleOf(info, state, me) : [];
-  const nameOf = (a: Address) => people.find((p) => isAddressEqual(p.account, a))?.name ?? copy.accountEnding(a);
   const colorOf = (a: Address | null) => {
     const i = a ? people.findIndex((p) => isAddressEqual(p.account, a)) : -1;
     return i >= 0 && i < PERSON_COLORS.length ? PERSON_COLORS[i]!.fill : "var(--ink)";
@@ -156,6 +155,21 @@ export function TimelineScreen(props: {
   };
 
   const steps: ReplayStep[] = useMemo(() => (events ? replaySteps(events) : []), [events]);
+  // Worked out once per change in the history or the numbers, not on every replay step.
+  const rows = useMemo(() => {
+    if (!events || !info || !state) return [];
+    const ps = peopleOf(info, state, me);
+    const find = (a: Address) => ps.find((p) => isAddressEqual(p.account, a));
+    return storyRows(events, {
+      me,
+      nameOf: (a) => find(a)?.name ?? copy.accountEnding(a),
+      cityOf: (a) => find(a)?.city ?? "",
+      payeeName: (i) => state.payees[i]?.name ?? "",
+      money: (v) => formatAmount(v, state.decimals, "cents"),
+      now: state.now,
+    });
+  }, [events, info, state, me]);
+  const byOrder = useMemo(() => ({ newest: ordered(rows, "newest"), oldest: ordered(rows, "oldest") }), [rows]);
   const replay = () => {
     if (!steps.length || replayAt !== null) return;
     timers.current.forEach(clearTimeout);
@@ -194,17 +208,7 @@ export function TimelineScreen(props: {
 
   const d = state.decimals;
   const fmt = (v: bigint, style: "auto" | "cents" = "auto") => formatAmount(v, d, style);
-  const rows = events
-    ? storyRows(events, {
-        me,
-        nameOf,
-        cityOf: (a) => people.find((p) => isAddressEqual(p.account, a))?.city ?? "",
-        payeeName: (i) => state.payees[i]?.name ?? "",
-        money: (v) => fmt(v, "cents"),
-        now: state.now,
-      })
-    : [];
-  const shown = ordered(rows, order);
+  const shown = byOrder[order];
 
   // During the replay the map shows each step as it was; the rows light up in step.
   const step = replayAt === null ? null : replayAt >= 0 ? steps[replayAt]! : null;
