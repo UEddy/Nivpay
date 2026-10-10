@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createSchedule, prefersReducedMotion } from "../lib/reduced.ts";
 import { encodeFunctionData, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import { POTS_ABI } from "../lib/abi.ts";
@@ -89,18 +90,12 @@ export function CreateScreen(props: {
   const [phase, setPhase] = useState<Phase>(() => (drafts.get(draftId)?.made ? "landed" : "draft"));
   useEffect(() => {
     if (!celebrate) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setPhase("landed");
-      return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (const { at, kind } of createSchedule(prefersReducedMotion(), drafts.get(draftId)?.deciders.length ?? 0)) {
+      if (at === 0) setPhase(kind);
+      else timers.push(setTimeout(() => setPhase(kind), at));
     }
-    const others = Math.max(0, (drafts.get(draftId)?.deciders.length ?? 0));
-    setPhase("locked");
-    const t1 = setTimeout(() => setPhase("flying"), 380);
-    const t2 = setTimeout(() => setPhase("landed"), 380 + 900 + 140 * Math.max(0, others - 1));
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
+    return () => timers.forEach(clearTimeout);
   }, [celebrate, drafts, draftId]);
   const [announce, setAnnounce] = useState("");
   const [shareNote, setShareNote] = useState<string | null>(null);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PAID_MOTION } from "../lib/payout.ts";
+import { paidSchedule, prefersReducedMotion, type PaidStep } from "../lib/reduced.ts";
 import type { Stream } from "./PotMap.tsx";
 
 export type PayMotion = {
@@ -34,29 +34,32 @@ export function usePayMotion() {
   const run = useCallback((payee: number, land: () => void, done: () => void) => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      land();
-      setMotion({ ...IDLE, payee, arrived: true });
-      done();
-      return;
+    // Reduced (paidSchedule(true)): the numbers land and the payee is checked at once, with no stream drawn.
+    const reduced = prefersReducedMotion();
+    const steps: Record<PaidStep, () => void> = {
+      tilt: () => setMotion({ ...IDLE, tilt: true, payee }),
+      stream: reduced
+        ? land
+        : () => {
+            setMotion((m) => ({ ...m, stream: { payee, at: "start" } }));
+            requestAnimationFrame(() =>
+              requestAnimationFrame(() => {
+                setMotion((m) => ({ ...m, stream: { payee, at: "end" }, draining: true }));
+                land();
+              }),
+            );
+          },
+      check: () => setMotion((m) => ({ ...m, payee, arrived: true })),
+      upright: () => setMotion((m) => ({ ...m, tilt: false })),
+      done: () => {
+        setMotion({ ...IDLE, payee, arrived: true });
+        done();
+      },
+    };
+    for (const { at, kind } of paidSchedule(reduced)) {
+      if (at === 0) steps[kind]();
+      else timers.current.push(setTimeout(steps[kind], at));
     }
-    const at = (ms: number, fn: () => void) => timers.current.push(setTimeout(fn, ms));
-    setMotion({ ...IDLE, tilt: true, payee });
-    at(PAID_MOTION.stream, () => {
-      setMotion((m) => ({ ...m, stream: { payee, at: "start" } }));
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          setMotion((m) => ({ ...m, stream: { payee, at: "end" }, draining: true }));
-          land();
-        }),
-      );
-    });
-    at(PAID_MOTION.check, () => setMotion((m) => ({ ...m, arrived: true })));
-    at(PAID_MOTION.upright, () => setMotion((m) => ({ ...m, tilt: false })));
-    at(PAID_MOTION.done, () => {
-      setMotion({ ...IDLE, payee, arrived: true });
-      done();
-    });
   }, []);
 
   return { motion, run };

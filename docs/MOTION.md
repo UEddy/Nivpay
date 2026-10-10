@@ -55,7 +55,19 @@ Two loops at most, counted by rhythm: every marching route is one march, and the
 - Pot layers are stacked rects inside a `clipPath`, scaled with `transform: scaleY()` from the bottom (`transform-box: fill-box; transform-origin: 50% 100%`). A payment scales the whole stack, so every layer shrinks by the same share, which is exactly how the contract splits a payment.
 - Counters update with `requestAnimationFrame` only while they move. Show whole dollars in flight and exact cents at rest.
 - Pause loops when the page is hidden (`visibilitychange`) or the map is off screen (`IntersectionObserver`).
-- Respect `prefers-reduced-motion`: no flights and no loops; values cross-fade in 150ms.
+- Respect `prefers-reduced-motion`: no flights and no loops; values cross-fade in 150ms, and only opacity transitions. Each motion has a still equivalent that shows the same change, and still only at Finalized, because reduced motion only shortens what happens after a screen starts a motion, never when it starts it (`app/src/lib/reduced.ts`):
+
+  | Motion | With reduced motion |
+  |---|---|
+  | Pot created | the made pot, lid shut and locked, at once |
+  | Someone chips in | the layer and the amount change at once, with the polite announcement |
+  | Your coin waiting at the rim | the coin stands at the rim in half tone until it lands |
+  | Payment asked | the payee's route stays dotted and its ring stands doubled |
+  | Your yes landing | your circle in half tone, its check only once final |
+  | Payment approved and paid | the payee filled and checked, the level lower, at once |
+  | Pot closed | the dotted streams and each amount, at once |
+  | Story replay | not offered; the story list in either order is the same history |
+  | A payment that just arrived | "Just arrived" under it, no tint |
 - Target 60fps and no task longer than 50ms during a flight, measured in Chrome DevTools on a real low-end Android phone, not on a laptop.
 - No animation library is needed for the map and the pot; the prototype uses plain CSS and one small counter. Add Motion (`npm install motion`, `import { motion } from "motion/react"`) only if a sheet or gesture needs springs. Every dependency is supply chain risk.
 

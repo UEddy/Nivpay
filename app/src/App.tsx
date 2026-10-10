@@ -19,6 +19,7 @@ import { decodeLink, type AskLink, type Invite, type PayLink, type PotLink } fro
 import { formatAmount, parseAmount } from "./lib/money.ts";
 import { hostCheck, signIn, signUp } from "./lib/passkey.ts";
 import { readClient } from "./lib/rpc.ts";
+import { prefersReducedMotion } from "./lib/reduced.ts";
 import { PotStore, rememberPotLink, type StoredPot } from "./lib/potstore.ts";
 import { retryStuckWrite, sendWrite, type Step } from "./lib/send.ts";
 import { acceptReply } from "./lib/replies.ts";
@@ -72,8 +73,7 @@ function potForRequest(link: AskLink): StoredPot {
  * pot map can stay put while the rest changes. Elsewhere it swaps at once.
  */
 function withTransition(change: () => void) {
-  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduced && typeof document.startViewTransition === "function") {
+  if (!prefersReducedMotion() && typeof document.startViewTransition === "function") {
     document.startViewTransition(() => flushSync(change));
   } else change();
 }

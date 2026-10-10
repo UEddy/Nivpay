@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { prefersReducedMotion } from "../lib/reduced.ts";
 import { isAddressEqual, type Address } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
@@ -181,7 +182,7 @@ export function TimelineScreen(props: {
     steps.forEach((_, i) => timers.current.push(setTimeout(() => alive.current && setReplayAt(i), 200 + i * each)));
     timers.current.push(setTimeout(() => alive.current && setReplayAt(null), 200 + steps.length * each + 400));
   };
-  const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduced = prefersReducedMotion();
 
   const bar = (
     <div className="bar">

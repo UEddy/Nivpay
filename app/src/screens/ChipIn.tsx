@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { prefersReducedMotion } from "../lib/reduced.ts";
 import { isAddressEqual, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
@@ -36,7 +37,7 @@ function useTicker(target: bigint | null, decimals: number): string {
     if (target === null) return;
     const start = from.current;
     from.current = target;
-    if (start === null || start === target || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (start === null || start === target || prefersReducedMotion()) {
       setShown({ value: target, moving: false });
       return;
     }
@@ -212,7 +213,7 @@ export function ChipInScreen(props: {
           setAnnounce(copy.addedAnnounce(who, formatAmount(last.args.assets as bigint, next.decimals, "auto"), formatAmount(next.totalAssets, next.decimals, "auto")));
         }
       };
-      if (flying.length === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if (flying.length === 0 || prefersReducedMotion()) {
         settle();
         return;
       }

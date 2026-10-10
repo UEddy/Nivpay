@@ -1601,3 +1601,32 @@
 .route.shown.faded {
   opacity: 0.3;
 }
+
+/*
+ * Reduced motion: every loop stops (styles.css), so each waiting state keeps
+ * a still mark instead of its pulse, and nothing reads as done before it is
+ * final (docs/MOTION.md). A marching route stays dotted, and the badge still
+ * says Live.
+ */
+@media (prefers-reduced-motion: reduce) {
+  /* Your coin at the rim, not final yet: half tone until it lands. */
+  .coin.holding {
+    opacity: 0.5 !important;
+  }
+
+  /* Your yes on its way: half tone, and no check until it is final. */
+  .voter-face.holding {
+    opacity: 0.55;
+  }
+
+  /* The fingerprint icon while the phone asks for it. */
+  .ico.breathe {
+    opacity: 0.55;
+  }
+
+  /* A payment waiting for a yes: the payee's ring stands doubled instead of pulsing. */
+  .payee-ping.on {
+    opacity: 0.6;
+    transform: scale(1.3);
+  }
+}
