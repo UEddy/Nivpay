@@ -259,18 +259,20 @@ Oct 2026.
 | NivPayPots on AUSD | [`0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB`](https://testnet.monadvision.com/address/0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB) | The product. Pots funded in AUSD. The app runs on this by default. |
 | NivPayPots on TESTUSD | [`0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA`](https://testnet.monadvision.com/address/0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA) | The same bytecode bound to TESTUSD, the fallback for testing. |
 | NivPayTestDollar (TESTUSD) | [`0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7`](https://testnet.monadvision.com/address/0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7) | A worthless test token anyone can mint, 100,000 per call. Testnet only. |
-| AUSD (Agora) | [`0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC`](https://testnet.monadvision.com/address/0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC) | not on Monad's Sourcify (see below) | Agora's six decimal dollar. Not ours. |
-| Agora AUSD faucet | [`0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C`](https://testnet.monadvision.com/address/0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C) | not on Monad's Sourcify (see below) | Dispenses test AUSD. Not ours. |
+| AUSD (Agora) | [`0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC`](https://testnet.monadvision.com/address/0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC) | [Monadscan](https://testnet.monadscan.com/address/0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC#code): proxy `AgoraDollarErc1967Proxy`, implementation `AgoraDollar`, both exact matches; not on Monad's Sourcify | Agora's six decimal dollar. Not ours. |
+| Agora AUSD faucet | [`0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C`](https://testnet.monadvision.com/address/0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C) | [Monadscan](https://testnet.monadscan.com/address/0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C#code): proxy `AgoraTransparentUpgradeableProxy`, exact match; implementation a similar match (same bytecode as another verified contract); not on Monad's Sourcify | Dispenses test AUSD. Not ours. |
 | Agora Instant Settlement pair, AUSD and CTK | [`0x1Aa8958Aa34cEC8096EF4381cb335effe977b0ae`](https://testnet.monadvision.com/address/0x1Aa8958Aa34cEC8096EF4381cb335effe977b0ae) | proxy; its implementation `0x1a5d115a87e39fd8d8c9e53b91dbe5e0ec309dd2` is a [Sourcify match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0x1a5d115a87e39fd8d8c9e53b91dbe5e0ec309dd2) | Delivers a payment in another currency at a fixed price. Not ours. |
-| Agora whitelister | [`0x7c10F56d6f04a51376393a1C3670e966863F6BD5`](https://testnet.monadvision.com/address/0x7c10F56d6f04a51376393a1C3670e966863F6BD5) | proxy; implementation not verified | Grants an account permission to send through the pair. Not ours. |
-| CTK (ConstantToken) | [`0x7BEb5D9DB0d85cBEa543C04f0dE8c23c2176cd9D`](https://testnet.monadvision.com/address/0x7BEb5D9DB0d85cBEa543C04f0dE8c23c2176cd9D) | not on Monad's Sourcify | Agora's 18 decimal test currency on the other side of the pair. Not ours. |
+| Agora whitelister | [`0x7c10F56d6f04a51376393a1C3670e966863F6BD5`](https://testnet.monadvision.com/address/0x7c10F56d6f04a51376393a1C3670e966863F6BD5) | proxy, exact match on [Monadscan](https://testnet.monadscan.com/address/0x7c10F56d6f04a51376393a1C3670e966863F6BD5#code); implementation `0xB6118Dd4ee6d92a6b4878ca4a011080b906a35ef`, `AgoraWhitelister`, exact match | Grants an account permission to send through the pair. Not ours. |
+| CTK (ConstantToken) | [`0x7BEb5D9DB0d85cBEa543C04f0dE8c23c2176cd9D`](https://testnet.monadvision.com/address/0x7BEb5D9DB0d85cBEa543C04f0dE8c23c2176cd9D) | [Monadscan](https://testnet.monadscan.com/address/0x7BEb5D9DB0d85cBEa543C04f0dE8c23c2176cd9D#code): `ConstantToken`, exact match; not on Monad's Sourcify | Agora's 18 decimal test currency on the other side of the pair. Not ours. |
 
 AUSD and the faucet are Agora's contracts. Both are EIP-1967 proxies: AUSD's
 implementation is `0xc1e3C7D486d6A92fBE920232E439EeC2cEb112dA` and the
 faucet's is `0xba804DF5c476E8EaeF87BF8085F295300ccE2a49`, read from the
-standard implementation slot. On 9 Oct 2026 Monad's Sourcify had no match for
-either proxy or either implementation. [CHECK: whether MonadVision or Monadscan
-shows Agora's verified source by another route; if so, link it here.]
+standard implementation slot. Monad's Sourcify, which MonadVision reads, has
+no match for either proxy or either implementation (404 on 10 Oct 2026), but
+Monadscan shows verified source for all of Agora's contracts here, with the
+names and match kinds in the table above (read from its public pages on 10
+Oct 2026).
 
 The three NivPay contracts were deployed from
 `0x7EAf7f3e330ac388A0e951e80957B7274597297c`. Their deploy transactions, from
@@ -342,18 +344,23 @@ Read from its verified source and its live state on 9 Oct 2026:
   * grant or revoke anyone's permission to send through the pair, and set
     where removed tokens and fees go.
 * **The pair and the whitelister are upgradeable.** Both are EIP-1967
-  proxies whose admin is `0x85f263d91f2706b32c85f22c681c0fe175eb48f2`, and
-  that admin's only manager is the same
-  `0x99B0E95Fa8F5C3b86e4d78ED715B475cFCcf6E97`. It can replace either
-  contract's code (`upgradeAndCall`). [CHECK: who manages the admin
-  `0x85f2...48f2` was read on 9 Oct 2026 and not again: its `owner()`
-  reverts, so it was not re-checked on 10 Oct.]
+  proxies whose admin slot holds
+  `0x85f263d91f2706b32c85f22c681c0fe175eb48f2`, a contract Monadscan shows
+  as `AgoraProxyAdmin` (exact match). It has no `owner()`; it uses Agora's
+  role checks, and `hasRole("ACCESS_CONTROL_MANAGER_ROLE", 0x99B0...6E97)`
+  is true on it. Whoever manages it can replace either contract's code.
+  Whether any other address also holds that role was not checked: that
+  would need the role's full grant history.
 * **Read again on 10 Oct 2026:** the six roles above are still held by
-  `0x99B0...6E97` (and `WHITELISTER_ROLE` also by the whitelister), both
-  proxies' admin slot still holds `0x85f2...48f2`, the pair is not paused,
-  the price is 1 CTK per AUSD and the purchase fee is 0. The price and fee
-  bounds were not read again. [CHECK: the 0.9 to 1.1 price bounds and the 0
-  to 0.05 percent fee bounds, if they are stated anywhere public.]
+  `0x99B0...6E97` (and `WHITELISTER_ROLE` also by the whitelister), which is
+  also the pair's fee receiver; both proxies' admin slot still holds
+  `0x85f2...48f2`; the pair is not paused. Its bounds, read from the pair:
+  base price 1.0 CTK per AUSD with bounds 0.9 to 1.1 (`minBasePrice`,
+  `maxBasePrice`, at `PRICE_PRECISION`), the interest rate bounded to 0
+  (`minAnnualizedInterestRate`, `maxAnnualizedInterestRate`), and purchase
+  fees 0 with bounds 0 to 0.05 percent for both tokens
+  (`maxToken0PurchaseFee`, `maxToken1PurchaseFee` 5e14 at `FEE_PRECISION`
+  1e18).
 * **On testnet anyone may send through the pair**: the whitelister's
   `setApprovedSwapper` has no caller check, so the app's one-time setup grants
   the permission to the person's own account.
@@ -1350,8 +1357,20 @@ and still pass as part of the suite. Nothing in `NivPayPots` depends on them.
 
 **Nothing in this repository predates 1 Sep 2026.** The first commit,
 `e627991`, is dated 6 Sep 2026, and every commit on every branch was authored
-between 6 Sep and 10 Oct 2026. The history has not been rewritten or squashed.
-[CHECK]
+between 6 Sep and 10 Oct 2026. Nothing was squashed.
+
+**The published history has never been rewritten.** Every push recorded in
+this clone (17, from 25 Sep to 10 Oct 2026) moved `origin/master` forward
+from the one before, and the local branch still contains the last one.
+The local reflog, which goes back to the first commit, shows two redos,
+both before they were ever pushed:
+
+* On 6 Sep 2026, six commits made between 21:28 and 21:33 were made again
+  from a fresh start at 21:34 (`e627991`, "commit (initial)"), with the same
+  messages. The first push, on 25 Sep, already began at `e627991`.
+* On 10 Oct 2026 at 08:00, two local commits were undone and made again 20
+  seconds later with the same messages (now `114d391` and `84a6e04`). The
+  push before was at 20:13 on 9 Oct, the push after at 09:04 on 10 Oct.
 
 * The streaming benchmark (`StreamBench`, `MockStable`, `BENCHMARK.md`) was the
   first thing built in this repository, on 6 Sep 2026, inside the build window.
