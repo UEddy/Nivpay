@@ -28,6 +28,16 @@ phone or a decision.
 | [CHECK] | No secrets in the repository | Done | Full history scan on 9 Oct 2026: no private key, mnemonic, API key, keystore or `.env` file. `.gitignore` covers `.env*`, keystores, key files and `.vercel/`. See README, "Broadcast receipts are committed on purpose". |
 | [CHECK] | The submission form | **Owner** | Fill it in with the repository link, the video link, the live app link (https://nivpay.vercel.app) and the contract addresses. |
 
+## The pot story, screen by screen
+
+| Screen | Status | Evidence, or what is left |
+| --- | --- | --- |
+| Make a pot | Done | Pot 0 on the AUSD pots was made with the app on 10 Oct 2026. |
+| Pour in your share | Done | Pot 0 holds a pour from a second account. |
+| Ask for a payment, and say yes | Built, needs the phone test | `app/src/screens/Ask.tsx`, `Request.tsx`, `app/src/lib/payout.ts`, `waiting.ts`. Unit tests for every state; live read-only tests against pot 0. Nothing has been signed on testnet with it yet. |
+| The pot's story | Not built yet | |
+| Close and split | Not built yet | |
+
 ## Agora bounty: Best Cross-Border Payments App on Monad
 
 Requirements as given: passkey onboarding, an AUSD balance, and a completed

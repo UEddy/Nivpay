@@ -524,6 +524,24 @@ first, is code 62. The new balance appears only once the claim is finalized.
 On TESTUSD, the button mints TESTUSD as before; both deployments are on the
 testnet only.
 
+## The pot story in the app
+
+The five comps in `docs/design/` are built as screens, in story order. Every
+amount and state on them is read at the finalized block or from the pot's
+finalized events; nothing lands before Finalized.
+
+| Screen | Where | Status |
+| --- | --- | --- |
+| Make a pot | `app/src/screens/Create.tsx` | Built and run on testnet (pot 0 on the AUSD pots) |
+| Pour in your share | `app/src/screens/ChipIn.tsx` | Built and run on testnet (pot 0 holds a pour) |
+| Ask for a payment, and say yes | `app/src/screens/Ask.tsx`, `Request.tsx` | Built, checked with unit and live read-only tests; needs the phone run. A named decider sees a request waiting for their yes on Home with no link. |
+| The pot's story | | Next |
+| Close and split | | After the story |
+
+Deciders "say yes"; the app never shows the word "approve", which the
+product language check (`app/src/copy.test.ts`) refuses everywhere people
+read.
+
 ## Accounting
 
 Shares are ERC4626 style, with OpenZeppelin's virtual shares and virtual assets
