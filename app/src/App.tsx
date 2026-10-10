@@ -825,6 +825,8 @@ function Home(props: {
 }
 
 const FIND_POTS_EVERY_MS = 10_000;
+/** When a request must be answered by, in the phone's own time. */
+const answerByFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const livePots = potsReader(readClient, POTS);
 const liveCreators = creatorReader(readClient, POTS);
 const liveAsks = askReader(readClient, POTS);
@@ -1021,11 +1023,11 @@ function YourPots(props: {
     props.onOpen(draft.id);
   };
   return (
-    <section className="card">
-      <p className="eyebrow">{copy.yourPots}</p>
-      {mine.length + opened.length + found.length + answered.length === 0 && <p className="hint">{copy.noPotsYet}</p>}
-      {waitingMine.length > 0 && <p className="eyebrow">{copy.waitingForYourYes}</p>}
-      {waitingMine.map((r) => {
+    <>
+    {waitingMine.length > 0 && (
+      <section className="card">
+        <p className="eyebrow">{copy.waitingForYourYes}</p>
+        {waitingMine.map((r) => {
         const stored = storedFor(r.potId);
         const name = scan.found.find((p) => p.potId === r.potId)?.name || stored?.name || copy.unnamedPot;
         const amount = scan.decimals === null ? "…" : formatAmount(BigInt(r.amount), scan.decimals, "auto");
@@ -1040,12 +1042,19 @@ function YourPots(props: {
             <span className="grow">
               <span className="name">{name}</span>
               <span className="meta">{r.kind === 1 ? copy.homeAskCloseMeta(r.yes.length, r.threshold) : copy.homeAskMeta(amount, r.yes.length, r.threshold)}</span>
+              <span className="meta">{copy.answerBy(answerByFormat.format(new Date(Number(r.expiresAt) * 1000)).replace(",", ""))}</span>
               {!stored && <span className="meta">{copy.gettingReadyToOpen}</span>}
             </span>
             <span className="tag live">{copy.yourYesTag}</span>
           </button>
         );
       })}
+      </section>
+    )}
+    <section className="card">
+      <p className="eyebrow">{copy.yourPots}</p>
+      {mine.length + opened.length + found.length + answered.length === 0 && <p className="hint">{copy.noPotsYet}</p>}
+
       {matched.map((r) => (
         <MatchedRow
           key={`matched-${r.match!.potId}`}
@@ -1091,5 +1100,6 @@ function YourPots(props: {
         {copy.makeAPot}
       </button>
     </section>
+    </>
   );
 }

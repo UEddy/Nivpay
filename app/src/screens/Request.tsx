@@ -18,6 +18,7 @@ import { rememberReceipt } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
+import { initialsOf, mapLines } from "./mapNames.ts";
 import { usePayMotion } from "./payMotion.ts";
 import { PotMap, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { andList, Icon, NoticeLine, phoneTimeZone, shareLink, type Notice } from "./ui.tsx";
@@ -352,8 +353,12 @@ export function RequestScreen(props: {
     const isAsker = isAddressEqual(p.account, request.asker);
     return {
       name: p.name,
-      city: p.city || (p.me ? copy.youCap : ""),
-      sub: isAsker && !p.me ? copy.personAsked(p.name) : time ? copy.personTime(p.me ? copy.youCap : p.name, time) : p.me ? copy.youCap : p.name,
+      ...mapLines(
+        p,
+        info.labelsOk,
+        isAsker && !p.me ? copy.personAsked(p.name) : time ? copy.personTime(p.me ? copy.youCap : p.name, time) : p.me ? copy.youCap : p.name,
+        isAsker && !p.me ? copy.asked : time,
+      ),
       subStrong: p.me,
       ring: inPot ? "solid" : "pencil",
       dim: !inPot,
@@ -374,7 +379,7 @@ export function RequestScreen(props: {
     const mine = isAddressEqual(a, me);
     const yes = saidYes(a) || (mine && acting === "yes" && step === "landing");
     const label = isAddressEqual(a, request.asker) ? copy.chipAsked : mine ? copy.youCap : yes ? copy.chipSaidYes : copy.chipWaiting;
-    const initial = mine ? copy.youCap.charAt(0) : p && info.labelsOk ? p.name.charAt(0).toUpperCase() : a.slice(-1).toUpperCase();
+    const initial = initialsOf(a, p?.name ?? "", info.labelsOk);
     return { account: a, initial, index, mine, yes, holding: mine && acting === "yes" && step === "landing", label };
   });
 
@@ -386,7 +391,7 @@ export function RequestScreen(props: {
       if (view.stage === "said-yes") return copy.yourYesCounts(view.needed);
       return copy.moreYesCloses(Math.max(view.needed, 1));
     }
-    if (paidNow || (request.status === "paid" && !running)) return otherNames.length ? copy.paidSeen(andList(otherNames)) : copy.paidAlone;
+    if (paidNow || (request.status === "paid" && !running)) return !otherNames.length ? copy.paidAlone : info.labelsOk ? copy.paidSeen(andList(otherNames)) : copy.paidSeenOthers;
     if (myFinalYes || running) return copy.yesPaysNow(request.threshold, state.deciders.length, payeeLabel);
     if (view.stage === "said-yes") return copy.yourYesCounts(view.needed);
     return copy.moreYesPays(Math.max(view.needed, 1), payeeLabel);
@@ -489,7 +494,7 @@ export function RequestScreen(props: {
           </div>
           <div>
             <span>{request.status === "paid" ? copy.leftInPot : copy.leftInPotAfter}</span>
-            <strong>{fmt(view.leftAfter < 0n ? 0n : view.leftAfter, "cents")}</strong>
+            <strong>{view.leftAfter < 0n ? copy.notEnough : fmt(view.leftAfter, "cents")}</strong>
           </div>
           {payee && (
             <div>

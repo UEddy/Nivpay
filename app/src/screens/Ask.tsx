@@ -183,7 +183,7 @@ export function AskSheet(props: {
           </div>
           <div>
             <span>{copy.leftInPotAfter}</span>
-            <strong>{fmt(view.leftAfter < 0n ? 0n : view.leftAfter, "cents")}</strong>
+            <strong>{view.leftAfter < 0n ? copy.notEnough : fmt(view.leftAfter, "cents")}</strong>
           </div>
           <div>
             <span>{copy.payeeLimit(chosen.name)}</span>

@@ -21,6 +21,7 @@ import { requestsFrom, waitingRequests } from "../lib/payout.ts";
 import { AskSheet, useAskFlow, WaitingRequests } from "./Ask.tsx";
 import { usePayMotion } from "./payMotion.ts";
 import { PotMap, type Coin, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
+import { mapLines } from "./mapNames.ts";
 import { factsOf } from "./Request.tsx";
 import { andList, Icon, NoticeLine, shareLink, Sheet, type Notice } from "./ui.tsx";
 
@@ -381,12 +382,12 @@ export function ChipInScreen(props: {
 
   const mapPeople: MapPerson[] = people.map((p, i) => {
     const inPot = (totals[p.account.toLowerCase()] ?? 0n) > 0n && (state.held[p.account.toLowerCase()] ?? 0n) > 0n;
+    const named = info.labelsOk;
     if (p.me) {
       const poured = inPot || done;
       return {
         name: p.name,
-        city: p.city || copy.youCap,
-        sub: copy.youCap,
+        ...mapLines(p, named, copy.youCap, ""),
         subStrong: true,
         ring: poured ? "solid" : "dashed",
         check: poured,
@@ -394,10 +395,10 @@ export function ChipInScreen(props: {
         route: poured ? "solid" : myCoin ? "none" : "march",
       };
     }
+    const put = fmt(totals[p.account.toLowerCase()] ?? 0n);
     return {
       name: p.name,
-      city: p.city,
-      sub: inPot ? copy.personPutIn(p.name, fmt(totals[p.account.toLowerCase()]!)) : copy.personNotYet(p.name),
+      ...mapLines(p, named, inPot ? copy.personPutIn(p.name, put) : copy.personNotYet(p.name), inPot ? put : copy.notYet2),
       ring: inPot ? "solid" : "pencil",
       dim: !inPot,
       check: inPot && theirCoins[i] === undefined,

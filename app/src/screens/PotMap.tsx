@@ -379,10 +379,11 @@ export function PotMap(props: {
                 </text>
                 {p.share && (
                   <text
-                    x={s.label.x}
-                    y={s.label.y + 29}
+                    // Under the label, or left of the dot where that would leave the map.
+                    x={s.label.y + 29 <= VIEW.height - 4 ? s.label.x : s.x - 16}
+                    y={s.label.y + 29 <= VIEW.height - 4 ? s.label.y + 29 : s.y + 4}
                     className="map-share"
-                    textAnchor={s.label.anchor}
+                    textAnchor={s.label.y + 29 <= VIEW.height - 4 ? s.label.anchor : "end"}
                     style={{ fill: PERSON_COLORS[i]!.text, animationDelay: `${300 + i * 150}ms` }}
                   >
                     {p.share}

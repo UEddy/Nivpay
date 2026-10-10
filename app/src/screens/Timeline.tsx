@@ -16,6 +16,7 @@ import { readClient } from "../lib/rpc.ts";
 import { ordered, replayStepMs, replaySteps, storyRows, type Order, type ReplayStep } from "../lib/story.ts";
 import { AskSheet, useAskFlow } from "./Ask.tsx";
 import { usePayMotion } from "./payMotion.ts";
+import { mapLines } from "./mapNames.ts";
 import { PotMap, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { factsOf, layersOf, peopleOf } from "./Request.tsx";
 import { Icon, NoticeLine, type Notice } from "./ui.tsx";
@@ -223,8 +224,7 @@ export function TimelineScreen(props: {
     const inPot = (shownState.held[p.account.toLowerCase()] ?? 0n) > 0n;
     return {
       name: p.name,
-      city: p.city || (p.me ? copy.youCap : ""),
-      sub: p.me ? copy.youCap : p.name,
+      ...mapLines(p, info.labelsOk, p.me ? copy.youCap : p.name, ""),
       subStrong: p.me,
       ring: inPot ? "solid" : "pencil",
       dim: !inPot,

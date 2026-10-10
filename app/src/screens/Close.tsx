@@ -21,6 +21,7 @@ import { rememberReceipt } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
+import { mapLines } from "./mapNames.ts";
 import { PotMap, type Coin, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { layersOf, peopleOf } from "./Request.tsx";
 import { andList, Icon, NoticeLine, shareLink, type Notice } from "./ui.tsx";
@@ -297,8 +298,7 @@ export function CloseScreen(props: {
     const mine = p.account.toLowerCase() === lower;
     return {
       name: p.name,
-      city: p.city || (p.me ? copy.youCap : ""),
-      sub: p.me ? copy.youCap : p.name,
+      ...mapLines(p, info.labelsOk, p.me ? copy.youCap : p.name, ""),
       subStrong: p.me,
       ring: inPot || (mine && tookAmount !== null) ? "solid" : "pencil",
       dim: !inPot,

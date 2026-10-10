@@ -31,7 +31,8 @@ export type PayeeSpot = {
 const PERSON_SPOTS: PersonSpot[] = [
   { x: 236, y: 30, route: "M236 30 Q224 58 180 78", label: { x: 254, y: 27, anchor: "start" } },
   { x: 38, y: 96, route: "M38 96 Q80 52 131 112", label: { x: 38, y: 121, anchor: "middle" } },
-  { x: 214, y: 204, route: "M214 204 Q206 170 182 153", label: { x: 233, y: 201, anchor: "start" } },
+  // One line lower than the comp's (201), so a city longer than "Uyo" clears the second payee's "up to" line at the same height.
+  { x: 214, y: 204, route: "M214 204 Q206 170 182 153", label: { x: 233, y: 214, anchor: "start" } },
   { x: 52, y: 182, route: "M52 182 Q100 186 136 146", label: { x: 52, y: 207, anchor: "middle" } },
   { x: 112, y: 26, route: "M112 26 Q142 34 150 72", label: { x: 128, y: 23, anchor: "start" } },
 ];
