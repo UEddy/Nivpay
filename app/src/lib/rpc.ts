@@ -14,6 +14,22 @@ import {
 import { CHAIN, RPC_URL } from "./config.ts";
 import { withRetry, type RetryOptions } from "./retry.ts";
 
+/**
+ * The public testnet RPC's rate limit: a JSON-RPC answer with this code and
+ * "requests limited to 15/sec" (seen 10 Oct 2026). It means "later", like
+ * HTTP 429, not a refusal of the request itself.
+ */
+export const RATE_LIMITED_CODE = -32011;
+
+function rateLimited(error: unknown): boolean {
+  const answered = (e: unknown) => e instanceof RpcError || e instanceof RpcRequestError;
+  const found = error instanceof BaseError ? error.walk(answered) : answered(error) ? error : null;
+  if (!found) return false;
+  const code = (found as RpcError | RpcRequestError).code;
+  const text = error instanceof Error ? error.message : "";
+  return code === RATE_LIMITED_CODE || /requests limited|rate limit/i.test(text);
+}
+
 /** Methods that send transactions. They never go through the read client. */
 const WRITE_METHODS = new Set(["eth_sendRawTransaction", "eth_sendTransaction"]);
 
@@ -25,6 +41,7 @@ const WRITE_METHODS = new Set(["eth_sendRawTransaction", "eth_sendTransaction"])
  */
 export function isRetryableReadError(error: unknown): boolean {
   if (error instanceof TimeoutError) return true;
+  if (rateLimited(error)) return true;
   if (error instanceof LimitExceededRpcError) return true;
   if (error instanceof HttpRequestError) {
     const status = error.status;
@@ -45,7 +62,7 @@ export function isBroadcastRefusal(error: unknown): boolean {
   const found = error instanceof BaseError ? error.walk(answered) : answered(error) ? error : null;
   if (!found) return false;
   const code = (found as RpcError | RpcRequestError).code;
-  if (code === LimitExceededRpcError.code || code === -32603) return false;
+  if (code === LimitExceededRpcError.code || code === -32603 || rateLimited(error)) return false;
   const text = error instanceof Error ? error.message : "";
   return !/already known|known transaction|already imported|nonce too low/i.test(text);
 }

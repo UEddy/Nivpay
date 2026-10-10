@@ -334,6 +334,10 @@ Taken with curl against `https://testnet-rpc.monad.xyz` from this machine.
   batched calls failed outright (no response inside 15 s) and 2 single calls
   hung past 30 s. Failures come in bursts. The app needs timeouts and retries
   on every RPC call.
+* **Rate limit (seen 10 Oct 2026):** more than 15 requests a second from one
+  place are answered with JSON-RPC error -32011, "requests limited to
+  15/sec". The read client retries it with backoff like HTTP 429, and a
+  broadcast answered with it is not counted as turned down.
 * **State overrides work** in `eth_call` and `eth_estimateGas` on this RPC.
 
 ### Gas and fee per action

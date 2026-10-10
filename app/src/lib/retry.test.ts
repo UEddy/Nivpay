@@ -77,6 +77,8 @@ test("which read errors are retried", () => {
   const revert = new RpcRequestError({ body: {}, url, error: { code: 3, message: "execution reverted" } });
   assert.equal(isRetryableReadError(revert), false);
   assert.equal(isRetryableReadError(new Error("anything else")), false);
+  // The public testnet RPC's own rate limit, as it answers it.
+  assert.equal(isRetryableReadError(new RpcRequestError({ body: {}, url, error: { code: -32011, message: "requests limited to 15/sec" } })), true);
 });
 
 test("which broadcast errors are refusals", () => {
@@ -92,4 +94,5 @@ test("which broadcast errors are refusals", () => {
   assert.equal(isBroadcastRefusal(new TimeoutError({ body: {}, url })), false, "no answer");
   assert.equal(isBroadcastRefusal(new HttpRequestError({ url, status: 502 })), false, "no answer");
   assert.equal(isBroadcastRefusal(new Error("anything else")), false);
+  assert.equal(isBroadcastRefusal(answer(-32011, "requests limited to 15/sec")), false, "the RPC's rate limit is later, not a refusal");
 });
