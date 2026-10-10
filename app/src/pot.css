@@ -662,6 +662,73 @@
   fill: var(--card);
   stroke: var(--ink);
   stroke-width: 1.5;
+  transition: fill 300ms ease-out;
+}
+
+/* Paid, at Finalized: the payee fills and gets a check. */
+.payee-ring.paid {
+  fill: var(--ink);
+}
+
+.payee-icon.paid {
+  stroke: var(--bg);
+}
+
+.payee-check circle {
+  fill: var(--person-2);
+}
+
+/* A payment is waiting for a yes: the payee's ring pulses until it is decided. */
+.payee-ping {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+}
+
+.payee-ping.on {
+  animation: lv-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.route.payee.gone {
+  opacity: 0;
+}
+
+.route.payee-paid,
+.payee-trail {
+  stroke: var(--ink);
+  stroke-width: 3.5;
+}
+
+.route.payee-paid {
+  stroke-linecap: round;
+}
+
+.payee-coin {
+  stroke: var(--ink);
+  transition-duration: 850ms;
+}
+
+.payee-trail {
+  transition-duration: 850ms;
+}
+
+/* The pot tips towards the payees while a payment pours out. */
+.tilt {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transition: transform 450ms var(--ease-swap);
+}
+
+.tilt.on {
+  transform: rotate(12deg);
+}
+
+/* After a payment every layer drops by the same share, on the drain curve. */
+.draining .layer {
+  transition: transform 1100ms var(--ease-flight);
 }
 
 .payee-icon {
@@ -737,6 +804,12 @@
 
 .map-badge.live .dot .ping {
   animation: lv-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Two loops at most: while a payment is asked, its route and ring are the loops. */
+.map-badge.live.quiet .dot .ping {
+  animation: none;
+  opacity: 0;
 }
 
 /* ------------------------------------------------------------------------

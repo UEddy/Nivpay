@@ -12,7 +12,9 @@ import { PERSON_COLORS, payeeSpots, personSpots, reverseRoute, VIEW } from "../l
  * with getTotalLength. Layers are full-height rects scaled with scaleY from
  * the bottom and lifted with translateY, so a layer rising, and every layer
  * above it moving up, is all transform. Loops pause when the page is hidden
- * or the map is off screen.
+ * or the map is off screen. At most two loops run at once: while a payment
+ * is asked, its marching route and pulsing ring take the place of the live
+ * badge's ping.
  */
 
 export type MapPerson = {
@@ -29,7 +31,15 @@ export type MapPerson = {
   route: "pencil" | "march" | "solid" | "none";
 };
 
-export type MapPayee = { name: string; sub: string };
+/**
+ * asked: a payment to it is waiting for a yes, so its route marches and its
+ * ring pulses until it is decided. paid: paid at Finalized, so it is filled
+ * and checked.
+ */
+export type MapPayee = { name: string; sub: string; state?: "asked" | "paid" };
+
+/** Money running from the pot down a payee's route. "start": not yet left. "end": arrived. */
+export type Stream = { payee: number; at: "start" | "end" };
 
 /**
  * A coin on a person's route. "start": not yet left (hidden). "end": arrived.
@@ -112,6 +122,11 @@ export function PotMap(props: {
   coins?: Coin[];
   /** Tilts the pot once, when a layer lands. Changing the key replays it. */
   sloshKey?: number;
+  /** Tips the pot towards the payees while a payment pours out. */
+  tilt?: boolean;
+  /** The pot level drops on the slower drain curve, as after a payment. */
+  draining?: boolean;
+  stream?: Stream | null;
   potText: string;
   badge: "draft" | "live";
   label: string;
@@ -123,10 +138,18 @@ export function PotMap(props: {
   const payeeAt = payeeSpots(payees.length);
   const routes = useRef<(SVGPathElement | null)[]>([]);
   const [lengths, setLengths] = useState<number[]>([]);
+  const payeeRoutes = useRef<(SVGPathElement | null)[]>([]);
+  const [payeeLengths, setPayeeLengths] = useState<number[]>([]);
 
   useLayoutEffect(() => {
     setLengths(routes.current.map((c) => (c ? Math.ceil(c.getTotalLength()) : 0)));
   }, [spots.length]);
+  useLayoutEffect(() => {
+    setPayeeLengths(payeeRoutes.current.map((c) => (c ? Math.ceil(c.getTotalLength()) : 0)));
+  }, [payeeAt.length]);
+  const asked = payees.some((p, i) => i < payeeAt.length && p.state === "asked");
+  const stream = props.stream && props.stream.payee < payeeAt.length ? props.stream : null;
+  const streamLength = stream ? (payeeLengths[stream.payee] ?? 0) : 0;
 
   const layers = props.layers ?? [];
   let below = 0;
@@ -168,10 +191,46 @@ export function PotMap(props: {
               </g>
             );
           })}
-          {payeeAt.map((s) => (
-            <path key={s.route} d={s.route} className={`route ${props.payeeRoutes === "pencil" ? "pencil" : "payee shown"}`} />
-          ))}
+          {payeeAt.map((s, i) => {
+            const state = payees[i]!.state;
+            const look = props.payeeRoutes === "pencil" ? "pencil" : `payee shown${state === "asked" ? " march" : ""}${state === "paid" ? " gone" : ""}`;
+            return (
+              <g key={s.route}>
+                <path
+                  ref={(el) => {
+                    payeeRoutes.current[i] = el;
+                  }}
+                  d={s.route}
+                  className={`route ${look}`}
+                />
+                {state === "paid" && stream?.payee !== i && <path d={s.route} className="route payee-paid" />}
+              </g>
+            );
+          })}
         </g>
+
+        {stream && (
+          <g key={`stream-${stream.payee}`}>
+            <path
+              d={payeeAt[stream.payee]!.route}
+              className="trail payee-trail"
+              style={{
+                strokeDasharray: `${streamLength}px ${streamLength}px`,
+                strokeDashoffset: stream.at === "start" ? streamLength : 0,
+                transitionProperty: stream.at === "start" ? "none" : "stroke-dashoffset",
+              }}
+            />
+            <path
+              d={payeeAt[stream.payee]!.route}
+              className="coin payee-coin"
+              style={{
+                strokeDashoffset: stream.at === "start" ? 6 : -streamLength,
+                opacity: stream.at === "start" ? 0 : 1,
+                transitionProperty: stream.at === "start" ? "none" : "stroke-dashoffset",
+              }}
+            />
+          </g>
+        )}
 
         {(props.coins ?? []).map((c) => {
           const s = spots[c.person];
@@ -217,6 +276,7 @@ export function PotMap(props: {
         <g className="pot-in">
           {/* Two identical animations, alternated, so a new slosh replays without remounting the layers. */}
           <g className={`slosh${props.sloshKey ? (props.sloshKey % 2 ? " odd" : " even") : ""}`}>
+            <g className={`tilt${props.tilt ? " on" : ""}`}>
             <svg x="118" y="66" width="96" height="96" viewBox="0 0 200 200" overflow="visible">
               <defs>
                 <clipPath id="pot-clip">
@@ -224,7 +284,7 @@ export function PotMap(props: {
                 </clipPath>
               </defs>
               <path d={POT_PATH} className="pot-fill" />
-              <g clipPath="url(#pot-clip)">
+              <g clipPath="url(#pot-clip)" className={props.draining ? "draining" : undefined}>
                 {stacked.map((l, i) => (
                   <rect
                     key={i}
@@ -246,6 +306,7 @@ export function PotMap(props: {
                 <rect x="62" y="26" width="76" height="14" rx="7" />
               </g>
             </svg>
+            </g>
           </g>
         </g>
 
@@ -279,14 +340,22 @@ export function PotMap(props: {
           );
         })}
 
-        {payeeAt.map((s, i) => (
-          <g key={`payee-${s.route}`} className="pop-in" style={{ animationDelay: `${600 + i * 100}ms` }}>
-            <circle cx={s.x} cy={s.y} r="14" className="payee-ring" />
-            <svg x={s.x - 8} y={s.y - 8} width="16" height="16" viewBox="0 0 24 24" className="payee-icon">
-              {payeeIcon(payees[i]!.name)}
-            </svg>
-          </g>
-        ))}
+        {payeeAt.map((s, i) => {
+          const state = payees[i]!.state;
+          return (
+            <g key={`payee-${s.route}`} className="pop-in" style={{ animationDelay: `${600 + i * 100}ms` }}>
+              <circle cx={s.x} cy={s.y} r="14" className={`payee-ping${state === "asked" ? " on" : ""}`} />
+              <circle cx={s.x} cy={s.y} r="14" className={`payee-ring${state === "paid" ? " paid" : ""}`} />
+              <svg x={s.x - 8} y={s.y - 8} width="16" height="16" viewBox="0 0 24 24" className={`payee-icon${state === "paid" ? " paid" : ""}`}>
+                {payeeIcon(payees[i]!.name)}
+              </svg>
+              <g className={`city-check payee-check${state === "paid" ? " on" : ""}`}>
+                <circle cx={s.x + 11} cy={s.y - 11} r="6.5" />
+                <path d={`M${s.x + 8} ${s.y - 11} l2 2 l3.5 -4`} />
+              </g>
+            </g>
+          );
+        })}
 
         <g className="map-labels">
           {spots.map((s, i) => {
@@ -336,7 +405,7 @@ export function PotMap(props: {
           )}
         </g>
       </svg>
-      <div className={`map-badge${props.badge === "live" ? " live" : ""}`}>
+      <div className={`map-badge${props.badge === "live" ? " live" : ""}${asked ? " quiet" : ""}`}>
         <span className="dot">
           <span />
           <span className="ping" />
