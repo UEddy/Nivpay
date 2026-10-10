@@ -136,6 +136,7 @@ function allCopy(): [string, string][] {
     mapPutIn: ["Idara", "$500", "London"],
     mapNotYet: ["Aniekan", "Uyo"],
     mapHolds: ["$900"],
+    mapHoldsShare: ["Idara", "London"],
     closesOn: ["Thu 31 Dec 2026"],
     joinAsDecider: ["Idara", "Mama’s 60th"],
     joinAsPayee: ["Idara", "Mama’s 60th", "Caterer"],

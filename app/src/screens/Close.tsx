@@ -46,6 +46,7 @@ export function CloseScreen(props: {
   const [info, setInfo] = useState<PotInfo | null>(null);
   const [state, setState] = useState<PotState | null>(null);
   const [events, setEvents] = useState<PotEvent[] | null>(null);
+  const [complete, setComplete] = useState(false);
   const [times, setTimes] = useState<Map<bigint, bigint>>(() => blockTimes.all());
   const [failure, setFailure] = useState<Notice | null>(link ? null : { tone: "bad", text: copy.errLinkDamaged, code: ERROR_CODES.LINK_DAMAGED });
   const [step, setStep] = useState<Step | "landing" | null>(null);
@@ -97,9 +98,10 @@ export function CloseScreen(props: {
   useEffect(() => {
     if (!info) return;
     const feed = potFeed(info.potId, info.block);
-    feed.start((all, fresh) => {
+    feed.start((all, fresh, progress) => {
       if (!alive.current) return;
       setEvents(all);
+      setComplete(progress.complete);
       if (fresh.some((e) => e.tx !== myTx.current && ["Funded", "Exited", "Claimed", "PayoutExecuted", "Closed", "Frozen", "Unfrozen"].includes(e.name))) {
         void read()
           .then((s) => alive.current && setState(s))
@@ -265,7 +267,7 @@ export function CloseScreen(props: {
   const myWorth = state.held[lower] ?? 0n;
   const take = takeView({ closed: state.closed, myShares, myWorth });
   const cs = closeState(state.closed, state.endTime, state.now);
-  const totals = events ? totalsOf(events) : null;
+  const totals = events && complete ? totalsOf(events) : null;
   const myPut = events ? (putInBy(events).get(lower) ?? 0n) : 0n;
   const fraction = totals ? shareFraction(myPut, totals.wentIn, myShares, state.totalShares, totals.anyTaken) : null;
   const split = splitNow(
@@ -282,7 +284,7 @@ export function CloseScreen(props: {
   const closedEvent = events?.filter((e) => e.name === "Closed").at(-1);
   const closedAt = closedEvent ? times.get(closedEvent.block) : cs === "closed-on-date" ? state.endTime : undefined;
   const closedDay = closedAt !== undefined ? dayFormat.format(new Date(Number(closedAt) * 1000)) : "";
-  const closeReq = events ? requestsFrom(events).find((r) => r.kind === 1 && r.status === "paid") : undefined;
+  const closeReq = events && complete ? requestsFrom(events).find((r) => r.kind === 1 && r.status === "paid") : undefined;
   const howClosed =
     cs === "closed-on-date"
       ? copy.closedOnDateLine(closedDay)
@@ -396,7 +398,12 @@ export function CloseScreen(props: {
           </div>
         )}
 
-        {howClosed && <p className="hint enter">{howClosed}</p>}
+        {howClosed && complete && <p className="hint enter">{howClosed}</p>}
+        {!complete && events !== null && (
+          <p className="hint" role="status">
+            {copy.loadingEarlier}
+          </p>
+        )}
         {shareNote && <p className="hint">{shareNote}</p>}
       </div>
 

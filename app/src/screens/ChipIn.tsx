@@ -76,6 +76,7 @@ export function ChipInScreen(props: {
   const [info, setInfo] = useState<PotInfo | null>(null);
   const [state, setState] = useState<PotState | null>(null);
   const [events, setEvents] = useState<PotEvent[]>([]);
+  const [complete, setComplete] = useState(false);
   const [failure, setFailure] = useState<Notice | null>(link ? null : { tone: "bad", text: copy.errLinkDamaged, code: ERROR_CODES.LINK_DAMAGED });
   const [amount, setAmount] = useState<bigint | null>(null);
   const [step, setStep] = useState<Step | "landing" | null>(null);
@@ -226,9 +227,10 @@ export function ChipInScreen(props: {
   useEffect(() => {
     if (!info) return;
     const feed = potFeed(info.potId, info.block);
-    feed.start((all, fresh) => {
+    feed.start((all, fresh, progress) => {
       if (!alive.current) return;
       setEvents(all);
+      setComplete(progress.complete);
       if (fresh.length) void landTheirs(fresh);
     });
     return () => feed.stop();
@@ -381,7 +383,9 @@ export function ChipInScreen(props: {
   if (state.totalAssets > knownSum) layers.push({ person: null, fraction: fraction(state.totalAssets - knownSum) });
 
   const mapPeople: MapPerson[] = people.map((p, i) => {
-    const inPot = (totals[p.account.toLowerCase()] ?? 0n) > 0n && (state.held[p.account.toLowerCase()] ?? 0n) > 0n;
+    // Until the whole history is read, whether someone is in comes from what they hold now, and no total is shown.
+    const holds = (state.held[p.account.toLowerCase()] ?? 0n) > 0n;
+    const inPot = complete ? (totals[p.account.toLowerCase()] ?? 0n) > 0n && holds : holds;
     const named = info.labelsOk;
     if (p.me) {
       const poured = inPot || done;
@@ -398,7 +402,12 @@ export function ChipInScreen(props: {
     const put = fmt(totals[p.account.toLowerCase()] ?? 0n);
     return {
       name: p.name,
-      ...mapLines(p, named, inPot ? copy.personPutIn(p.name, put) : copy.personNotYet(p.name), inPot ? put : copy.notYet2),
+      ...mapLines(
+        p,
+        named,
+        inPot ? (complete ? copy.personPutIn(p.name, put) : p.name) : copy.personNotYet(p.name),
+        inPot ? (complete ? put : "") : copy.notYet2,
+      ),
       ring: inPot ? "solid" : "pencil",
       dim: !inPot,
       check: inPot && theirCoins[i] === undefined,
@@ -416,6 +425,7 @@ export function ChipInScreen(props: {
       .filter((p) => !p.me)
       .map((p) => {
         const put = totals[p.account.toLowerCase()] ?? 0n;
+        if (!complete) return copy.mapHoldsShare(p.name, p.city);
         return put > 0n ? copy.mapPutIn(p.name, fmt(put), p.city) : copy.mapNotYet(p.name, p.city);
       }),
   ].join(" ");

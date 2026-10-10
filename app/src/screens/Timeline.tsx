@@ -51,6 +51,8 @@ export function TimelineScreen(props: {
   const [info, setInfo] = useState<PotInfo | null>(null);
   const [state, setState] = useState<PotState | null>(null);
   const [events, setEvents] = useState<PotEvent[] | null>(null);
+  // False while older pages of history are still arriving, newest first.
+  const [complete, setComplete] = useState(false);
   const [times, setTimes] = useState<Map<bigint, bigint>>(() => blockTimes.all());
   const [failure, setFailure] = useState<Notice | null>(link ? null : { tone: "bad", text: copy.errLinkDamaged, code: ERROR_CODES.LINK_DAMAGED });
   const [readFailed, setReadFailed] = useState(false);
@@ -104,10 +106,11 @@ export function TimelineScreen(props: {
     if (!info) return;
     const feed = potFeed(info.potId, info.block);
     feed.start(
-      (all, fresh) => {
+      (all, fresh, progress) => {
         if (!alive.current) return;
         setReadFailed(false);
         setEvents(all);
+        setComplete(progress.complete);
         if (!fresh.length) return;
         // New entries land only now, at Finalized, with the numbers read at Finalized.
         setArrived(new Set(fresh.map((e) => `${e.tx}:${e.logIndex}`)));
@@ -257,7 +260,7 @@ export function TimelineScreen(props: {
           draining={replaying || motion.draining}
           stream={replaying ? null : motion.stream}
         >
-          {!reduced && steps.length > 0 && (
+          {!reduced && complete && steps.length > 0 && (
             <button type="button" className="replay-btn" aria-label={copy.replay} disabled={replaying} onClick={replay}>
               <Icon name="replay" size={18} />
             </button>
@@ -282,7 +285,7 @@ export function TimelineScreen(props: {
 
         {events === null && <p className="hint">{copy.readingStory}</p>}
         {readFailed && <NoticeLine notice={{ tone: "bad", text: copy.errStoryRead, code: ERROR_CODES.STORY_READ_FAILED }} />}
-        {events !== null && rows.length === 0 && <p className="hint">{copy.nothingYet}</p>}
+        {events !== null && complete && rows.length === 0 && <p className="hint">{copy.nothingYet}</p>}
         <ol className="story enter" style={{ animationDelay: "240ms" }}>
           {shown.map((r) => {
             const t = times.get(r.block);
@@ -305,6 +308,11 @@ export function TimelineScreen(props: {
             );
           })}
         </ol>
+        {events !== null && !complete && (
+          <p className="hint loading-earlier" role="status">
+            {copy.loadingEarlier}
+          </p>
+        )}
       </div>
 
       <div className="screen-foot compact-foot enter" style={{ animationDelay: "300ms" }}>
