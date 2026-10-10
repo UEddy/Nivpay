@@ -45,6 +45,8 @@ Rules:
 | pop | 420ms | cubic-bezier(0.34, 1.56, 0.64, 1) | checks, the lock badge |
 | ambient | 1.2s to 2.4s loop | linear or ease-out | live dot, pending routes; no more than two loops on screen |
 
+Two loops at most, counted by rhythm: every marching route is one march, and the live dot and a payee's ring are one ping. When more would run, they give way in this order, and the one that gives way stands still but still shows its state: your coin waiting at the rim first, then a loop off the map (your yes pulsing while it lands, the fingerprint icon), then the march, then the ping (`app/src/lib/loops.ts`, tested over every combination).
+
 ## 4. Smooth on cheap Android phones
 
 - Animate only `transform`, `opacity` and SVG `stroke-dashoffset`. Never width, height, top, left or a path's `d`, and never a colour (`background`, `fill`, `stroke`, `color`, `border-color`): a colour that has to fade is its own layer whose opacity moves, as the payee's fill at Paid and the tint behind a payment that just arrived. Every transition names its properties; a bare duration would transition all of them. `app/src/motion.test.ts` checks every stylesheet and the screens' inline transitions.

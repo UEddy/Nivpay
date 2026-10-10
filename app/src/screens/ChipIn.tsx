@@ -461,6 +461,8 @@ export function ChipInScreen(props: {
         <PotMap
           people={mapPeople}
           payees={mapPayees}
+          // The fingerprint icon breathes while the phone asks for it.
+          outsideLoop={step === "confirm"}
           payeeRoutes="dotted"
           lid="shut"
           lock={false}

@@ -450,6 +450,8 @@ export function RequestScreen(props: {
         <PotMap
           people={mapPeople}
           payees={mapPayees}
+          // Your yes pulses while it lands.
+          outsideLoop={deciders.some((d) => d.holding)}
           payeeRoutes="dotted"
           lid="shut"
           lock={false}

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { copy } from "../copy.ts";
+import { loopsOn } from "../lib/loops.ts";
 import { PERSON_COLORS, payeeSpots, personSpots, reverseRoute, VIEW } from "../lib/potmap.ts";
 
 /**
@@ -12,9 +13,10 @@ import { PERSON_COLORS, payeeSpots, personSpots, reverseRoute, VIEW } from "../l
  * with getTotalLength. Layers are full-height rects scaled with scaleY from
  * the bottom and lifted with translateY, so a layer rising, and every layer
  * above it moving up, is all transform. Loops pause when the page is hidden
- * or the map is off screen. At most two loops run at once: while a payment
- * is asked, its marching route and pulsing ring take the place of the live
- * badge's ping.
+ * or the map is off screen. At most two loops run at once, counting one off
+ * the map (lib/loops.ts): while a payment is asked, its marching route and
+ * pulsing ring take the place of the live badge's ping, and a coin of yours
+ * waiting at the rim stops the pings.
  */
 
 export type MapPerson = {
@@ -141,6 +143,8 @@ export function PotMap(props: {
   label: string;
   /** Laid over the map, such as the Replay button. */
   children?: ReactNode;
+  /** A loop runs on the screen off the map, such as a yes pulsing while it lands: the map keeps to one. */
+  outsideLoop?: boolean;
 }) {
   const { people, payees } = props;
   const card = useRef<HTMLDivElement>(null);
@@ -159,6 +163,13 @@ export function PotMap(props: {
     setPayeeLengths(payeeRoutes.current.map((c) => (c ? Math.ceil(c.getTotalLength()) : 0)));
   }, [payeeAt.length]);
   const asked = payees.some((p, i) => i < payeeAt.length && p.state === "asked");
+  const loops = loopsOn({
+    coinHolding: (props.coins ?? []).some((c) => c.at === "hold" && c.person < spots.length),
+    outside: Boolean(props.outsideLoop),
+    asked,
+    peopleMarch: people.some((p, i) => i < spots.length && p.route === "march"),
+    badgeLive: props.badge === "live" && !props.badgeText,
+  });
   const stream = props.stream && props.stream.payee < payeeAt.length ? props.stream : null;
   const streamLength = stream ? (payeeLengths[stream.payee] ?? 0) : 0;
 
@@ -194,7 +205,7 @@ export function PotMap(props: {
                     routes.current[i] = el;
                   }}
                   d={s.route}
-                  className={`route ${p.route === "solid" ? "solid" : "dots"}${p.route === "march" ? " march" : ""}${
+                  className={`route ${p.route === "solid" ? "solid" : "dots"}${p.route === "march" && loops.peopleMarch ? " march" : ""}${
                     p.route === "march" || p.route === "solid" ? " shown" : ""
                   }${p.split ? " faded" : ""}`}
                   style={{ stroke: color }}
@@ -205,7 +216,7 @@ export function PotMap(props: {
           })}
           {payeeAt.map((s, i) => {
             const state = payees[i]!.state;
-            const look = props.payeeRoutes === "pencil" ? "pencil" : `payee shown${state === "asked" ? " march" : ""}${state === "paid" || state === "paying" ? " gone" : ""}`;
+            const look = props.payeeRoutes === "pencil" ? "pencil" : `payee shown${state === "asked" && loops.payeeMarch ? " march" : ""}${state === "paid" || state === "paying" ? " gone" : ""}`;
             return (
               <g key={s.route}>
                 <path
@@ -356,7 +367,7 @@ export function PotMap(props: {
           const state = payees[i]!.state;
           return (
             <g key={`payee-${s.route}`} className="pop-in" style={{ animationDelay: `${600 + i * 100}ms` }}>
-              <circle cx={s.x} cy={s.y} r="14" className={`payee-ping${state === "asked" ? " on" : ""}`} />
+              <circle cx={s.x} cy={s.y} r="14" className={`payee-ping${state === "asked" && loops.payeePing ? " on" : ""}`} />
               <circle cx={s.x} cy={s.y} r="14" className={`payee-ring${state === "paid" ? " paid" : ""}`} />
               <circle cx={s.x} cy={s.y} r="13.25" className={`payee-fill${state === "paid" ? " on" : ""}`} />
               <svg x={s.x - 8} y={s.y - 8} width="16" height="16" viewBox="0 0 24 24" className={`payee-icon${state === "paid" ? " paid" : ""}`}>
@@ -430,7 +441,7 @@ export function PotMap(props: {
           )}
         </g>
       </svg>
-      <div className={`map-badge${props.badge === "live" ? " live" : ""}${asked || props.badgeText ? " quiet" : ""}`}>
+      <div className={`map-badge${props.badge === "live" ? " live" : ""}${loops.badgePing ? "" : " quiet"}`}>
         <span className="dot">
           <span />
           <span className="ping" />
