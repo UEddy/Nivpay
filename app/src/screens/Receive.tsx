@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { isAddressEqual, type Address, type Log } from "viem";
+import type { Address, Log } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
 import { ERC20_READ_ABI } from "../lib/abi.ts";
-import { CTK, LOG_PAGE_BLOCKS, SETTLEMENT_PAIR } from "../lib/config.ts";
+import { CTK, LOG_PAGE_BLOCKS, POTS_AUSD, POTS_TESTUSD, SETTLEMENT_PAIR } from "../lib/config.ts";
 import { DEPLOYMENT, DOLLAR } from "../lib/deployment.ts";
 import { PotFeed } from "../lib/feed.ts";
 import { idbFeedStore } from "../lib/idb.ts";
@@ -11,7 +11,7 @@ import { linkUrl } from "../lib/invites.ts";
 import { formatAmount, formatCurrency, parseAmount } from "../lib/money.ts";
 import { receiptUrl } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
-import { incomingFrom, incomingSource, RECEIVE_BACKLOG_BLOCKS, withFloor, type Incoming } from "../lib/transfer.ts";
+import { incomingFrom, incomingSource, RECEIVE_BACKLOG_BLOCKS, senderKind, withFloor, type Incoming } from "../lib/transfer.ts";
 import { Icon, NoticeLine, shareLink } from "./ui.tsx";
 
 const finalized = async () => (await readClient.getBlock({ blockTag: "finalized" })).number;
@@ -35,9 +35,10 @@ function show(currencies: Record<string, Currency>, p: Arrival): string {
   return c.symbol === "$" ? formatAmount(p.amount, c.decimals, "cents") : formatCurrency(p.amount, c.decimals, c.symbol);
 }
 
-/** A payment in another currency comes from Agora's settlement, not from a person's account. */
+/** A payment from a pot, or in another currency from Agora's settlement, is not from a person's account. */
 function fromText(from: Address): string {
-  return isAddressEqual(from, SETTLEMENT_PAIR) ? copy.fromAgoraSettlement : copy.accountEnding(from);
+  const kind = senderKind(from, [POTS_AUSD, POTS_TESTUSD], SETTLEMENT_PAIR);
+  return kind === "pot" ? copy.fromAPot : kind === "settlement" ? copy.fromAgoraSettlement : copy.accountEnding(from);
 }
 
 export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode; onClose: () => void }) {

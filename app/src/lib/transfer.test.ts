@@ -4,7 +4,7 @@ import { decodeFunctionData, encodeAbiParameters, getAddress, pad, toEventSelect
 import { ERROR_CODES } from "../copy.ts";
 import { ERC20_TRANSFER_ABI } from "./abi.ts";
 import type { FeedStore } from "./feed.ts";
-import { checkSend, incomingFrom, incomingSource, transferData, withFloor } from "./transfer.ts";
+import { checkSend, incomingFrom, incomingSource, senderKind, transferData, withFloor } from "./transfer.ts";
 
 const IDARA = getAddress("0x725c9a4bb4c3de2f11ac0e7c9b1e8f0d3a2b7bc1");
 const UBONG = getAddress("0x1111111111111111111111111111111111111111");
@@ -66,4 +66,13 @@ test("Receive never reads further back than its floor, and keeps what it had", a
   assert.deepEqual(await withFloor(inner, 1_000n).load(), { cursor: 1_000n, events: saved.events });
   assert.deepEqual(await withFloor(inner, 10n).load(), saved);
   assert.equal(await withFloor({ load: async () => undefined, save: async () => {} }, 5n).load(), undefined);
+});
+
+test("a payment from a pot is told as from a pot, never as an account ending", () => {
+  const pots = getAddress("0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB");
+  const pair = getAddress("0x1Aa8958Aa34cEC8096EF4381cb335effe977b0ae");
+  const person = getAddress("0x1111111111111111111111111111111111111111");
+  assert.equal(senderKind(pots, [pots], pair), "pot");
+  assert.equal(senderKind(pair, [pots], pair), "settlement");
+  assert.equal(senderKind(person, [pots], pair), "account");
 });

@@ -99,3 +99,13 @@ export function withFloor(store: FeedStore, floor: bigint): FeedStore {
     save: (s) => store.save(s),
   };
 }
+
+/**
+ * Who a payment came from, as Receive tells it. A payment from a pot is sent
+ * by the pots contract, never by a person, and one in another currency by
+ * Agora's settlement pair; anything else is a person's account.
+ */
+export function senderKind(from: Address, pots: Address[], settlementPair: Address): "pot" | "settlement" | "account" {
+  if (pots.some((p) => isAddressEqual(p, from))) return "pot";
+  return isAddressEqual(from, settlementPair) ? "settlement" : "account";
+}

@@ -351,6 +351,7 @@ const words = {
   noPaymentsYet: "Nothing yet. Payments show here once they're final, usually within a second.",
   paymentFrom: (from: string) => `From ${from}`,
   justArrived: "Just arrived",
+  fromAPot: "A NivPay pot, paid with its deciders' yes",
   fromAgoraSettlement: "Agora's settlement, paid in another currency",
   receivedAnnounce: (amount: string, from: string) => `${amount} received from ${from}.`,
   errReceiveRead: "Couldn't check for payments just now. Trying again.",
