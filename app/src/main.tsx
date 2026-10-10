@@ -9,6 +9,7 @@ import "@fontsource/work-sans/600.css";
 import "./styles.css";
 import "./pot.css";
 import { App } from "./App.tsx";
+import { serviceWorkerUrl, type TrustedTypesLike } from "./lib/trusted.ts";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");
@@ -22,7 +23,9 @@ createRoot(root).render(
 // fresh files.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
+    const tt = (window as unknown as { trustedTypes?: TrustedTypesLike }).trustedTypes;
+    // register() takes a TrustedScriptURL; the cast is only for TypeScript's older signature.
+    navigator.serviceWorker.register(serviceWorkerUrl(tt) as string, { scope: "/" }).catch(() => {
       // An app that works without its offline shell is better than one that
       // breaks because of it.
     });
