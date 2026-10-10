@@ -532,10 +532,10 @@ finalized events; nothing lands before Finalized.
 
 | Screen | Where | Status |
 | --- | --- | --- |
-| Make a pot | `app/src/screens/Create.tsx` | Built; pot 0 on the AUSD pots was made on testnet on 10 Oct 2026 |
+| Make a pot | `app/src/screens/Create.tsx` | Built; pot 0 on the AUSD pots was made on testnet on 9 Oct 2026 |
 | Pour in your share | `app/src/screens/ChipIn.tsx` | Built; pot 0 holds a pour from a second account |
 | Ask for a payment, and say yes | `app/src/screens/Ask.tsx`, `Request.tsx` | Built, checked with unit and live read-only tests; needs the phone run. A named decider sees a request waiting for their yes on Home with no link. |
-| The pot's story | | Next |
+| The pot's story | `app/src/screens/Timeline.tsx`, `app/src/lib/story.ts` | Built, checked with unit and live read-only tests; needs the phone run. Reading a pot's whole history is slow the first time (see Known limits below) |
 | Close and split | | After the story |
 
 Deciders "say yes"; the app never shows the word "approve", which the

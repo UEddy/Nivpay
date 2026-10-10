@@ -31,6 +31,7 @@ import { CreateScreen } from "./screens/Create.tsx";
 import { JoinScreen } from "./screens/Join.tsx";
 import { ReceiveScreen } from "./screens/Receive.tsx";
 import { RequestScreen } from "./screens/Request.tsx";
+import { TimelineScreen } from "./screens/Timeline.tsx";
 import { SendScreen } from "./screens/Send.tsx";
 import { formatDay, NoticeLine, phoneTimeZone, type Notice } from "./screens/ui.tsx";
 
@@ -46,6 +47,7 @@ type Screen =
   | { kind: "join"; invite: Invite }
   | { kind: "pot"; pot: StoredPot }
   | { kind: "request"; pot: StoredPot; proposalId: bigint }
+  | { kind: "story"; pot: StoredPot }
   | { kind: "send"; request: PayLink | null }
   | { kind: "receive" };
 
@@ -265,7 +267,20 @@ export function App() {
         // A pot opened with no link is not kept: Home shows it from the invite it was matched to.
         onName={(name) => screen.pot.fragment && pots.put({ ...screen.pot, name })}
         onOpenRequest={(proposalId) => go({ kind: "request", pot: screen.pot, proposalId })}
+        onOpenStory={() => go({ kind: "story", pot: screen.pot })}
         onClose={() => go({ kind: "home" })}
+      />
+    );
+  }
+  if (active && !switching && screen.kind === "story") {
+    return (
+      <TimelineScreen
+        key={screen.pot.potId + ":" + active.address}
+        account={active}
+        pot={screen.pot}
+        banner={banner}
+        onBack={() => go({ kind: "pot", pot: screen.pot })}
+        onOpenRequest={(proposalId) => go({ kind: "request", pot: screen.pot, proposalId })}
       />
     );
   }

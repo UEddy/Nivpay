@@ -32,10 +32,10 @@ phone or a decision.
 
 | Screen | Status | Evidence, or what is left |
 | --- | --- | --- |
-| Make a pot | Done | Pot 0 on the AUSD pots was made on testnet on 10 Oct 2026 by the author's account. |
+| Make a pot | Done | Pot 0 on the AUSD pots was made on testnet on 9 Oct 2026 (18:26 UTC) by the author's account. |
 | Pour in your share | Done | Pot 0 holds a pour from a second account. |
 | Ask for a payment, and say yes | Built, needs the phone test | `app/src/screens/Ask.tsx`, `Request.tsx`, `app/src/lib/payout.ts`, `waiting.ts`. Unit tests for every state; live read-only tests against pot 0. Nothing has been signed on testnet with it yet. |
-| The pot's story | Not built yet | |
+| The pot's story | Built, needs the phone test | `app/src/screens/Timeline.tsx`, `app/src/lib/story.ts`, `blockTimes.ts`. Unit tests for every row kind, ordering and the replay; a live read-only test checks the replay's arithmetic against `funderInfo` on pot 0. A phone that has never opened pot 0 reads about 1,480 pages of history the first time. |
 | Close and split | Not built yet | |
 
 ## Agora bounty: Best Cross-Border Payments App on Monad

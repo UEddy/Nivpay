@@ -129,6 +129,7 @@ stays open. Nothing is sent.
 
 | Code | What happened | Where to look |
 | --- | --- | --- |
+| 78 | Reading the pot's history for its story failed (`eth_getLogs` from the saved place, in 101 block pages). Entries already read stay; the next read is a second later and resumes from the same place. | RPC reachability; the pot's cursor in IndexedDB, `nivpay` store, key `<pots>:<potId>` |
 | 77 | One of those reads failed, so pots this account was added to may be missing for now. Pots already found stay listed, and the next read is 10 seconds later. | RPC reachability; Multicall3 at `0xcA11bde05977b3631167028862bE2a173976CA11` |
 
 ## Sending and receiving dollars

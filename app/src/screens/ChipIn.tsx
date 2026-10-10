@@ -63,6 +63,7 @@ export function ChipInScreen(props: {
   banner: ReactNode;
   onName: (name: string) => void;
   onOpenRequest: (proposalId: bigint) => void;
+  onOpenStory: () => void;
   onClose: () => void;
 }) {
   const { account } = props;
@@ -493,6 +494,9 @@ export function ChipInScreen(props: {
             {copy.askForPayment}
           </button>
         )}
+        <button type="button" className="text-btn story-link" onClick={props.onOpenStory}>
+          {copy.openStory}
+        </button>
         {!info.labelsOk && <p className="hint">{copy.namesUnchecked}</p>}
         {shareNote && <p className="hint">{shareNote}</p>}
       </div>

@@ -129,7 +129,11 @@ export function PotMap(props: {
   stream?: Stream | null;
   potText: string;
   badge: "draft" | "live";
+  /** Replaces the badge's word while the story replays; its dot stops pinging. */
+  badgeText?: string;
   label: string;
+  /** Laid over the map, such as the Replay button. */
+  children?: ReactNode;
 }) {
   const { people, payees } = props;
   const card = useRef<HTMLDivElement>(null);
@@ -405,13 +409,14 @@ export function PotMap(props: {
           )}
         </g>
       </svg>
-      <div className={`map-badge${props.badge === "live" ? " live" : ""}${asked ? " quiet" : ""}`}>
+      <div className={`map-badge${props.badge === "live" ? " live" : ""}${asked || props.badgeText ? " quiet" : ""}`}>
         <span className="dot">
           <span />
           <span className="ping" />
         </span>
-        {props.badge === "live" ? copy.live : copy.draft}
+        {props.badgeText ?? (props.badge === "live" ? copy.live : copy.draft)}
       </div>
+      {props.children}
     </div>
   );
 }

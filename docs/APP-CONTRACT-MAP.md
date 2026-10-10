@@ -621,3 +621,37 @@ the cap: a retry on the same nonce uses none of them, but a request that
 reverts, or a faucet claim that loses the race (62), uses one. Asking
 without a yes (the asker's own counts) and the take back are the only new
 kinds of request, and neither is in the story; a take back costs 55,816 gas.
+
+## 12. The pot's story, built (10 Oct 2026)
+
+Screen 4 (`Live-Timeline`), `app/src/screens/Timeline.tsx`, rows and replay
+in `app/src/lib/story.ts`.
+
+* **From finalized events only**, through the pot's one event feed: from the
+  creation block to the finalized block, 101 blocks a page (two queries a
+  page, since the pot number is the first indexed topic of some events and
+  the second of others), its place kept in IndexedDB. The pot screen and the
+  story share that place, so a phone that opened the pot already has it.
+* **Rows:** made, put in, asked to pay, a yes on its own, a yes taken back, a
+  request withdrawn, paid (who asked, who said yes, the fee), taken out
+  before close (`Exited`), share taken after close (`Claimed`), asked to
+  close, closed (early or on the date, with what was left), paused, asked to
+  turn payments back on, back on. The asker's own yes is told with the ask,
+  and the yes that ends a request with what it did, so nothing is told twice
+  (gap G11: `PayoutExecuted` names no one, the `Approved` events do). `Closed`
+  names no request; the request it ended is the one the yes in the same
+  transaction was for. People are named from the signed labels, else
+  "account ending 7bC1". Each row has a Receipt link to its transaction.
+* **Order:** Newest first by default, with a Newest/Oldest control the comp
+  does not have (agreed 10 Oct 2026), remembered on the phone.
+* **Dates** are the block time of each row, read once per block and kept.
+* **Replay** runs the money steps in about 7 s. What the pot held and what
+  each person's shares were worth after each step come from the events with
+  the contract's own conversion (offset 10**3, rounding down); a live test
+  checks this equals `funderInfo` right after pot 0's pour. Hidden with
+  reduced motion.
+* **Known limit, measured:** pot 0 was made 149,460 blocks before this was
+  written, about 1,480 pages, so a phone that has never opened it makes
+  about 3,000 log reads before its story is complete; at the measured
+  0.5 s a read and 4 pages at a time, a few minutes. Later opens read only
+  what is new. The fix is the snapshot planned in section 10.
