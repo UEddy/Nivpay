@@ -698,3 +698,29 @@ request once agreed.
   (96), anything else (97); asking to close as a non decider is 22. Each is
   found by running the request as a call first. The usual write path after
   that: resume on reload, retry on the same nonce, 52, 53, 56.
+
+## 14. Browser check of the pot story (10 Oct 2026)
+
+Approve, the story and close and split were run in a headless Chromium with
+a throwaway profile, at 360 and 320 px, against a local Anvil fork of Monad
+testnet. On the fork a Mama's 60th pot was made, funded, asked, said yes to
+and closed by impersonating throwaway addresses, so no key was used and
+nothing reached the testnet; the browser's calls to the RPC were answered by
+the fork. The app was read as Ubong, with no passkey, so every step that
+needs a fingerprint (asking, saying yes, taking a yes back, taking a share
+out) was not run in the browser.
+
+| Checked | Result |
+| --- | --- |
+| Overflow at 360 and 320 px | none on Home, the pot, the request, the story or close |
+| A request on Home with no link | shown, with when it must be answered by |
+| Payment asked | the payee's route marches and its ring pulses; two loops, the badge's ping stops |
+| Approved and paid, from the feed | lands about 4 s after the yes on the fork; tilt, stream, drain, check |
+| Replay | rows light in step, the badge shows the date, no loop runs |
+| Pot closed, early, while open | streams to each city over faded routes, $57.80, $46.24, $11.56 |
+| Nothing to take | code 94, no button |
+| Frames, production build, CPU 4 times slower | no long task; worst frame 12 ms in the replay and 7 ms in the close |
+
+Headless Chromium on a laptop is not an S10; the real frame budget is for
+the phone test. What the check found is fixed in the commits that follow
+`3247dd4` back to `89ed338`.
