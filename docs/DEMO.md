@@ -13,9 +13,11 @@ close early, Ubong agrees, and each takes their share of the $115.60 left.
 
 ## Before you record
 
-* `https://nivpay.vercel.app/api/fund/status` answers `"enabled": true`, and
-  the funder holds at least 2 MON: a take uses about 0.5 MON of gas grants
-  (4 grants of 0.1), and granting stops at a 1 MON floor.
+* `https://nivpay.vercel.app/api/fund/status` answers `"enabled": true` and
+  `"keyMatches": true`, and the funder holds at least 2 MON: a take uses
+  0.4 MON of gas grants (4 grants of 0.1, two for Idara and one each for
+  Ubong and Aniekan, plus about 0.002 MON to send each), the 2 minute path
+  below uses 0.1, and granting stops at a 1 MON floor.
 * Agora's faucet has stock: Add test dollars works for one account on either
   phone, or `faucetDripAmount()` and the faucet's AUSD balance read on
   MonadVision.
@@ -132,12 +134,31 @@ narration should not say the money "goes back" by itself.
 | Step | Phone, account | Do | Expect |
 | --- | --- | --- | --- |
 | 6.1 | A, Idara | Pot, See the pot's story | every step, newest first, each with a Receipt link |
-| 6.2 | A, Idara | Replay | the whole story in about 7 s, rows lighting up in step |
-| 6.3 | A, Idara | Tap Receipt on "Paid $600.00 to Caterer" | MonadVision opens the transaction: Ubong's yes, the payout to the Caterer's account and the fee, finalized |
+| 6.2 | A, Idara | Tap the replay button on the map (the circular arrow, read out as "Replay the pot's story") | the whole story in about 7 s, rows lighting up in step. It only shows once the history has fully loaded, and never with reduced motion on |
+| 6.3 | A, Idara | Tap Receipt on "Paid $600 to Caterer" | MonadVision opens the transaction: Ubong's yes, the payout to the Caterer's account and the fee, finalized |
 | 6.4 | A, Idara | Account details, View receipt | MonadVision opens Idara's own latest request, the share she took |
 
 Show the explorer once, at 6.3. It is the only screen in the video that names
 the chain, and the app links to it only as a receipt.
+
+## Amounts and fees in one take
+
+| Step | Amount | NivPay fee | Pot after |
+| --- | ---: | ---: | ---: |
+| Idara pours in | $500 | none | $500.00 |
+| Ubong pours in | $400 | none | $900.00 |
+| Aniekan pours in | $100 | none | $1,000.00 |
+| Caterer paid, on Ubong's yes | $600 | $3.00 | $397.00 |
+| Event hall paid, on Idara's yes | $280 | $1.40 | $115.60 |
+| Closed early, on Ubong's yes | | none | $115.60 |
+| Ubong takes his share | $46.24 | none | $69.36 |
+| Idara takes her share | $57.80 | none | $11.56 |
+| Aniekan takes his share | $11.56 | none | $0.00 |
+
+Only a payment from the pot has a fee. Putting money in, asking, saying
+yes, closing and taking a share have none, and the gas behind every request
+is covered by the gas grants, never shown. `app/src/docs.test.ts` checks
+these figures against the app's own fee and share arithmetic.
 
 ## Requests per account in one take
 
@@ -172,6 +193,54 @@ past 10 sent requests in the second take, and the gas grants would stop.
    one stays visible on MonadVision only.
 5. Wait at least 60 s after the last claim of the previous take before the
    first new claim, or it shows Code 60 and counts down.
+
+## The 2 minute bounty path
+
+A separate, shorter recording for Agora's bounty: passkey onboarding, an AUSD
+balance, a send and a receive settled at Finalized, and a payment delivered
+in another currency through Agora's Instant Settlement. No pot. Two fresh
+accounts, one per phone; only the sender needs test dollars, so the
+faucet's shared 60 second cooldown matters only if a claim was made in the
+minute before.
+
+| Phone | Account | Role |
+| --- | --- | --- |
+| A, Galaxy S24 | **Idara**, made on camera | sends |
+| B, Galaxy S10 | **Ubong**, made before the camera rolls | receives |
+
+Before the camera: on phone B, create **Ubong** and open Receive once, so
+its Payments in list starts before anything is sent (it starts about ten
+minutes before Receive is first opened on that phone). Check
+`api/fund/status` as above.
+
+| Time | Phone, account | Do | Expect |
+| --- | --- | --- | --- |
+| 0:00 | A | Open nivpay.vercel.app. Your name **Idara**, Create your account, save the passkey to Google Password Manager | the fingerprint prompt, then Home: **Your balance**, Dollars **$0.00**, "Held as AUSD, a digital dollar issued by Agora." |
+| 0:15 | A, Idara | Add test dollars | "Getting your account ready…", the fingerprint, "Adding test dollars…", then "Added $10,000 test dollars. Settled in 0.Xs." and Dollars **$10,000.00**. Code 60 with a countdown means someone claimed in the last minute: wait, Try again |
+| 0:35 | B, Ubong | Receive, Amount to ask for **25**, Share your request link, send it to phone A through the chat | |
+| 0:45 | A, Idara | Open the link | Send dollars: "Ubong asked you to pay them.", Sending to Ubong, How much **25** already filled in |
+| 0:50 | A, Idara | Review | Check and send: To Ubong, Amount **$25**, Fee "None. NivPay covers it.", Arrives "In about a second, final once confirmed" |
+| 0:55 | A, Idara | Send $25, fingerprint | "Sending…", "Confirming…", then Payment final: "Sent $25 to Ubong. Settled in 0.Xs." and View receipt |
+| 1:00 | B, Ubong | Receive is still open | **+$25.00**, "From account ending" and Idara's last 4 characters, "Just arrived", within a second or two; Your balance **$25.00** |
+| 1:05 | A, Idara | View receipt | MonadVision opens the transfer of 25 AUSD from Idara's account to Ubong's, finalized. The one explorer moment in this path; go back to the app |
+| 1:15 | A, Idara | Done, open the same request link again from the chat, change How much to **10**, They receive: **CTK** | "CTK is a test currency from Agora, settled at a fixed rate the moment your payment is final." |
+| 1:25 | A, Idara | Review | Check and send: You send **$10**, They receive **10.00 CTK**, At least 10.00 CTK, Rate "$1 = 1.00 CTK, fixed by Agora", Agora's fee **0.00 CTK**, No NivPay fee, "Includes a one-time setup for sending in other currencies.", "One fingerprint. It settles in 3 steps, each final before the next." |
+| 1:30 | A, Idara | Send $10 as CTK, fingerprint once | "Step 1 of 3. One-time setup…", "Step 2 of 3. Getting your dollars ready…", "Step 3 of 3. Sending…", then "Sent $10 to Ubong. They received 10.00 CTK. Settled in 0.Xs." and "Your one-time setup is done." The settled time is the exchange's own, the last step |
+| 1:45 | B, Ubong | Receive | **+10.00 CTK**, "From Agora's settlement, paid in another currency" |
+
+Read the rate, the fee and the CTK amounts off the sheet, not this table:
+Agora sets them and can change them (on 9 Oct 2026, 1 CTK per AUSD and no
+fee). Every "Settled in" figure is measured on the phone; never narrate a
+number before it shows.
+
+Requests in one take: Idara sends 5 (the claim, the $25 payment, then the
+setup, the allowance and the exchange behind one fingerprint) and gets one
+gas grant, before the claim. Ubong sends none: receiving sends nothing. A
+second take on the same Idara account would end at 10 sent, the gas grant
+limit, and would not show the one-time setup, so every take needs a new
+sender. Ubong can stay. Between takes: delete phone A's site data and
+Idara's passkey as in [Between takes](#between-takes), and wait 60 s after
+the last claim.
 
 ## If something goes wrong on camera
 
