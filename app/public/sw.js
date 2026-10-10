@@ -1,14 +1,21 @@
-// NivPay service worker. Caches the app shell only.
+// NivPay service worker. Caches the app shell only: the page, its scripts and
+// styles, fonts, icons and the manifest.
 //
 // Never cached, never even intercepted:
 //  * anything on another origin, which includes the Monad RPC,
 //  * anything under /api/,
 //  * any request that is not a GET.
 // Chain data must always be fresh, and a cached RPC answer could show money
-// that is no longer there.
+// that is no longer there. Offline, the app opens from this cache and says
+// it is offline; it shows no balance as current until a read comes back.
 
-const VERSION = "shell-v1";
-const SHELL = ["/", "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png", "/icons/icon-512.png"];
+// Filled in by the build (app/sw-build.ts): this build's scripts and styles,
+// every screen's included, so screens not opened yet still open offline, and
+// a version that changes with them. Left as null when not built.
+const BUILD = /* NIVPAY_BUILD */ null;
+
+const VERSION = `shell-${BUILD ? BUILD.version : "dev"}`;
+const SHELL = ["/", "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png", "/icons/icon-512.png", ...(BUILD ? BUILD.assets : [])];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

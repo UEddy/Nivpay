@@ -28,18 +28,21 @@ import { SEND_LABEL } from "./lib/transfer.ts";
 import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
 // Every screen but Home loads when it is first opened, and so does the code
 // that signs (passkeys, keys, signatures): the first screen stays small.
-const ChipInScreen = lazy(() => import("./screens/ChipIn.tsx").then((m) => ({ default: m.ChipInScreen })));
-const CreateScreen = lazy(() => import("./screens/Create.tsx").then((m) => ({ default: m.CreateScreen })));
-const JoinScreen = lazy(() => import("./screens/Join.tsx").then((m) => ({ default: m.JoinScreen })));
-const ReceiveScreen = lazy(() => import("./screens/Receive.tsx").then((m) => ({ default: m.ReceiveScreen })));
-const RequestScreen = lazy(() => import("./screens/Request.tsx").then((m) => ({ default: m.RequestScreen })));
-const TimelineScreen = lazy(() => import("./screens/Timeline.tsx").then((m) => ({ default: m.TimelineScreen })));
-const CloseScreen = lazy(() => import("./screens/Close.tsx").then((m) => ({ default: m.CloseScreen })));
-const SendScreen = lazy(() => import("./screens/Send.tsx").then((m) => ({ default: m.SendScreen })));
-const passkeys = () => import("./lib/passkey.ts");
-const sending = () => import("./lib/send.ts");
+// A page left open across a deploy can ask for a file the new build no longer
+// has; then it reloads once, onto the new build (lib/reloadOnce.ts).
+const ChipInScreen = lazy(() => reloadOnce(() => import("./screens/ChipIn.tsx")).then((m) => ({ default: m.ChipInScreen })));
+const CreateScreen = lazy(() => reloadOnce(() => import("./screens/Create.tsx")).then((m) => ({ default: m.CreateScreen })));
+const JoinScreen = lazy(() => reloadOnce(() => import("./screens/Join.tsx")).then((m) => ({ default: m.JoinScreen })));
+const ReceiveScreen = lazy(() => reloadOnce(() => import("./screens/Receive.tsx")).then((m) => ({ default: m.ReceiveScreen })));
+const RequestScreen = lazy(() => reloadOnce(() => import("./screens/Request.tsx")).then((m) => ({ default: m.RequestScreen })));
+const TimelineScreen = lazy(() => reloadOnce(() => import("./screens/Timeline.tsx")).then((m) => ({ default: m.TimelineScreen })));
+const CloseScreen = lazy(() => reloadOnce(() => import("./screens/Close.tsx")).then((m) => ({ default: m.CloseScreen })));
+const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
+const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
+const sending = () => reloadOnce(() => import("./lib/send.ts"));
 import { formatDay, NoticeLine, phoneTimeZone, useOnline, type Notice } from "./screens/ui.tsx";
 import { balanceNote } from "./lib/connection.ts";
+import { reloadOnce } from "./lib/reloadOnce.ts";
 
 const accounts = new AccountStore(localStorage);
 const drafts = new DraftStore(localStorage);
@@ -192,7 +195,7 @@ function Screens() {
       }
       if (link.kind === "reply") {
         try {
-          const { acceptReply } = await import("./lib/replies.ts");
+          const { acceptReply } = await reloadOnce(() => import("./lib/replies.ts"));
           const { draft, text } = await acceptReply(drafts, POTS, link);
           // The reply belongs to whichever account on this phone is making that pot.
           if (accounts.list().some((a) => a.address === draft.owner)) {

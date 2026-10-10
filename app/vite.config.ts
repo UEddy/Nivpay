@@ -1,5 +1,7 @@
-import { readFileSync } from "node:fs";
-import { defineConfig } from "vite";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
+import { defineConfig, type Plugin } from "vite";
+import { injectBuild, shellBuild } from "./sw-build.ts";
 
 // The production security headers live in vercel.json. `vite preview` serves
 // the same ones, so a production build can be checked locally under the real
@@ -16,7 +18,26 @@ const previewHeaders = Object.fromEntries((allRoutes?.headers ?? []).map((h) => 
 // in its ALLOWED_ORIGINS.
 const apiTarget = process.env.NIVPAY_API_TARGET;
 
+/** After the build is written, puts its scripts and styles into dist/sw.js (sw-build.ts). */
+function serviceWorkerShell(): Plugin {
+  let outDir = "dist";
+  return {
+    name: "nivpay-sw-shell",
+    apply: "build",
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir);
+    },
+    closeBundle() {
+      const root = join(outDir, "assets");
+      const files = readdirSync(root).map((f) => relative(outDir, join(root, f)));
+      const sw = join(outDir, "sw.js");
+      writeFileSync(sw, injectBuild(readFileSync(sw, "utf8"), shellBuild(files)));
+    },
+  };
+}
+
 export default defineConfig({
+  plugins: [serviceWorkerShell()],
   build: {
     target: "es2022",
     sourcemap: false,

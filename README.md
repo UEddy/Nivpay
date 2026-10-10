@@ -438,7 +438,7 @@ The documents behind the design:
 | Contracts | Solidity 0.8.28, OpenZeppelin Contracts 5.1.0, Foundry 1.8.3 with `network = "monad"`, forge-std 1.16.2 |
 | Money | AUSD (Agora) by default, TESTUSD as the test fallback; CTK through Agora's Instant Settlement for payments in another currency |
 | Accounts | Mera 0.2.0 passkeys (WebAuthn PRF), `@scure/bip39` and `@scure/bip32` for the key path `m/44'/60'/0'/0/0` |
-| App | React 19, TypeScript 7, Vite 8, viem 2.56, self hosted fonts, a service worker that caches the app shell only |
+| App | React 19, TypeScript 7, Vite 8, viem 2.56, self hosted fonts, a service worker that caches the app shell only (every screen's scripts, so it opens offline and says so) and never `/api` or the RPC |
 | Hosting | Vercel: static app plus two functions, `/api/fund` and `/api/fund/status` |
 | Tests | `forge test` (unit, fuzz, invariant, fork), `node --test` for the app |
 
