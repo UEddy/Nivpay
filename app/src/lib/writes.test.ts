@@ -304,3 +304,52 @@ test("a refusal is not given up on while the nonce may still be used, and a drop
   await submit(s2, quiet.chain, w);
   assert.deepEqual(await followToFinality(s2, quiet.chain, w, clock()), { kind: "stuck", refused: false }, "no answer is not a refusal");
 });
+
+test("a request signed while offline carries on once the phone is back, instead of being called stuck", async () => {
+  // Offline for 60 s, three times the stuck window: nothing answers. Then the
+  // network is back, takes the same bytes, and includes them a little later.
+  const store = memoryStore();
+  const t = clock();
+  const OFFLINE_MS = 60_000;
+  const broadcasts: { at: number; raw: Hex }[] = [];
+  let includedAt: number | null = null;
+  const offline = () => t.now() < OFFLINE_MS;
+  const chain: WriteChain = {
+    async sendRawTransaction(raw) {
+      broadcasts.push({ at: t.now(), raw });
+      if (offline()) throw new Error("Failed to fetch");
+      includedAt ??= t.now() + 1_200;
+      return "0x";
+    },
+    async getReceipt() {
+      if (offline()) throw new Error("Failed to fetch");
+      return includedAt !== null && t.now() >= includedAt ? { blockNumber: 100n, status: "success" } : null;
+    },
+    async getFinalizedBlockNumber() {
+      if (offline()) throw new Error("Failed to fetch");
+      return 1_000n;
+    },
+    async getNonce() {
+      if (offline()) throw new Error("Failed to fetch");
+      return 5;
+    },
+    async isInBlock() {
+      if (offline()) throw new Error("Failed to fetch");
+      return includedAt !== null && t.now() >= includedAt;
+    },
+  };
+  await submit(store, chain, write());
+  const outcome = await followToFinality(store, chain, write(), t);
+  assert.equal(outcome.kind, "final");
+  assert.ok(broadcasts.every((b) => b.raw === "0xaa01"), "only the same bytes are ever sent");
+  assert.ok(broadcasts.some((b) => b.at >= OFFLINE_MS), "sent again once back online");
+  assert.equal(store.map.has(ME), false);
+});
+
+test("a request still in no block after the stuck window, with the network answering, is still called stuck", async () => {
+  const store = memoryStore();
+  const { chain } = fakeChain({ finalizedNonce: 5 });
+  await submit(store, chain, write());
+  const outcome = await followToFinality(store, chain, write(), clock());
+  assert.deepEqual(outcome, { kind: "stuck", refused: false });
+});

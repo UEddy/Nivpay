@@ -130,12 +130,23 @@ export async function followToFinality(
   write: PendingWrite,
   timing: Timing = DEFAULT_TIMING,
 ): Promise<Outcome> {
-  const started = timing.now();
-  let lastBroadcast = started;
+  let lastBroadcast = timing.now();
+  // Time spent with the network answering. Only that counts towards stuck:
+  // a phone that was offline hasn't been waiting on the chain, and once it is
+  // back the same bytes are sent again and followed as before.
+  let answeredMs = 0;
+  let lastPoll = lastBroadcast;
   // Refusals in a row. A broadcast that gets no answer neither adds nor resets.
   let refusals = 0;
   for (;;) {
-    const receipt = await chain.getReceipt(write.hash).catch(() => null);
+    let answered = true;
+    const receipt = await chain.getReceipt(write.hash).catch(() => {
+      answered = false;
+      return null;
+    });
+    const polled = timing.now();
+    if (answered) answeredMs += polled - lastPoll;
+    lastPoll = polled;
     if (receipt) {
       const finalized = await chain.getFinalizedBlockNumber().catch(() => -1n);
       if (finalized >= receipt.blockNumber) {
@@ -155,7 +166,7 @@ export async function followToFinality(
         if (answer === "refused") refusals += 1;
         if (answer === "taken") refusals = 0;
       }
-      if (now - started >= timing.stuckAfterMs || refusals >= REFUSALS_BEFORE_STUCK) {
+      if (answeredMs >= timing.stuckAfterMs || refusals >= REFUSALS_BEFORE_STUCK) {
         const verdict = await nonceVerdict(chain, write);
         if (verdict === "superseded") {
           await store.delete(write.address);

@@ -88,7 +88,7 @@ a call before anything is signed, so these send nothing.
 | 41 | Signing the transaction failed after the passkey step. | Browser console |
 | 42 | Saving the signed request to IndexedDB failed, so it was never broadcast. | Storage settings, private browsing |
 | 50 | The request was broadcast, but following it to finality failed. The app resumes on reload. | The pending write's hash |
-| 51 | Not in any block after 45 seconds, and its nonce is still unused at finalized. Nothing moved; it can be retried on the same nonce. | The pending write |
+| 51 | Not in any block after 45 seconds of the network answering, and its nonce is still unused at finalized. Time offline doesn't count: a request signed or sent while offline is sent again, the same bytes, when the phone is back. Nothing moved; it can be retried on the same nonce. | The pending write |
 | 52 | Included and finalized, but reverted. Nothing moved. | The transaction receipt |
 | 53 | Its nonce was used by a different transaction. Nothing of this request moved. | The account's transactions |
 | 54 | A retry was refused because the earlier attempt may still go through. Wait. | The pending write |
