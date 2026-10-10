@@ -58,6 +58,8 @@ export type Payee = { to: Address; name: string; cap: bigint; spent: bigint };
 /** Current numbers, all read at one finalized block. */
 export type PotState = {
   at: bigint;
+  /** The finalized block's time, in seconds: what expiry is judged against. */
+  now: bigint;
   name: string;
   endTime: bigint;
   threshold: number;
@@ -90,6 +92,7 @@ export async function readPotState(potId: bigint, accounts: Address[], me: Addre
   ]);
   return {
     at: block.number,
+    now: block.timestamp,
     name: fromText32(pot.purpose),
     endTime: pot.endTime,
     threshold: pot.threshold,

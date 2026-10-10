@@ -1,4 +1,15 @@
-import { BaseError, ContractFunctionRevertedError, encodeFunctionData, getAddress, parseEventLogs, type Address, type Hex, type PublicClient } from "viem";
+import {
+  BaseError,
+  ContractFunctionRevertedError,
+  decodeFunctionData,
+  encodeFunctionData,
+  getAddress,
+  parseEventLogs,
+  parseTransaction,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import { POTS_ABI, POTS_READ_ABI } from "./abi.ts";
 import { AppError } from "./errors.ts";
@@ -108,4 +119,22 @@ export async function proposalIdIn(client: Client, pots: Address, hash: Hex): Pr
   const receipt = await client.getTransactionReceipt({ hash });
   const [proposed] = parseEventLogs({ abi: POTS_ABI, eventName: "Proposed", logs: receipt.logs.filter((l) => l.address.toLowerCase() === pots.toLowerCase()) });
   return proposed ? proposed.args.proposalId : null;
+}
+
+/**
+ * What a signed ask asks for, read back from its own bytes, so an ask that
+ * was in flight when the app was closed can say what it is and be retried
+ * with exactly the same payee and amount. Null for anything else.
+ */
+export function askIn(raw: Hex, pots: Address, potId: bigint): { payee: number; amount: bigint } | null {
+  try {
+    const tx = parseTransaction(raw);
+    if (!tx.to || tx.to.toLowerCase() !== pots.toLowerCase() || !tx.data) return null;
+    const call = decodeFunctionData({ abi: POTS_ABI, data: tx.data });
+    if (call.functionName !== "proposePayout") return null;
+    const [id, payee, amount] = call.args;
+    return id === potId ? { payee, amount } : null;
+  } catch {
+    return null;
+  }
 }

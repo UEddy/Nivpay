@@ -262,6 +262,7 @@ export function App() {
         banner={banner}
         // A pot opened with no link is not kept: Home shows it from the invite it was matched to.
         onName={(name) => screen.pot.fragment && pots.put({ ...screen.pot, name })}
+        onOpenRequest={(proposalId) => go({ kind: "request", pot: screen.pot, proposalId })}
         onClose={() => go({ kind: "home" })}
       />
     );

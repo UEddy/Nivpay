@@ -1299,3 +1299,45 @@
   opacity: 0.55;
   cursor: default;
 }
+
+/* Asking for a payment: one of the pot's payees, each with what is left of its limit. */
+.payee-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.payee-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--card-border);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  font: 500 15px var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-swap) ease-out;
+}
+
+.payee-option.on {
+  border-color: var(--primary);
+}
+
+.payee-option .meta {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.payee-option:disabled {
+  cursor: default;
+}
+
+.waiting-requests .eyebrow {
+  margin: 4px 0 2px;
+}

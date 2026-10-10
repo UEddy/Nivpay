@@ -17,7 +17,11 @@ import { openPot, potFeed, putIn, readPotState, type PotInfo, type PotState } fr
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { rememberReceipt } from "../lib/receipts.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
-import { PotMap, type Coin, type Layer, type MapPerson } from "./PotMap.tsx";
+import { requestsFrom, waitingRequests } from "../lib/payout.ts";
+import { AskSheet, useAskFlow, WaitingRequests } from "./Ask.tsx";
+import { usePayMotion } from "./payMotion.ts";
+import { PotMap, type Coin, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
+import { factsOf } from "./Request.tsx";
 import { andList, Icon, NoticeLine, shareLink, Sheet, type Notice } from "./ui.tsx";
 
 const orList = new Intl.ListFormat("en-GB", { style: "long", type: "disjunction" });
@@ -58,6 +62,7 @@ export function ChipInScreen(props: {
   pot: StoredPot;
   banner: ReactNode;
   onName: (name: string) => void;
+  onOpenRequest: (proposalId: bigint) => void;
   onClose: () => void;
 }) {
   const { account } = props;
@@ -80,8 +85,18 @@ export function ChipInScreen(props: {
   const [announce, setAnnounce] = useState("");
   const [exact, setExact] = useState(false);
   const [shareNote, setShareNote] = useState<string | null>(null);
+  const [askOpen, setAskOpen] = useState(false);
   const alive = useRef(true);
   const myTx = useRef<Hex | null>(null);
+  const { motion, run } = usePayMotion();
+  // The feed's handler reads the numbers on screen without restarting the feed when they change.
+  const stateRef = useRef<PotState | null>(null);
+  stateRef.current = state;
+  const askFlow = useAskFlow(me, potId, props.onOpenRequest);
+  // An ask that was in flight when the app was closed opens its sheet again.
+  useEffect(() => {
+    if (askFlow.resumable) setAskOpen(true);
+  }, [askFlow.resumable]);
 
   useEffect(() => {
     alive.current = true;
@@ -155,10 +170,32 @@ export function ChipInScreen(props: {
   const landTheirs = useCallback(
     async (fresh: PotEvent[]) => {
       const funded = fresh.filter((e) => e.name === "Funded" && e.tx !== myTx.current);
+      const asked = fresh.filter((e) => e.name === "Proposed" && Number(e.args.kind) === 0).at(-1);
+      const shown = stateRef.current;
+      if (asked && shown) {
+        const who = people[indexOf(String(asked.args.proposer))]?.name ?? copy.someoneElse;
+        const payee = shown.payees[Number(asked.args.destIndex)]?.name ?? "";
+        setAnnounce(copy.paymentAskedAnnounce(who, formatAmount(asked.args.amount as bigint, shown.decimals, "auto"), payee));
+      }
       const changes = fresh.filter((e) => e.tx !== myTx.current && ["Funded", "Exited", "Claimed", "PayoutExecuted", "Closed", "Frozen", "Unfrozen"].includes(e.name));
       if (changes.length === 0) return;
       const next = await read().catch(() => null);
       if (!next || !alive.current) return;
+      // A payment made, final: the pot tips, a stream runs to the payee, every layer drains.
+      const payout = changes.filter((e) => e.name === "PayoutExecuted").at(-1);
+      if (payout) {
+        const payee = Number(payout.args.destIndex);
+        run(
+          payee,
+          () => alive.current && setState(next),
+          () => {
+            if (!alive.current) return;
+            const fmt = (v: bigint) => formatAmount(v, next.decimals, "auto");
+            setAnnounce(copy.paidLine(fmt(payout.args.amount as bigint), next.payees[payee]?.name ?? "", formatAmount(next.totalAssets, next.decimals, "cents")));
+          },
+        );
+        return;
+      }
       const flying = funded.map((e) => indexOf(String(e.args.funder))).filter((i) => i >= 0 && i < MAX_DRAWN_PEOPLE);
       const settle = () => {
         if (!alive.current) return;
@@ -179,7 +216,7 @@ export function ChipInScreen(props: {
       requestAnimationFrame(() => requestAnimationFrame(() => setTheirCoins(Object.fromEntries(flying.map((i) => [i, "end"])))));
       setTimeout(settle, FLIGHT_MS);
     },
-    [read, indexOf, people],
+    [read, indexOf, people, run],
   );
 
   // One event feed for this pot, from its creation block, up to finalized.
@@ -380,6 +417,17 @@ export function ChipInScreen(props: {
       }),
   ].join(" ");
   const others = people.filter((p) => !p.me).map((p) => p.name);
+  const facts = factsOf(state);
+  const waiting = waitingRequests(requestsFrom(events), state.now);
+  const askedFor = new Map(waiting.map((r) => [r.payee, r.amount]));
+  const iDecide = state.deciders.some((a) => isAddressEqual(a, me));
+  const mapPayees: MapPayee[] = state.payees.map((p, i) => {
+    if (motion.payee === i) return { name: p.name, sub: copy.payeeSubPaid(fmt(p.spent)), state: motion.arrived ? "paid" : "paying" };
+    const ask = askedFor.get(i);
+    if (ask !== undefined) return { name: p.name, sub: copy.payeeSubAsked(fmt(ask)), state: "asked" };
+    return { name: p.name, sub: copy.upTo(fmt(p.cap)) };
+  });
+  const nameOf = (a: Address) => people.find((p) => isAddressEqual(p.account, a))?.name ?? copy.accountEnding(a);
 
   const pourLabel =
     step === "confirm"
@@ -399,7 +447,7 @@ export function ChipInScreen(props: {
       <div className="screen-body">
         <PotMap
           people={mapPeople}
-          payees={state.payees.map((p) => ({ name: p.name, sub: copy.upTo(fmt(p.cap)) }))}
+          payees={mapPayees}
           payeeRoutes="dotted"
           lid="shut"
           lock={false}
@@ -409,6 +457,9 @@ export function ChipInScreen(props: {
           potText={potText}
           badge="live"
           label={mapLabel}
+          tilt={motion.tilt}
+          draining={motion.draining}
+          stream={motion.stream}
         />
 
         <div className="intro enter" style={{ animationDelay: "120ms" }}>
@@ -436,6 +487,12 @@ export function ChipInScreen(props: {
           <span className="chip">{copy.chipRule(state.threshold, state.deciders.length)}</span>
           <span className="chip">{copy.chipLeftover}</span>
         </div>
+        <WaitingRequests requests={waiting} facts={facts} nameOf={nameOf} me={me} onOpen={props.onOpenRequest} />
+        {iDecide && !blocked && (
+          <button type="button" className="pill-btn outline enter" style={{ animationDelay: "340ms" }} onClick={() => setAskOpen(true)}>
+            {copy.askForPayment}
+          </button>
+        )}
         {!info.labelsOk && <p className="hint">{copy.namesUnchecked}</p>}
         {shareNote && <p className="hint">{shareNote}</p>}
       </div>
@@ -486,6 +543,8 @@ export function ChipInScreen(props: {
           </>
         )}
       </div>
+
+      {askOpen && <AskSheet me={me} facts={facts} flow={askFlow} onClose={() => setAskOpen(false)} />}
 
       {exact && (
         <ExactSheet

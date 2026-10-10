@@ -354,6 +354,24 @@ export const copy = {
   errLowLiquidity: "Agora can't settle that much in this currency right now. Try a smaller amount. Nothing was sent.",
   errNotEnoughForFees: "Your account can't cover the processing for this yet, and can't be topped up while it holds what it has. Send a smaller payment first, or try again later. Nothing was sent.",
 
+  // Asking for a payment, from the pot screen
+  askForPayment: "Ask for a payment",
+  askLede: "The pot can only pay these, each up to its limit. Asking counts as your yes.",
+  whoToPay: "Who to pay",
+  payeeLeft: (left: string, cap: string) => `${left} left of ${cap}`,
+  askAmount: "Amount",
+  askCountsAsYes: (more: number, payee: string) =>
+    more === 0
+      ? `This pot needs only one yes, so asking pays ${payee} straight away.`
+      : `Asking counts as your yes. ${more} more ${more === 1 ? "yes pays" : "yeses pay"} ${payee}.`,
+  askAction: (amount: string, payee: string) => `Ask to pay ${amount} to ${payee}`,
+  asking: "Asking…",
+  askingFor: (amount: string, payee: string) => `Asking to pay ${amount} to ${payee}…`,
+  waitingForYes: "Waiting for a yes",
+  requestRow: (who: string, amount: string, payee: string) => `${who} asked to pay ${amount} to ${payee}`,
+  requestRowMeta: (k: number, n: number) => `${k} of ${n} yeses so far`,
+  paymentAskedAnnounce: (who: string, amount: string, payee: string) => `${who} asked to pay ${amount} to ${payee}.`,
+
   // A payment request (Live-Approve). Nobody "approves": deciders say yes.
   paymentRequest: "Payment request",
   openingRequest: "Opening the request…",

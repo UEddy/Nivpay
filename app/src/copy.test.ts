@@ -152,6 +152,13 @@ function allCopy(): [string, string][] {
     payeeReplyAdded: ["Chidi", "Caterer"],
     errOverLimit: ["$100", "Caterer"],
     errPotShort: ["$397.00"],
+    payeeLeft: ["$700", "$700"],
+    askCountsAsYes: [1, "Caterer"],
+    askAction: ["$600", "Caterer"],
+    askingFor: ["$600", "Caterer"],
+    requestRow: ["Aniekan", "$600", "Caterer"],
+    requestRowMeta: [1, 2],
+    paymentAskedAnnounce: ["Aniekan", "$600", "Caterer"],
     wantsToPay: ["Aniekan", "$600", "Caterer"],
     youAskedToPay: ["$600", "Caterer"],
     askedLine: ["Aniekan", "14 Oct, 09:12"],
@@ -211,6 +218,9 @@ test("a payment request reads in plain words: a yes, never an approval", () => {
   assert.equal(copy.yesPaysNow(2, 3, "Caterer"), "That's 2 of 3. Paying Caterer now.");
   assert.equal(copy.paidLine("$600", "Caterer", "$397.00"), "Paid $600 to Caterer. The pot has $397.00.");
   assert.equal(copy.needsYesesWithin(2, 7), "Requests need 2 yeses within 7 days, or they expire.");
+  assert.equal(copy.askCountsAsYes(1, "Caterer"), "Asking counts as your yes. 1 more yes pays Caterer.");
+  assert.equal(copy.askCountsAsYes(2, "Caterer"), "Asking counts as your yes. 2 more yeses pay Caterer.");
+  assert.equal(copy.askCountsAsYes(0, "Caterer"), "This pot needs only one yes, so asking pays Caterer straight away.");
 });
 
 test("vendors and people are shown as 'account ending', never a 0x form", () => {
