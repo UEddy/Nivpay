@@ -323,6 +323,57 @@ from its comments.
 * **Tokens sent straight to the contract are stuck for good.** There is no
   rescue function, by design; they do not change any pot's share price.
 
+### Each claim, and the line that proves it
+
+Checked on 10 Oct 2026 against `src/NivPayPots.sol` at this commit. The
+deployed AUSD instance is this source: a fresh build with the `deploy`
+profile (solc 0.8.28, optimizer 200 runs, no IR) is byte for byte the code
+at `0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB` (`eth_getCode`), including
+the 51 byte metadata trailer, which carries the hash of the source. The
+only differences are the 17 places the compiler leaves for the four
+immutables, which hold AUSD, `feeBps` 50, `feeCap` 50,000,000 and the fee
+recipient `0x7EAf...297c`.
+
+| Claim | Where |
+| --- | --- |
+| No owner or admin, no roles | imports at lines 4 to 8 are `IERC20`, `IERC20Permit`, `SafeERC20`, `ReentrancyGuard`, `Math` only; no `owner`, `Ownable` or `AccessControl` anywhere |
+| Nothing global can be set after deploy | `token`, `feeBps`, `feeCap`, `feeRecipient` are `immutable` (lines 68 to 79), set only in the constructor (235 to 242); `feeBps` refused above `MAX_FEE_BPS` 100 (48, 237) |
+| No global pause | the only pause is `freeze(potId)`, one pot (577 to 583) |
+| Not a proxy | no `delegatecall`, no assembly in the source; the deployed implementation slot is empty and the code matches the build above |
+| Fees go to the fee recipient only | `collectFees` refuses anyone else (604) and moves only `feesAccrued` (605 to 608), which grows only on a payout (560); on both instances that recipient is the deployer's address |
+| One decider can pause a pot, only the rule can unpause it | `freeze` needs only `_isApprover` (579), refuses a second freeze (580); `pot.frozen = false` appears once, in `_execute` for an agreed unpause request (516 to 518) |
+| A pause stops pour-ins and payments, never exits | frozen is checked in `_fund` (337), `proposePayout` (418), `approve` for payouts (475) and `_executePayout` (531); `exit`, `claim` and `_redeem` (370 to 405) have no such check |
+| Requests expire after 7 days | `PROPOSAL_TTL = 7 days` (47); `approve` refuses after (471) |
+| The closing time | `_isClosed` is `closedFlag \|\| block.timestamp >= endTime` (626 to 627); `endTime` must be in the future when made (268) and nothing changes it; `closePot` only records it (589 to 594) |
+| Exits in every state | `exit` calls `_redeem` (370 to 372), which checks only that the caller holds the shares (384 to 386) |
+| What is left goes back by share | `claim` needs the pot closed (378) and burns all the caller's shares for their part of what is left, rounded down (379, 382 to 396, `_convertToAssets` 656) |
+| Nobody can take another person's share, so a lost passkey's share stays put | shares are written only for `msg.sender`: when they pour in (357) and when they take out (392); there is no transfer or approval of shares |
+| A payment goes only to a listed payee, within its cap | `_executePayout` pays `_destinations[potId][p.destIndex].to` and refuses past its cap (523 to 566) |
+
+The Foundry suite was run on 10 Oct 2026, default profile: see
+[Tests](#tests).
+
+### What a pot's maker or its deciders can do to those who put money in
+
+All of this is visible before anyone puts money in, but only if they look:
+
+* **The maker chooses every name.** A payee's name ("Caterer") is a label
+  the maker typed, stored on chain and in the signed link. Nothing checks
+  it: a maker can list their own account as "Caterer". The app shows each
+  payee's account ending under its name; check it with the real payee.
+* **A rule of one yes.** With "1 of n", any single decider can pay a listed
+  payee up to its cap at once, with no one else agreeing. The rule is on
+  the pot screen ("1 of 3 must agree").
+* **Caps can be as large as the maker likes**, so a payee can be allowed
+  all of the pot.
+* **A decider can pause a pot for good.** Payments stop until the rule
+  agrees to unpause; everyone can still take their own share out.
+* **A payment agreed just before you take your share out** lowers what you
+  get, as it would for everyone in the pot.
+* **The closing time can be seconds away** if the pot is made outside the
+  app; the app itself refuses less than 10 minutes. A closed pot still
+  lets everyone take what is left by share.
+
 ### Outside this contract: Agora's Instant Settlement
 
 Sending in another currency goes through Agora's pair

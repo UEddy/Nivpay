@@ -152,3 +152,36 @@ test("docs/PERF-S10.md covers the five motions, and every demo step it points to
   for (const s of steps) assert.match(DEMO, new RegExp(`^\| ${s.replace(".", "\.")} \|`, "m"), `DEMO.md step ${s}`);
   assert.match(perf, /https:\/\/developer\.samsung\.com\/android-usb-driver/);
 });
+
+test("the README's contract claims point at the source lines that prove them", () => {
+  const sol = doc("src/NivPayPots.sol").split("\n");
+  const at = (line: number) => sol[line - 1] ?? "";
+  const expect: [number, RegExp][] = [
+    [47, /PROPOSAL_TTL = 7 days/],
+    [48, /MAX_FEE_BPS = 100/],
+    [237, /feeBps_ > MAX_FEE_BPS/],
+    [268, /endTime <= block\.timestamp\) revert EndTimeInPast/],
+    [337, /pot\.frozen\) revert PotFrozen/],
+    [357, /_shares\[potId\]\[msg\.sender\] \+= sharesMinted/],
+    [370, /function exit\(/],
+    [378, /!_isClosed\(pot\)\) revert PotNotClosed/],
+    [386, /shares > held\) revert InsufficientShares/],
+    [392, /_shares\[potId\]\[msg\.sender\] = held - shares/],
+    [418, /pot\.frozen\) revert PotFrozen/],
+    [471, /PROPOSAL_TTL\) revert ProposalExpired/],
+    [475, /ProposalKind\.Payout && pot\.frozen/],
+    [518, /pot\.frozen = false/],
+    [531, /pot\.frozen\) revert PotFrozen/],
+    [560, /feesAccrued \+= fee/],
+    [579, /_isApprover\[potId\]\[msg\.sender\]\) revert NotApprover/],
+    [580, /pot\.frozen\) revert PotFrozen/],
+    [604, /msg\.sender != feeRecipient\) revert NotFeeRecipient/],
+    [627, /closedFlag \|\| block\.timestamp >= pot\.endTime/],
+  ];
+  for (const [line, re] of expect) assert.match(at(line), re, `src/NivPayPots.sol:${line}`);
+  assert.equal(sol.filter((l) => /pot\.frozen = false/.test(l)).length, 1, "one place unpauses");
+  assert.equal(sol.filter((l) => /_shares\[potId\]\[[^\]]+\] (\+?=|-=)/.test(l)).length, 2, "shares are written in two places only");
+  const code = sol.filter((l) => !/^\s*\/\//.test(l)).join("\n");
+  assert.doesNotMatch(code, /\bowner\b|Ownable|AccessControl|delegatecall|selfdestruct|assembly/, "outside comments");
+  assert.match(README, /\| A pause stops pour-ins and payments, never exits \| frozen is checked in `_fund` \(337\)/);
+});
