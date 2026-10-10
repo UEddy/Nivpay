@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { stripInvisible } from "../lib/text.ts";
 import { createSchedule, prefersReducedMotion } from "../lib/reduced.ts";
 import { encodeFunctionData, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
@@ -691,7 +692,7 @@ function NameSheet(props: { draft: Draft; onSave: (name: string) => void; onClos
     <Sheet title={copy.potName} onClose={props.onClose}>
       <label className="field">
         <span>{copy.potName}</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={copy.potNamePlaceholder} autoFocus enterKeyHint="done"
+        <input value={name} onChange={(e) => setName(stripInvisible(e.target.value))} placeholder={copy.potNamePlaceholder} autoFocus enterKeyHint="done"
           onKeyDown={(e) => e.key === "Enter" && save()} />
       </label>
       <p className={tooLong ? "error" : "hint"}>{tooLong ? copy.potNameTooLong : copy.potNameHint}</p>
@@ -774,7 +775,7 @@ function DecidersSheet(props: {
               maxLength={40}
               placeholder={copy.cityPlaceholder}
               autoComplete="off"
-              onChange={(e) => update((d) => ({ ...d, me: { city: e.target.value, timeZone: phoneTimeZone() } }))}
+              onChange={(e) => update((d) => ({ ...d, me: { city: stripInvisible(e.target.value), timeZone: phoneTimeZone() } }))}
             />
           </label>
           <span className="hint">{copy.timeZoneLine(draft.me.timeZone)}</span>
@@ -814,7 +815,7 @@ function DecidersSheet(props: {
       {!full && (
         <label className="field">
           <span>{copy.inviteeName}</span>
-          <input value={inviteName} onChange={(e) => setInviteName(e.target.value)} maxLength={40} placeholder={copy.namePlaceholder} autoComplete="off" />
+          <input value={inviteName} onChange={(e) => setInviteName(stripInvisible(e.target.value))} maxLength={40} placeholder={copy.namePlaceholder} autoComplete="off" />
         </label>
       )}
       <button type="button" className="btn" disabled={full || !inviteName.trim()}
@@ -969,7 +970,7 @@ function PayeesSheet(props: {
           <div className="field-row">
             <label className="field">
               <span>{copy.payeeName}</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder={copy.payeeNamePlaceholder} />
+              <input value={name} onChange={(e) => setName(stripInvisible(e.target.value))} placeholder={copy.payeeNamePlaceholder} />
             </label>
             <label className="field">
               <span>{copy.limit}</span>

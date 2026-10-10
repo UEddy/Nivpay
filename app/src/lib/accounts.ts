@@ -1,4 +1,5 @@
 import { getAddress, isAddress, type Address } from "viem";
+import { stripInvisible } from "./text.ts";
 
 /**
  * The accounts this phone knows about. Only an address and a display name are
@@ -30,11 +31,7 @@ export const NAME_MAX = 40;
  * look like another), runs of spaces made one, trimmed, and cut to NAME_MAX.
  */
 export function cleanName(raw: string): string {
-  const visible = raw
-    .normalize("NFC")
-    .replace(/[\p{Cc}\p{Cf}]/gu, "")
-    .replace(/\s+/gu, " ")
-    .trim();
+  const visible = stripInvisible(raw.normalize("NFC")).replace(/\s+/gu, " ").trim();
   return Array.from(visible).slice(0, NAME_MAX).join("").trim();
 }
 

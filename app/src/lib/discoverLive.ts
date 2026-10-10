@@ -3,7 +3,7 @@ import { ERC20_READ_ABI, POTS_ABI, POTS_READ_ABI } from "./abi.ts";
 import type { PotsReader } from "./discover.ts";
 import type { CreatorReader } from "./invited.ts";
 import type { AskReader } from "./waiting.ts";
-import { fromText32 } from "./text32.ts";
+import { shownText32 } from "./text32.ts";
 
 /** Calls per Multicall3 batch, so one slow or oversized request never holds up the rest. */
 const CHUNK = 100;
@@ -58,7 +58,7 @@ export function potsReader(readClient: Pick<PublicClient, "getBlock" | "readCont
           blockNumber: at,
           contracts: chunk.map((id) => ({ address: pots, abi: POTS_ABI, functionName: "getPot", args: [BigInt(id)] }) as const),
         });
-        return rows.map((p) => ({ name: fromText32(p.purpose), totalAssets: p.totalAssets, endTime: p.endTime, closed: p.closed }));
+        return rows.map((p) => ({ name: shownText32(p.purpose), totalAssets: p.totalAssets, endTime: p.endTime, closed: p.closed }));
       }),
   };
 }

@@ -1,4 +1,5 @@
 import { bytesToHex, hexToBytes, type Hex } from "viem";
+import { stripInvisible } from "./text.ts";
 
 /**
  * The pot's name and each payee's name are stored on chain as bytes32: UTF-8,
@@ -21,6 +22,14 @@ export function toText32(text: string): Hex {
   const out = new Uint8Array(TEXT32_BYTES);
   out.set(new TextEncoder().encode(text));
   return bytesToHex(out);
+}
+
+/**
+ * A bytes32 name as it is shown. Anyone can make a pot straight through the
+ * contract, so the name may carry invisible characters; they are taken out.
+ */
+export function shownText32(value: Hex): string {
+  return stripInvisible(fromText32(value));
 }
 
 /** Reads a bytes32 name back. Trailing zeros are padding; anything that isn't UTF-8 throws. */

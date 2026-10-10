@@ -2,6 +2,7 @@ import { getAddress, isAddressEqual, recoverTypedDataAddress, type Address, type
 import { CHAIN_ID, type Deployment } from "./config.ts";
 import type { Person, Share } from "./draft.ts";
 import { LinkReader, LinkWriter } from "./links.ts";
+import { hasInvisible } from "./text.ts";
 
 /**
  * The links NivPay sends through chats (invite case B in
@@ -110,9 +111,10 @@ export type Link = Invite | Reply | PotLink | PayLink | AskLink;
 /** Text limits in links, so a crafted link can't carry a novel. */
 const MAX_TEXT = 64;
 
+/** Too long, or carrying invisible characters that could disguise a name: the link is refused. */
 function checkedText(r: LinkReader): string {
   const t = r.text();
-  if (t.length > MAX_TEXT) throw new Error("link is damaged");
+  if (t.length > MAX_TEXT || hasInvisible(t)) throw new Error("link is damaged");
   return t;
 }
 

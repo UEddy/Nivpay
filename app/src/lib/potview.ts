@@ -9,7 +9,7 @@ import { PotFeed, type FeedSource, type PotEvent } from "./feed.ts";
 import { idbFeedStore } from "./idb.ts";
 import { verifyLabels, type PotLink } from "./invites.ts";
 import { readClient } from "./rpc.ts";
-import { fromText32 } from "./text32.ts";
+import { shownText32 } from "./text32.ts";
 
 /** A pot as opened from its link, checked against its PotCreated event. */
 export type PotInfo = {
@@ -96,14 +96,14 @@ export async function readPotState(potId: bigint, accounts: Address[], me: Addre
   return {
     at: block.number,
     now: block.timestamp,
-    name: fromText32(pot.purpose),
+    name: shownText32(pot.purpose),
     endTime: pot.endTime,
     threshold: pot.threshold,
     closed: pot.closed,
     frozen: pot.frozen,
     totalAssets: pot.totalAssets,
     deciders: deciders.map((d) => getAddress(d)),
-    payees: destinations.map((d) => ({ to: getAddress(d.to), name: fromText32(d.label), cap: d.cap, spent: d.spent })),
+    payees: destinations.map((d) => ({ to: getAddress(d.to), name: shownText32(d.label), cap: d.cap, spent: d.spent })),
     asset: getAddress(asset),
     decimals,
     myBalance,

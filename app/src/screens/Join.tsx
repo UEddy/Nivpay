@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { stripInvisible } from "../lib/text.ts";
 import { copy } from "../copy.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
 import { DEPLOYMENT, POTS } from "../lib/deployment.ts";
@@ -82,11 +83,11 @@ export function JoinScreen(props: {
           <div className="card enter" style={{ animationDelay: "120ms", display: "flex", flexDirection: "column", gap: 12 }}>
             <label className="field">
               <span>{copy.yourName}</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="given-name" />
+              <input value={name} onChange={(e) => setName(stripInvisible(e.target.value))} maxLength={40} autoComplete="given-name" />
             </label>
             <label className="field">
               <span>{copy.yourCity}</span>
-              <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={40} placeholder={copy.cityPlaceholder} autoComplete="off" />
+              <input value={city} onChange={(e) => setCity(stripInvisible(e.target.value))} maxLength={40} placeholder={copy.cityPlaceholder} autoComplete="off" />
             </label>
             <p className="hint">{copy.timeZoneLine(timeZone)}</p>
           </div>
