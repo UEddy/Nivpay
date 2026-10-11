@@ -375,7 +375,7 @@ const words = {
   // Sending in another currency, through Agora's Instant Settlement
   theyReceive: "They receive",
   anotherCurrency: "Another currency",
-  otherCurrencyHint: (symbol: string) => `${symbol} is a test currency from Agora, settled at a fixed rate the moment your payment is final.`,
+  otherCurrencyExplainer: (symbol: string) => `${symbol} is a test currency from Agora. In test mode it stands in for a local currency, at a fixed rate Agora sets.`,
   youSend: "You send",
   atLeast: (amount: string) => `At least ${amount}`,
   rate: "Rate",

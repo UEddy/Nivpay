@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Address, Log } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
+import { otherCurrencyNote } from "../lib/currencyNote.ts";
 import { shownName, type StoredAccount } from "../lib/accounts.ts";
 import { ERC20_READ_ABI } from "../lib/abi.ts";
 import { CTK, LOG_PAGE_BLOCKS, POTS_AUSD, POTS_TESTUSD, SETTLEMENT_PAIR } from "../lib/config.ts";
@@ -186,6 +187,10 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
             {copy.paymentsIn}
           </p>
           {payments.length === 0 && <p className="hint">{copy.noPaymentsYet}</p>}
+          {(() => {
+            const note = otherCurrencyNote(payments.map((p) => currencies[p.asset.toLowerCase()]?.symbol));
+            return note && <p className="hint">{note}</p>;
+          })()}
           <div className="list">
             {payments.map((p) => {
               const isNew = fresh.has(keyOf(p));

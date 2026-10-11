@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Address, Hex } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
+import { otherCurrencyNote } from "../lib/currencyNote.ts";
 import { recipientDetail } from "../lib/recipient.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
 import { ERC20_READ_ABI } from "../lib/abi.ts";
@@ -383,7 +384,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
                         </button>
                       ))}
                     </div>
-                    {currency === "other" && <p className="hint">{copy.otherCurrencyHint(symbol)}</p>}
+                    {otherCurrencyNote([otherSymbol]) && <p className="hint">{otherCurrencyNote([otherSymbol])}</p>}
                   </div>
                 )}
               </div>

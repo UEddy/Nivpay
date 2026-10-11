@@ -250,10 +250,10 @@ minutes before Receive is first opened on that phone). Check
 | 0:55 | A, Eddy | Send $25, fingerprint | "Sending…", "Confirming…", then Payment final: "Sent $25 to Maya. Settled in 0.Xs." and View receipt |
 | 1:00 | B, Maya | Receive is still open | **+$25.00**, "From account ending" and Eddy's last 4 characters, "Just arrived", within a second or two; Your balance **$25.00** |
 | 1:05 | A, Eddy | View receipt | MonadVision opens the transfer of 25 AUSD from Eddy's account to Maya's, finalized. The one explorer moment in this path; go back to the app |
-| 1:15 | A, Eddy | Done, open the same request link again from the chat, change How much to **10**, They receive: **CTK** | "CTK is a test currency from Agora, settled at a fixed rate the moment your payment is final." |
+| 1:15 | A, Eddy | Done, open the same request link again from the chat, change How much to **10**, They receive: **CTK** | "CTK is a test currency from Agora. In test mode it stands in for a local currency, at a fixed rate Agora sets." (already under the choice before CTK is picked) |
 | 1:25 | A, Eddy | Review | Check and send: You send **$10**, They receive **10.00 CTK**, At least 10.00 CTK, Rate "$1 = 1.00 CTK, fixed by Agora", Agora's fee **0.00 CTK**, No NivPay fee, "Includes a one-time setup for sending in other currencies.", "One fingerprint. It settles in 3 steps, each final before the next." |
 | 1:30 | A, Eddy | Send $10 as CTK, fingerprint once | "Step 1 of 3. One-time setup…", "Step 2 of 3. Getting your dollars ready…", "Step 3 of 3. Sending…", then "Sent $10 to Maya. They received 10.00 CTK. Settled in 0.Xs." and "Your one-time setup is done." The settled time is the exchange's own, the last step |
-| 1:45 | B, Maya | Receive | **+10.00 CTK**, "From Agora's settlement, paid in another currency" |
+| 1:45 | B, Maya | Receive | **+10.00 CTK**, "From Agora's settlement, paid in another currency", and under the list the same line on what CTK is |
 
 Read the rate, the fee and the CTK amounts off the sheet, not this table:
 Agora sets them and can change them (on 9 Oct 2026, 1 CTK per AUSD and no

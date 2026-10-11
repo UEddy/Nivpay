@@ -98,7 +98,7 @@ function allCopy(): [string, string][] {
     morePeople: [2],
     stillNeeded: ["a name, a closing date"],
     sendingTo: ["Ubong"],
-    otherCurrencyHint: ["CTK"],
+    otherCurrencyExplainer: ["CTK"],
     atLeast: ["10.00 CTK"],
     rateValue: ["1.00 CTK"],
     stepsLine: [3],
