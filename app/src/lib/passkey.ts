@@ -1,11 +1,10 @@
-import { createPasskeyWithPrfOutput, getPasskeyPrfOutput } from "@category-labs/mera";
-import { toViemAccount } from "@category-labs/mera/viem";
 import type { Address, LocalAccount } from "viem";
 import { ERROR_CODES } from "../copy.ts";
-import { AppError, WrongPasskeyError } from "./errors.ts";
+import { CredentialStore } from "./credentials.ts";
+import { AppError } from "./errors.ts";
 import { checkPasskeyHost } from "./hosts.ts";
 import { PRODUCTION_HOSTNAME } from "./passkeyHost.ts";
-import { sessionAddress, sessionFromPrfOutput } from "./keys.ts";
+import { createAccount, openAccount, signAs, type Opened } from "./passkeyCore.ts";
 
 export class HostNotAllowedError extends AppError {}
 
@@ -15,32 +14,23 @@ function rpId(): string {
   return check.rpId;
 }
 
+/** Each account's credential ID, kept in localStorage next to the accounts (lib/credentials.ts). */
+const book = new CredentialStore(localStorage);
+
 export { hostCheck } from "./passkeyHost.ts";
 
-/** Makes a new passkey and returns the account's address. Nothing but the address leaves this function. */
-export async function signUp(name: string): Promise<Address> {
-  const id = rpId();
-  const created = await createPasskeyWithPrfOutput({
-    rp: { id, name: "NivPay" },
-    user: { name, displayName: name },
-  });
-  const session = sessionFromPrfOutput(created.prfOutput);
-  try {
-    return sessionAddress(session);
-  } finally {
-    session.end();
-  }
+/** Makes a new passkey and returns the account's address and the passkey's ID. Nothing secret leaves this function. */
+export async function signUp(name: string): Promise<Opened> {
+  return createAccount(rpId(), name);
 }
 
-/** Asks for an existing passkey and returns its account's address. */
-export async function signIn(): Promise<Address> {
-  const { prfOutput } = await getPasskeyPrfOutput({ rpId: rpId() });
-  const session = sessionFromPrfOutput(prfOutput);
-  try {
-    return sessionAddress(session);
-  } finally {
-    session.end();
-  }
+/**
+ * Asks for a passkey and returns its account. With `expected`, an account on
+ * this phone, only that account's passkey is asked for (passkeyCore.ts).
+ * Without, the phone shows its list, so a passkey from another phone works.
+ */
+export async function signIn(expected?: Address): Promise<Opened> {
+  return openAccount(rpId(), book, expected);
 }
 
 /**
@@ -49,12 +39,5 @@ export async function signIn(): Promise<Address> {
  * broadcasting and waiting outside, after the session has ended.
  */
 export async function withSigner<T>(expected: Address, sign: (account: LocalAccount) => Promise<T>): Promise<T> {
-  const { prfOutput } = await getPasskeyPrfOutput({ rpId: rpId() });
-  const session = sessionFromPrfOutput(prfOutput);
-  try {
-    if (sessionAddress(session) !== expected) throw new WrongPasskeyError();
-    return await sign(toViemAccount(session));
-  } finally {
-    session.end();
-  }
+  return signAs(rpId(), book, expected, sign);
 }

@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { flushSync } from "react-dom";
 import { encodeFunctionData, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES, offlineMessage } from "./copy.ts";
+import { CredentialStore } from "./lib/credentials.ts";
 import { AccountStore, cleanName, NAME_MAX, shownName, type StoredAccount } from "./lib/accounts.ts";
 import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
@@ -46,6 +47,7 @@ import { balanceNote } from "./lib/connection.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
 
 const accounts = new AccountStore(localStorage);
+const credentials = new CredentialStore(localStorage);
 const drafts = new DraftStore(localStorage);
 const pots = new PotStore(localStorage);
 const invited = new InvitedStore(localStorage);
@@ -243,8 +245,9 @@ function Screens() {
     return () => window.removeEventListener("hashchange", check);
   }, [openLink]);
 
-  const choose = (address: Address, name: string) => {
+  const choose = (address: Address, name: string, credentialId: string) => {
     accounts.upsert({ address, name });
+    credentials.rememberCredential(address, credentialId);
     accounts.setActive(address);
     setActive(accounts.active());
     setSwitching(false);
@@ -396,23 +399,27 @@ function Welcome(props: {
   current?: StoredAccount;
   /** Why the account is needed, when a link brought someone here. */
   note?: string;
-  onReady: (address: Address, name: string) => void;
+  onReady: (address: Address, name: string, credentialId: string) => void;
   onCancel?: () => void;
 }) {
   const host = useMemo(() => hostCheck(), []);
   const [name, setName] = useState("");
-  const [busy, setBusy] = useState<"up" | "in" | null>(null);
+  // "up" makes an account, an address signs in to that account, "in" lets the phone list every passkey.
+  const [busy, setBusy] = useState<"up" | "in" | Address | null>(null);
   const [error, setError] = useState<Notice | null>(null);
 
-  const run = async (kind: "up" | "in") => {
+  const run = async (kind: "up" | "in" | Address) => {
     setError(null);
     setBusy(kind);
     try {
       const { signIn, signUp } = await passkeys();
-      if (kind === "up") props.onReady(await signUp(cleanName(name)), cleanName(name));
-      else {
-        const address = await signIn();
-        props.onReady(address, props.known.find((a) => a.address === address)?.name ?? "");
+      if (kind === "up") {
+        const made = await signUp(cleanName(name));
+        props.onReady(made.address, cleanName(name), made.credentialId);
+      } else {
+        // An account on this phone asks for its own passkey only; "in" is for a passkey this phone doesn't list.
+        const opened = await signIn(kind === "in" ? undefined : kind);
+        props.onReady(opened.address, props.known.find((a) => a.address === opened.address)?.name ?? "", opened.credentialId);
       }
     } catch (e) {
       setError({ tone: "bad", ...describeFailure(e) });
@@ -440,15 +447,15 @@ function Welcome(props: {
         <>
           {props.known.length > 0 && (
             <section className="card">
-              <p className="eyebrow">{copy.accountsOnThisPhone}</p>
+              <p className="eyebrow">{props.known.length > 1 ? copy.whoIsSigningIn : copy.accountsOnThisPhone}</p>
               {props.known.map((a) => (
-                <div className="row" key={a.address}>
-                  <span className="value">{shownName(a)}</span>
+                <button className="btn account-choice" key={a.address} disabled={busy !== null} onClick={() => run(a.address)}>
+                  <span>{busy === a.address ? copy.waitingForPasskey : shownName(a)}</span>
                   <span className="label">{copy.accountEnding(a.address)}</span>
-                </div>
+                </button>
               ))}
-              <button className="btn" disabled={busy !== null} onClick={() => run("in")}>
-                {busy === "in" ? copy.waitingForPasskey : copy.useOneOfThese}
+              <button className="btn ghost" disabled={busy !== null} onClick={() => run("in")}>
+                {busy === "in" ? copy.waitingForPasskey : copy.anotherAccount}
               </button>
               <p className="hint">{copy.pickAccountHint}</p>
             </section>

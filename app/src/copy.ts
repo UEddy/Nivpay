@@ -36,8 +36,9 @@ const words = {
   // Welcome, sign up, sign in, switch account
   switchAccount: "Switch account",
   accountsOnThisPhone: "Accounts on this phone",
-  useOneOfThese: "Use one of these",
-  pickAccountHint: "Your phone asks which passkey. Pick the account you want.",
+  whoIsSigningIn: "Who is signing in?",
+  anotherAccount: "A different account",
+  pickAccountHint: "Tap your name. For an account not listed here, choose A different account and your phone shows its passkeys.",
   addAnotherAccount: "Add another account",
   makeYourAccount: "Make your account",
   yourName: "What should we call you?",
