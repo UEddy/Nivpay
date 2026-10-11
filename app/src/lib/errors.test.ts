@@ -60,6 +60,15 @@ test("the setup service's answers map to distinct codes, and its words never rea
   }
 });
 
+test("the per-account limit says it is for good, never to try again in a minute (footage 1000336013, 106 s and 116 s)", () => {
+  const e = setupFailure(409, { error: "this account has reached its limit" });
+  assert.equal(e.code, ERROR_CODES.SETUP_LIMIT_REACHED);
+  const shown = describeFailure(new SendFailure("gas grant", false, e));
+  assert.doesNotMatch(shown.text, /try again|in a minute/i, shown.text);
+  assert.match(shown.text, /can still be paid/);
+  assert.match(shown.text, /Nothing was sent/);
+});
+
 test("custom errors keep their own names and messages", () => {
   const gas = new NotEnoughGasError("Your account couldn't be made ready for this.", ERROR_CODES.SETUP_REFUSED);
   assert.equal(gas.name, "NotEnoughGasError");

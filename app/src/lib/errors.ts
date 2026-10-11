@@ -42,7 +42,8 @@ export function setupFailure(status: number, body: { error?: string; code?: stri
     if (body.error === "wrong chain, refusing to fund") return failed(ERROR_CODES.SETUP_REFUSED);
     return new NotEnoughGasError(copy.errSetupPaused, ERROR_CODES.SETUP_PAUSED);
   }
-  if (status === 409 && body.error === "this account has reached its limit") return failed(ERROR_CODES.SETUP_LIMIT_REACHED);
+  // For good: waiting doesn't help, so never "try again in a minute".
+  if (status === 409 && body.error === "this account has reached its limit") return new NotEnoughGasError(copy.errSetupLimit, ERROR_CODES.SETUP_LIMIT_REACHED);
   return failed(ERROR_CODES.SETUP_REFUSED);
 }
 

@@ -120,6 +120,7 @@ const words = {
   errSetupUnreachable: "Couldn't reach NivPay to get your account ready. Check your connection and try again.",
   errSetupPaused: "NivPay can't set up payments right now. Try again later.",
   errSetupFailed: "Your account couldn't be made ready for this. Try again in a minute.",
+  errSetupLimit: "This account has sent as many payments as NivPay covers, so it can't send more. It can still be paid. To send, make another account.",
   errSetupSlow: "Getting your account ready is taking too long. Try again in a minute.",
   errSetupReverted: "Getting your account ready didn't go through. Try again.",
   errPasskeyCancelled: "The passkey step was cancelled or didn't finish.",
