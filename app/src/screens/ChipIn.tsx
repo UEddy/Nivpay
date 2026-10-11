@@ -24,7 +24,7 @@ import { usePayMotion } from "./payMotion.ts";
 import { PotMap, type Coin, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { mapLines } from "./mapNames.ts";
 import { factsOf } from "./Request.tsx";
-import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, Sheet, type Notice } from "./ui.tsx";
+import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, Sheet, useSlowStepLine, type Notice } from "./ui.tsx";
 
 const orList = new Intl.ListFormat("en-GB", { style: "long", type: "disjunction" });
 const FLIGHT_MS = 900;
@@ -328,6 +328,7 @@ export function ChipInScreen(props: {
 
   const decimals = state?.decimals ?? 6;
   const potText = useTicker(state?.totalAssets ?? null, decimals);
+  const slowLine = useSlowStepLine(step);
 
   const close = (
     <div className="bar">
@@ -548,6 +549,11 @@ export function ChipInScreen(props: {
           <>
             {result && <NoticeLine notice={result} />}
             {blocked && <p className="foot-hint">{state.closed ? copy.potClosedNote : copy.potPausedNote}</p>}
+            {slowLine && (
+              <p className="foot-hint" role="status">
+                {slowLine}
+              </p>
+            )}
             {stuck && !busy ? (
               <button type="button" className="pill-btn" onClick={() => pour(true)}>
                 {copy.tryAgain}

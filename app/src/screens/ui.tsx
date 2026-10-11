@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { copy } from "../copy.ts";
+import { SLOW_AFTER_MS, slowStepLine } from "../lib/slowStep.ts";
 import type { ShareResult } from "../lib/share.ts";
 
 export type Notice = { tone: "ok" | "bad"; text: string; code?: number };
@@ -19,6 +20,18 @@ export function useOnline(): boolean {
     };
   }, []);
   return online;
+}
+
+/** What a step before the passkey is waiting for, once it has run long enough to need saying (lib/slowStep.ts). */
+export function useSlowStepLine(step: string | null): string | null {
+  const [slow, setSlow] = useState<{ step: string | null; elapsed: number }>({ step, elapsed: 0 });
+  useEffect(() => {
+    setSlow({ step, elapsed: 0 });
+    if (!step) return;
+    const t = setTimeout(() => setSlow({ step, elapsed: SLOW_AFTER_MS }), SLOW_AFTER_MS);
+    return () => clearTimeout(t);
+  }, [step]);
+  return slow.step === step ? slowStepLine(step, slow.elapsed) : null;
 }
 
 /** A result line. Failures end with a neutral code people can read out to support. */
