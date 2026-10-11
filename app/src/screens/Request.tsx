@@ -21,7 +21,7 @@ import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { initialsOf, mapLines } from "./mapNames.ts";
 import { usePayMotion } from "./payMotion.ts";
 import { PotMap, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
-import { andList, Icon, NoticeLine, phoneTimeZone, shareLink, type Notice } from "./ui.tsx";
+import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, phoneTimeZone, shareLink, type Notice } from "./ui.tsx";
 
 type Action = "yes" | "take back";
 type Who = Person & { me: boolean };
@@ -278,6 +278,8 @@ export function RequestScreen(props: {
     }
   };
 
+  const requestUrl = (block: bigint) => linkUrl(location.origin, { kind: "ask", deployment: props.pot.deployment, potId, block, proposalId });
+
   const bar = (
     <div className="bar">
       <button type="button" className="icon-btn" aria-label={copy.close} onClick={props.onClose}>
@@ -290,8 +292,7 @@ export function RequestScreen(props: {
           className="icon-btn"
           aria-label={copy.shareRequest}
           onClick={async () => {
-            const url = linkUrl(location.origin, { kind: "ask", deployment: props.pot.deployment, potId, block: info.block, proposalId });
-            const how = await shareLink(url, copy.paymentRequestShareText(state?.name ?? props.pot.name));
+            const how = await shareLink(requestUrl(info.block), copy.paymentRequestShareText(state?.name ?? props.pot.name));
             setShareNote(how === "copied" ? copy.linkCopied : how === "failed" ? copy.copyFailed : null);
           }}
         >
@@ -526,6 +527,13 @@ export function RequestScreen(props: {
           ))}
           <p className="vote-text">{voteText}</p>
         </div>
+        <CopyLinkButton
+          onCopy={async () => {
+            const how = await copyLink(requestUrl(info.block));
+            setShareNote(how === "failed" ? copy.copyFailed : null);
+            return how;
+          }}
+        />
         {shareNote && <p className="hint">{shareNote}</p>}
       </div>
 

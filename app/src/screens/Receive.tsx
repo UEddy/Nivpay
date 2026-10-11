@@ -12,7 +12,7 @@ import { formatAmount, formatCurrency, parseAmount } from "../lib/money.ts";
 import { receiptUrl } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
 import { incomingFrom, incomingSource, RECEIVE_BACKLOG_BLOCKS, senderKind, withFloor, type Incoming } from "../lib/transfer.ts";
-import { Icon, NoticeLine, shareLink, useOnline } from "./ui.tsx";
+import { copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, useOnline } from "./ui.tsx";
 import { balanceNote } from "../lib/connection.ts";
 
 const finalized = async () => (await readClient.getBlock({ blockTag: "finalized" })).number;
@@ -167,6 +167,14 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
             <Icon name="share" />
             {copy.shareRequestLink}
           </button>
+          <CopyLinkButton
+            onCopy={async () => {
+              setNote(null);
+              const how = await copyLink(url);
+              if (how === "failed") setNote(copy.copyFailed);
+              return how;
+            }}
+          />
           {note && <p className="hint">{note}</p>}
           <button type="button" className="btn ghost small" onClick={copyId}>
             {copied ? copy.copied : copy.orShareAccountId}

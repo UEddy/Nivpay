@@ -24,7 +24,7 @@ import { usePayMotion } from "./payMotion.ts";
 import { PotMap, type Coin, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { mapLines } from "./mapNames.ts";
 import { factsOf } from "./Request.tsx";
-import { andList, Icon, NoticeLine, shareLink, Sheet, type Notice } from "./ui.tsx";
+import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, Sheet, type Notice } from "./ui.tsx";
 
 const orList = new Intl.ListFormat("en-GB", { style: "long", type: "disjunction" });
 const FLIGHT_MS = 900;
@@ -518,6 +518,15 @@ export function ChipInScreen(props: {
           </button>
         </div>
         {!info.labelsOk && <p className="hint">{copy.namesUnchecked}</p>}
+        {props.pot.fragment && link && (
+          <CopyLinkButton
+            onCopy={async () => {
+              const how = await copyLink(`${location.origin}/#${props.pot.fragment}`);
+              setShareNote(how === "failed" ? copy.copyFailed : null);
+              return how;
+            }}
+          />
+        )}
         {shareNote && <p className="hint">{shareNote}</p>}
       </div>
 

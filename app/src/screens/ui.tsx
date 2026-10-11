@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { copy } from "../copy.ts";
+import type { ShareResult } from "../lib/share.ts";
 
 export type Notice = { tone: "ok" | "bad"; text: string; code?: number };
 
@@ -95,6 +96,12 @@ const ICONS = {
       <path d="M8 11V7a4 4 0 0 1 8 0v4" />
     </>
   ),
+  copy: (
+    <>
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </>
+  ),
   share: (
     <>
       <circle cx="18" cy="5" r="3" />
@@ -115,27 +122,27 @@ export function Icon(props: { name: keyof typeof ICONS; size?: number; className
   );
 }
 
-export type ShareResult = "shared" | "copied" | "cancelled" | "failed";
+export { copyLink, shareLink, type ShareResult } from "../lib/share.ts";
 
-/**
- * Shares a link through the phone's share sheet, or copies it where there is
- * none. Says which happened, so the screen can tell people.
- */
-export async function shareLink(url: string, text: string): Promise<ShareResult> {
-  if (typeof navigator.share === "function") {
-    try {
-      await navigator.share({ text, url });
-      return "shared";
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") return "cancelled";
-    }
-  }
-  try {
-    await navigator.clipboard.writeText(url);
-    return "copied";
-  } catch {
-    return "failed";
-  }
+/** A Copy link button that says "Link copied" briefly, for every place that also offers Share. */
+export function CopyLinkButton(props: { onCopy: () => Promise<ShareResult>; className?: string; disabled?: boolean }) {
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (!done) return;
+    const t = setTimeout(() => setDone(false), 2000);
+    return () => clearTimeout(t);
+  }, [done]);
+  return (
+    <button
+      type="button"
+      className={props.className ?? "btn ghost small"}
+      disabled={props.disabled}
+      onClick={async () => setDone((await props.onCopy()) === "copied")}
+    >
+      <Icon name="copy" />
+      {done ? copy.linkCopiedShort : copy.copyLink}
+    </button>
+  );
 }
 
 const listFormat = new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" });

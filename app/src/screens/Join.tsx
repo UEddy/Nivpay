@@ -9,7 +9,7 @@ import { answered, type AnsweredInvite } from "../lib/invited.ts";
 import { linkUrl, ROLE, signReply, type Invite, type Reply } from "../lib/invites.ts";
 import { withSigner } from "../lib/passkey.ts";
 import { readClient } from "../lib/rpc.ts";
-import { Icon, NoticeLine, phoneTimeZone, shareLink, type Notice } from "./ui.tsx";
+import { copyLink, CopyLinkButton, Icon, NoticeLine, phoneTimeZone, shareLink, type Notice } from "./ui.tsx";
 
 /**
  * Joining a pot that is still being made. The invitee signs a reply with
@@ -112,6 +112,14 @@ export function JoinScreen(props: {
               <Icon name="share" />
               {copy.sendTheReply}
             </button>
+            <CopyLinkButton
+              onCopy={async () => {
+                setNote(null);
+                const how = await copyLink(url);
+                if (how === "failed") setNote(copy.copyFailed);
+                return how;
+              }}
+            />
             {note && <p className="foot-hint">{note}</p>}
             <button type="button" className="btn ghost" onClick={props.onClose}>
               {copy.done}

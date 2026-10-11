@@ -43,7 +43,7 @@ import { fitsText32 } from "../lib/text32.ts";
 import { rememberReceipt } from "../lib/receipts.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { PotMap, type Coin, type MapPerson } from "./PotMap.tsx";
-import { andList, formatDay, Icon, NoticeLine, phoneTimeZone, shareLink, Sheet, type Notice, type ShareResult } from "./ui.tsx";
+import { andList, copyLink, CopyLinkButton, formatDay, Icon, NoticeLine, phoneTimeZone, shareLink, Sheet, type Notice, type ShareResult } from "./ui.tsx";
 
 type SheetKind = "name" | "deciders" | "payees" | "closes" | "leftover" | "confirm";
 
@@ -317,10 +317,11 @@ export function CreateScreen(props: {
     }
   };
 
-  const share = async (url: string, text: string): Promise<ShareResult> => {
+  /** Shares through the share sheet, or with "copy" only copies; Copy link says "Link copied" on its own button. */
+  const share = async (url: string, text: string, mode: ShareMode = "share"): Promise<ShareResult> => {
     setShareNote(null);
-    const how = await shareLink(url, text);
-    if (how === "copied") setShareNote(copy.linkCopied);
+    const how = mode === "copy" ? await copyLink(url) : await shareLink(url, text);
+    if (how === "copied" && mode === "share") setShareNote(copy.linkCopied);
     if (how === "failed") setShareNote(copy.copyFailed);
     return how;
   };
@@ -489,6 +490,7 @@ export function CreateScreen(props: {
               <Icon name="share" />
               {copy.shareThePot}
             </button>
+            <CopyLinkButton onCopy={() => share(potUrl, copy.shareText(draft.name), "copy")} />
             <button type="button" className="pill-btn" onClick={() => props.onOpenPot(rememberPot(made.potId, made.block, made.fragment))}>
               {view.primary.label}
             </button>
@@ -610,6 +612,8 @@ export function CreateScreen(props: {
   );
 }
 
+type ShareMode = "share" | "copy";
+
 function Bar(props: { title: string; onBack: () => void }) {
   return (
     <div className="bar">
@@ -708,7 +712,7 @@ function DecidersSheet(props: {
   me: StoredAccount;
   update: (change: (d: Draft) => Draft) => void;
   onReply: (reply: Reply) => Promise<string>;
-  onShare: (url: string, text: string) => Promise<ShareResult>;
+  onShare: (url: string, text: string, mode?: ShareMode) => Promise<ShareResult>;
   shareNote: string | null;
   decimals: number | null;
   maxDeciders: number | null;
@@ -723,7 +727,7 @@ function DecidersSheet(props: {
   const full = props.maxDeciders !== null && total + invited.length >= props.maxDeciders;
 
   /** Sends an invite to decide, named so the draft can show who hasn't replied. Recorded once it leaves the phone. */
-  const invite = async (slot: Hex, name: string) => {
+  const invite = async (slot: Hex, name: string, mode: ShareMode = "share"): Promise<ShareResult> => {
     const how = await props.onShare(
       linkUrl(location.origin, {
         kind: "invite",
@@ -738,11 +742,13 @@ function DecidersSheet(props: {
         share: 0n,
       }),
       copy.joinAsDecider(props.me.name, draft.name || copy.unnamedPot),
+      mode,
     );
     if (how === "shared" || how === "copied") {
       update((d) => withInvited(d, slot, name));
       setInviteName("");
     }
+    return how;
   };
 
   const addReply = async () => {
@@ -806,6 +812,7 @@ function DecidersSheet(props: {
             <button type="button" className="btn ghost small" onClick={() => invite(i.slot, i.name)}>
               {copy.sendAgain}
             </button>
+            <CopyLinkButton onCopy={() => invite(i.slot, i.name, "copy")} />
             <button type="button" className="btn ghost small" onClick={() => update((d) => withoutInvited(d, i.slot))}>
               {copy.remove}
             </button>
@@ -822,6 +829,8 @@ function DecidersSheet(props: {
         onClick={() => invite(newSlot((n) => crypto.getRandomValues(new Uint8Array(n))), inviteName.trim())}>
         {copy.inviteToDecide}
       </button>
+      <CopyLinkButton disabled={full || !inviteName.trim()}
+        onCopy={() => invite(newSlot((n) => crypto.getRandomValues(new Uint8Array(n))), inviteName.trim(), "copy")} />
       {props.shareNote && <p className="hint">{props.shareNote}</p>}
       <label className="field">
         <span>{copy.replyLinkField}</span>
@@ -861,7 +870,7 @@ function PayeesSheet(props: {
   update: (change: (d: Draft) => Draft) => void;
   decimals: number | null;
   maxPayees: number | null;
-  onShare: (url: string, text: string) => Promise<ShareResult>;
+  onShare: (url: string, text: string, mode?: ShareMode) => Promise<ShareResult>;
   shareNote: string | null;
   onClose: () => void;
 }) {
@@ -884,7 +893,7 @@ function PayeesSheet(props: {
     setLimit("");
   };
 
-  const invite = (slot: Hex, payeeName: string, share: bigint) =>
+  const invite = (slot: Hex, payeeName: string, share: bigint, mode: ShareMode = "share") =>
     props.onShare(
       linkUrl(location.origin, {
         kind: "invite",
@@ -898,6 +907,7 @@ function PayeesSheet(props: {
         share,
       }),
       copy.joinAsPayee(props.me.name, draft.name || copy.unnamedPot, payeeName),
+      mode,
     );
 
   const usePasted = () => {
@@ -949,6 +959,7 @@ function PayeesSheet(props: {
                   <button type="button" className="btn small" onClick={() => invite(p.slot, p.name, BigInt(p.share ?? "0"))}>
                     {copy.sendThemALink}
                   </button>
+                  <CopyLinkButton className="btn small" onCopy={() => invite(p.slot, p.name, BigInt(p.share ?? "0"), "copy")} />
                   <button type="button" className="btn small" onClick={() => { setPasting(p.slot); setIdText(""); setLast4(""); }}>
                     {copy.pasteTheirAccountId}
                   </button>

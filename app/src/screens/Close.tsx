@@ -24,7 +24,7 @@ import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { mapLines } from "./mapNames.ts";
 import { PotMap, type Coin, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { layersOf, peopleOf } from "./Request.tsx";
-import { andList, Icon, NoticeLine, shareLink, type Notice } from "./ui.tsx";
+import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, type Notice } from "./ui.tsx";
 
 type Action = "take" | "ask close";
 const FLIGHT_MS = 900;
@@ -451,6 +451,15 @@ export function CloseScreen(props: {
           >
             {copy.shareThePot}
           </button>
+        )}
+        {props.pot.fragment && (
+          <CopyLinkButton
+            onCopy={async () => {
+              const how = await copyLink(`${location.origin}/#${props.pot.fragment}`);
+              setShareNote(how === "failed" ? copy.copyFailed : null);
+              return how;
+            }}
+          />
         )}
       </div>
     </div>
