@@ -90,8 +90,8 @@
       "plan": "Phone B, Maya: Waiting for your yes, Say yes and pay Caterer, That's 2 of 3, the stream runs to the Caterer, the pot has $397.00",
       "take": { "clip": null, "in": 0, "out": 12 },
       "settle": true,
-      "caption": "The second yes pays it. Settled in {measured.catererSettle}",
-      "callout": "The pot holds {pot.caterer.after}"
+      "caption": "The second yes pays it, in the same step",
+      "callout": "Only to the {cast.caterer.name}. The pot holds {pot.caterer.after}"
     },
     {
       "id": "caterer-paid",

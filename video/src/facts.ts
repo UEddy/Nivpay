@@ -73,8 +73,6 @@ export const FACTS = {
     otherCurrencyRate: null as string | null,
     /** The last four characters of the new Eddy account, as phone B shows them. */
     senderLastFour: null as string | null,
-    /** "Settled in" on the yes that pays the Caterer, main cut. */
-    catererSettle: null as string | null,
   },
 
   /** docs/APP-CONTRACT-MAP.md section 6, measured on testnet. */
