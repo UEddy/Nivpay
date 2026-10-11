@@ -26,7 +26,7 @@ means it was, and the app is still tracking it.
 | 15 | The funder key doesn't belong to `FUNDER_ADDRESS`. | Vercel env vars; `keyMatches` in `/api/fund/status` |
 | 16 | The grant couldn't be sent (`SEND_FAILED`). | Vercel function log, `"event":"failed"` |
 | 17 | The service couldn't read the chain before granting (`RPC_FAILED`). | Vercel function log, RPC status |
-| 18 | The account has sent 10 or more transactions, the per-account limit. | Expected abuse limit |
+| 18 | The account has sent 30 or more transactions, the per-account limit (`MAX_SENT_TXS` in `app/api/fund/index.ts`), and holds too little to pay for this request. It gets no more gas grants. The screen says "This account has sent as many payments as NivPay covers, so it can't send more. It can still be paid. To send, make another account. Nothing was sent." Nothing was signed: the grant is asked for before the passkey. | Expected abuse limit. The account can still receive |
 | 19 | The service refused for another reason: not a personal account, wrong chain, wrong origin, not found, a request over 1 KB, or this address was granted in the last 2 minutes on that server instance. | Vercel function log, `"event":"refused"` |
 | 20 | The grant was sent but wasn't final within 60 seconds. | Funder's recent transactions |
 | 21 | The grant was included but reverted. | The grant transaction |
