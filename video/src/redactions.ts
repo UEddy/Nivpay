@@ -170,7 +170,7 @@ export function assertRenderable(id: string, map: Redactions, from: number, to: 
   const entry = map.clips[id];
   if (!entry) throw new RedactionError(`clip ${id} has no entry in redactions.json, so it can't be rendered`);
   if (!entry.reviewed) throw new RedactionError(`clip ${id} isn't marked reviewed in redactions.json, so it can't be rendered`);
-  if (hits === null) throw new RedactionError(`clip ${id} has no frame scan (footage/_frames/${id}.scan.json), so nothing proves it is covered`);
+  if (hits === null) throw new RedactionError(`clip ${id} has no frame scan (footage/_scans/${id}.scan.json), so nothing proves it is covered`);
   for (const h of hits) {
     if (h.t < from || h.t > to) continue;
     // A marker of where a sheet is, not private in itself; what the sheet shows is caught under its own category.

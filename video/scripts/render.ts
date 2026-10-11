@@ -19,7 +19,7 @@ import { checkVideo, readDenylist } from "./privacy-check.ts";
 const root = join(import.meta.dirname, "..");
 
 export function scanHits(clip: string): ScanHit[] | null {
-  const f = join(root, "footage", "_frames", `${clip}.scan.json`);
+  const f = join(root, "footage", "_scans", `${clip}.scan.json`);
   if (!existsSync(f)) return null;
   const scan = JSON.parse(readFileSync(f, "utf8"));
   return scan.frames.flatMap((fr: { t: number; hits: { category: string; box: ScanHit["box"] }[]; keypad: boolean }) => [

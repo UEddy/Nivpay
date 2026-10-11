@@ -1,13 +1,13 @@
 /**
  * Reads every extracted frame under footage/_frames/<clip>/ with OCR and
- * writes footage/_frames/<clip>.scan.json: per frame, its time, the
+ * writes footage/_scans/<clip>.scan.json: per frame, its time, the
  * categories of private things found with their boxes, and a short hash of
  * the frame's text so identical screens can be grouped. Never the text.
  *
  *   node scripts/scan-frames.ts <clip> [fps]
  */
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { jpegSize, ocrPool } from "./ocr.ts";
 import { classify, looksLikeKeypad } from "./sensitive.ts";
@@ -28,5 +28,6 @@ const frames = await Promise.all(
   }),
 );
 await ocr.terminate();
-writeFileSync(join(dir, "..", `${clip}.scan.json`), JSON.stringify({ clip, fps, frames }));
+mkdirSync(join(dir, "..", "..", "_scans"), { recursive: true });
+writeFileSync(join(dir, "..", "..", "_scans", `${clip}.scan.json`), JSON.stringify({ clip, fps, frames }));
 console.log(`${clip}: ${frames.length} frames, ${frames.filter((f) => f.hits.length || f.keypad).length} flagged`);

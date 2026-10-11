@@ -1,7 +1,7 @@
 /** Prints each clip's OCR hits as time ranges per category with their union box. Categories and numbers only. */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-const dir = join(import.meta.dirname, "..", "footage", "_frames");
+const dir = join(import.meta.dirname, "..", "footage", "_scans");
 for (const f of readdirSync(dir).filter((f) => f.endsWith(".scan.json")).sort()) {
   const s = JSON.parse(readFileSync(join(dir, f), "utf8"));
   type R = { cat: string; t0: number; t1: number; x0: number; y0: number; x1: number; y1: number };

@@ -21,8 +21,9 @@ categories, times and rectangles only:
   kept, at most 2.5 s, captioned "Confirm with fingerprint".
 
 A clip renders only if it has an entry marked `reviewed`, a frame scan
-(`footage/_frames/<clip>.scan.json`), and every private thing the scan found
-in the stretch is cropped, cut or under a region.
+(`footage/_scans/<clip>.scan.json`, categories and boxes only), and every
+private thing the scan found in the stretch is cropped, cut or under a
+region.
 
 ## Commands
 
@@ -46,4 +47,5 @@ Only files in `out/` are ever uploaded.
 Review tools, local only: `scripts/scan-frames.ts` (OCR a clip's extracted
 frames into a scan of categories and boxes), `scripts/summarise-scan.ts`, and
 `scripts/sheets.sh` (contact sheets of the changing frames). Frames go under
-`footage/_frames/` and are deleted after a review.
+`footage/_frames/` and are deleted after a review; the scans in
+`footage/_scans/` stay, as the render needs them.

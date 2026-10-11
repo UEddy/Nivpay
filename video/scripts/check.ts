@@ -15,7 +15,7 @@ const mapFile = join(root, "footage", "redactions.json");
 if (existsSync(mapFile)) {
   const map = parseRedactions(readFileSync(mapFile, "utf8"));
   for (const [clip, entry] of Object.entries(map.clips)) {
-    const scanFile = join(root, "footage", "_frames", `${clip}.scan.json`);
+    const scanFile = join(root, "footage", "_scans", `${clip}.scan.json`);
     if (!existsSync(scanFile)) {
       console.log(`SKIP ${clip}: no frame scan on this PC (the map is still checked when it renders)`);
       continue;
