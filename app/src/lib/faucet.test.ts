@@ -4,7 +4,7 @@ import { CallExecutionError, RawContractError, toFunctionSelector } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import { deploymentFrom, POTS_AUSD, POTS_TESTUSD, potsFor } from "./config.ts";
 import { AppError, describeFailure, SendFailure } from "./errors.ts";
-import { ClaimCooldownError, claimData, cooldownIn, FAUCET_ERRORS, refusalKind, revertData, secondsLeft, secondsUntil } from "./faucet.ts";
+import { addDollarsField, ClaimCooldownError, claimData, cooldownIn, FAUCET_ERRORS, refusalKind, revertData, secondsLeft, secondsUntil } from "./faucet.ts";
 
 test("AUSD is the default deployment; TESTUSD only when asked for", () => {
   assert.equal(deploymentFrom(undefined), "ausd");
@@ -69,4 +69,11 @@ test("a cooldown refusal carries when the next claim is allowed, and counts down
   assert.equal(secondsUntil(refusal.until, 1_041_001), 1);
   assert.equal(secondsUntil(refusal.until, 1_042_000), 0);
   assert.equal(secondsUntil(refusal.until, 1_050_000), 0);
+});
+
+test("on AUSD the card never shows a How many field, even while the balance is read (footage 1000335919 at 26.5 s)", () => {
+  assert.equal(addDollarsField("ausd", false), "reading");
+  assert.equal(addDollarsField("ausd", true), "claim hint");
+  assert.equal(addDollarsField("testusd", false), "amount");
+  assert.equal(addDollarsField("testusd", true), "amount");
 });

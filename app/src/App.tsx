@@ -12,7 +12,7 @@ import { findPots, ScanStore, type FoundPot, type Role, type ScanState } from ".
 import { askReader, creatorReader, potsReader } from "./lib/discoverLive.ts";
 import { AskScanStore, findOpenRequests, learnPotBlocks, needingMyYes, PotBlocks, type AskScan } from "./lib/waiting.ts";
 import { AppError, describeFailure, SendFailure } from "./lib/errors.ts";
-import { checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
+import { addDollarsField, checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
 import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
 import { InvitedStore, matchInvites, type AnsweredInvite } from "./lib/invited.ts";
 import { decodeLink, type AskLink, type Invite, type PayLink, type PotLink } from "./lib/invites.ts";
@@ -885,6 +885,8 @@ function Home(props: {
           <p className="hint">
             {copy.claimAmountHint(formatAmount(balances.faucet.drip, decimals, "auto"), formatAmount(balances.faucet.ceiling, decimals, "auto"))}
           </p>
+        ) : addDollarsField(DEPLOYMENT, balances !== null) === "reading" ? (
+          <p className="hint">{copy.readingBalance}</p>
         ) : (
           <label className="field">
             <span>{copy.howMany}</span>

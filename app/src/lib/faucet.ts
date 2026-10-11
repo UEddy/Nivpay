@@ -37,6 +37,16 @@ export const FAUCET_ERRORS = {
 
 export type FaucetTerms = { drip: bigint; ceiling: bigint };
 
+/**
+ * What the Add test dollars card shows under its hint. Decided by the
+ * deployment, not by whether balances have loaded: on AUSD there is never a
+ * "How many" field, so none flashes up while the balance is read.
+ */
+export function addDollarsField(deployment: string, loaded: boolean): "claim hint" | "amount" | "reading" {
+  if (deployment !== "ausd") return "amount";
+  return loaded ? "claim hint" : "reading";
+}
+
 export function claimData(to: Address): Hex {
   return encodeFunctionData({ abi: FAUCET_ABI, functionName: "requestFunds", args: [to] });
 }
