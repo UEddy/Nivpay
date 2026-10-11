@@ -30,9 +30,9 @@ const ABI = [...POTS_ABI, ...ERC20_READ_ABI, ...FAUCET_ABI, ...SETTLEMENT_PAIR_A
 const NOW = 1_791_700_000n; // 11 Oct 2026
 const MAMA_END = endTimeFor("2026-12-31", "Europe/London")!;
 
-const IDARA = getAddress("0x1111111111111111111111111111111111111111");
-const UBONG = getAddress("0x2222222222222222222222222222222222222222");
-const ANIEKAN = getAddress("0x3333333333333333333333333333333333333333");
+const EDDY = getAddress("0x1111111111111111111111111111111111111111");
+const MAYA = getAddress("0x2222222222222222222222222222222222222222");
+const DANIEL = getAddress("0x3333333333333333333333333333333333333333");
 const CATERER = getAddress("0x4444444444444444444444444444444444444444");
 const HALL = getAddress("0x5555555555555555555555555555555555555555");
 
@@ -79,21 +79,21 @@ function showcase(): Pot {
 function seededForClose(): Chain {
   return {
     ausd: new Map([
-      [k(IDARA), usd("9500")],
-      [k(UBONG), usd("9600")],
-      [k(ANIEKAN), usd("9900")],
+      [k(EDDY), usd("9500")],
+      [k(MAYA), usd("9600")],
+      [k(DANIEL), usd("9900")],
       [k(CATERER), usd("600")],
       [k(HALL), usd("280")],
     ]),
-    mon: new Map([[k(IDARA), 90_000_000_000_000_000n], [k(UBONG), 95_000_000_000_000_000n], [k(ANIEKAN), 60_000_000_000_000_000n]]),
-    nonce: new Map([[k(IDARA), 4], [k(UBONG), 3], [k(ANIEKAN), 4]]),
+    mon: new Map([[k(EDDY), 90_000_000_000_000_000n], [k(MAYA), 95_000_000_000_000_000n], [k(DANIEL), 60_000_000_000_000_000n]]),
+    nonce: new Map([[k(EDDY), 4], [k(MAYA), 3], [k(DANIEL), 4]]),
     pots: [
       showcase(),
       {
         purpose: "Mama\u2019s 60th",
         endTime: MAMA_END,
         threshold: 2,
-        deciders: [IDARA, UBONG, ANIEKAN],
+        deciders: [EDDY, MAYA, DANIEL],
         payees: [
           { to: CATERER, label: "Caterer", cap: usd("700"), spent: usd("600") },
           { to: HALL, label: "Event hall", cap: usd("300"), spent: usd("280") },
@@ -102,7 +102,7 @@ function seededForClose(): Chain {
         frozen: false,
         total: usd("115.60"),
         // funderInfo rounds down: a sub-cent remainder is how the contract leaves it.
-        shares: new Map([[k(IDARA), 57_799_999n], [k(UBONG), usd("46.24")], [k(ANIEKAN), usd("11.56")]]),
+        shares: new Map([[k(EDDY), 57_799_999n], [k(MAYA), usd("46.24")], [k(DANIEL), usd("11.56")]]),
       },
     ],
     proposals: [
@@ -116,8 +116,8 @@ function seededForClose(): Chain {
 }
 
 const MAIN: Config = {
-  main: { idara: IDARA, ubong: UBONG, aniekan: ANIEKAN, caterer: CATERER, eventHall: HALL, pot: 1 },
-  bounty: { ubong: "0x6666666666666666666666666666666666666666" },
+  main: { eddy: EDDY, maya: MAYA, daniel: DANIEL, caterer: CATERER, eventHall: HALL, pot: 1 },
+  bounty: { maya: "0x6666666666666666666666666666666666666666" },
   testClose: { pot: 2 },
 };
 
@@ -175,7 +175,7 @@ function call(chain: Chain, to: string, data: Hex): unknown {
         destination: CATERER,
         amount: p.amount,
         fee: 0n,
-        proposer: IDARA,
+        proposer: EDDY,
         createdAt: p.expiresAt - 604_800n,
         expiresAt: p.expiresAt,
         approvals: p.approvals,
@@ -247,7 +247,7 @@ test("preflight: main-close passes on a chain seeded as SEEDING.md M4 says", asy
   const report = await runTake(take("main-close"), MAIN, mock.deps);
   assert.deepEqual(failed(report), []);
   assert.equal(row(report, /Mama's 60th .* holds/).actual, "$115.60");
-  assert.equal(row(report, /share, Idara/).ok, true, "a sub-cent remainder still shows as $57.80");
+  assert.equal(row(report, /share, Eddy/).ok, true, "a sub-cent remainder still shows as $57.80");
   assert.equal(row(report, /Pot 0, .* requests waiting/).ok, null, "pot 0's own request is reported, never judged");
   assert.match(formatReport(report), /checks pass\. Ready for take M4\./);
 });
@@ -284,36 +284,36 @@ test("preflight: a closing date in another time zone, or already passed, fails",
 test("preflight: a reused account fails main-make on its balance, its requests sent and the pot on its Home", async () => {
   const chain = seededForClose();
   chain.pots.pop();
-  chain.ausd.set(k(UBONG), usd("10000"));
-  chain.ausd.set(k(ANIEKAN), usd("10000"));
+  chain.ausd.set(k(MAYA), usd("10000"));
+  chain.ausd.set(k(DANIEL), usd("10000"));
   chain.ausd.set(k(CATERER), 0n);
   chain.ausd.set(k(HALL), 0n);
-  chain.nonce.set(k(UBONG), 1);
-  chain.nonce.set(k(ANIEKAN), 1);
-  // Idara is last take's: she has spent and sent, and pot 0 names her.
-  chain.nonce.set(k(IDARA), 6);
-  chain.pots[0]!.deciders.push(IDARA);
+  chain.nonce.set(k(MAYA), 1);
+  chain.nonce.set(k(DANIEL), 1);
+  // Eddy is last take's: the account has spent and sent, and pot 0 names it.
+  chain.nonce.set(k(EDDY), 6);
+  chain.pots[0]!.deciders.push(EDDY);
   const report = await runTake(take("main-make"), MAIN, mockRpc(chain).deps);
   const fails = failed(report).map((r) => r.what);
-  assert.deepEqual(fails, ["Idara (ending 1111) AUSD", "Idara (ending 1111) requests sent", "Idara (ending 1111) is on no pot yet", "Pot 0, the showcase (pot 0) yeses needed", "Pot 0, the showcase (pot 0) deciders"]);
-  assert.match(row(report, /Idara .* requests sent/).fix!, /fresh account/);
+  assert.deepEqual(fails, ["Eddy (ending 1111) AUSD", "Eddy (ending 1111) requests sent", "Eddy (ending 1111) is on no pot yet", "Pot 0, the showcase (pot 0) yeses needed", "Pot 0, the showcase (pot 0) deciders"]);
+  assert.match(row(report, /Eddy .* requests sent/).fix!, /fresh account/);
 });
 
 test("preflight: an extra request acknowledged in the config passes", async () => {
   const chain = seededForClose();
-  chain.nonce.set(k(UBONG), 4);
-  const config = { ...MAIN, extraSent: { [UBONG]: 1 } };
+  chain.nonce.set(k(MAYA), 4);
+  const config = { ...MAIN, extraSent: { [MAYA]: 1 } };
   const report = await runTake(take("main-close"), config, mockRpc(chain).deps);
   assert.deepEqual(failed(report), []);
-  assert.equal(row(report, /Ubong .* requests sent/).expected, "4 (3 + 1 acknowledged)");
+  assert.equal(row(report, /Maya .* requests sent/).expected, "4 (3 + 1 acknowledged)");
 });
 
 test("preflight: an account at the gas grant limit with too little MON fails", async () => {
   const chain = seededForClose();
-  chain.nonce.set(k(ANIEKAN), 10);
-  chain.mon.set(k(ANIEKAN), 10_000_000_000_000_000n);
-  const report = await runTake(take("main-close"), { ...MAIN, extraSent: { [ANIEKAN]: 6 } }, mockRpc(chain).deps);
-  assert.deepEqual(failed(report).map((r) => r.what), ["Aniekan (ending 3333) MON for gas"]);
+  chain.nonce.set(k(DANIEL), 10);
+  chain.mon.set(k(DANIEL), 10_000_000_000_000_000n);
+  const report = await runTake(take("main-close"), { ...MAIN, extraSent: { [DANIEL]: 6 } }, mockRpc(chain).deps);
+  assert.deepEqual(failed(report).map((r) => r.what), ["Daniel (ending 3333) MON for gas"]);
 });
 
 test("preflight: the 2 minute cut fails while the faucet cools down, the pair is paused or the funder is low", async () => {
@@ -343,7 +343,7 @@ test("preflight: only reads, and the client refuses to broadcast", async () => {
 });
 
 test("preflight: a config with a private key or a recovery phrase is refused", () => {
-  assert.throws(() => parseConfig(JSON.stringify({ main: { idara: `0x${"1".repeat(64)}` } })), ConfigError);
+  assert.throws(() => parseConfig(JSON.stringify({ main: { eddy: `0x${"1".repeat(64)}` } })), ConfigError);
   assert.throws(() => parseConfig(JSON.stringify({ funderPrivateKey: "x" })), ConfigError);
   assert.throws(() => parseConfig(JSON.stringify({ note: "abandon ".repeat(11) + "about" })), ConfigError);
   assert.doesNotThrow(() => parseConfig(readFileSync(new URL("./preflight.config.example.json", import.meta.url), "utf8")));
@@ -352,7 +352,7 @@ test("preflight: a config with a private key or a recovery phrase is refused", (
 test("preflight: a config gap stops the run before any request", async () => {
   const mock = mockRpc(seededForClose());
   await assert.rejects(runTake(take("main-close"), { main: { ...MAIN.main, pot: null } }, mock.deps), /main\.pot is not filled in/);
-  await assert.rejects(runTake(take("main-make"), parseConfig(readFileSync(new URL("./preflight.config.example.json", import.meta.url), "utf8")), mock.deps), /main\.idara is not filled in/);
+  await assert.rejects(runTake(take("main-make"), parseConfig(readFileSync(new URL("./preflight.config.example.json", import.meta.url), "utf8")), mock.deps), /main\.eddy is not filled in/);
   assert.deepEqual(mock.methods, []);
 });
 

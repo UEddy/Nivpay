@@ -54,9 +54,9 @@ class Pot {
 
 test("the demo's fees, what is left and each share match the app and the contract", () => {
   const pot = new Pot();
-  pot.fund("Idara", usd(500));
-  pot.fund("Ubong", usd(400));
-  pot.fund("Aniekan", usd(100));
+  pot.fund("Eddy", usd(500));
+  pot.fund("Maya", usd(400));
+  pot.fund("Daniel", usd(100));
   const caterer = pot.pay(usd(600));
   assert.equal(cents(caterer), "$3.00");
   assert.equal(cents(pot.assets), "$397.00");
@@ -67,9 +67,9 @@ test("the demo's fees, what is left and each share match the app and the contrac
 
   // In the order the script takes them.
   const takes: [string, string, string][] = [
-    ["Ubong", "$46.24", "$69.36"],
-    ["Idara", "$57.80", "$11.56"],
-    ["Aniekan", "$11.56", "$0.00"],
+    ["Maya", "$46.24", "$69.36"],
+    ["Eddy", "$57.80", "$11.56"],
+    ["Daniel", "$11.56", "$0.00"],
   ];
   for (const [who, share, after] of takes) {
     assert.equal(cents(pot.take(who)), share, who);
@@ -82,11 +82,11 @@ test("the demo's fees, what is left and each share match the app and the contrac
 });
 
 test("every account in the demo stays under the gas grant's limit of sent requests", () => {
-  const counts = [...DEMO.matchAll(/^\| (Idara|Ubong|Aniekan|Caterer, Event hall) \| .* \| (\d+) \|$/gm)].map((m) => Number(m[2]));
+  const counts = [...DEMO.matchAll(/^\| (Eddy|Maya|Daniel|Caterer, Event hall) \| .* \| (\d+) \|$/gm)].map((m) => Number(m[2]));
   assert.deepEqual(counts, [6, 5, 5, 0]);
   for (const n of counts) assert.ok(n < MAX_SENT);
-  // The bounty path: Idara sends 5 in a take, under the limit, and a second take on her account would reach it.
-  const bounty = /Idara sends (\d+) \(the claim, the \$25 payment, then the\s+setup, the allowance and the exchange/.exec(DEMO);
+  // The bounty path: Eddy sends 5 in a take, under the limit, and a second take on that account would reach it.
+  const bounty = /Eddy sends (\d+) \(the claim, the \$25 payment, then the\s+setup, the allowance and the exchange/.exec(DEMO);
   const sent = Number(bounty?.[1]);
   assert.equal(sent, 5);
   assert.ok(sent < MAX_SENT && sent * 2 >= MAX_SENT);

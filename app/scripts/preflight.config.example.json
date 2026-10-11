@@ -6,15 +6,15 @@
     "third": "0xa5057F32DB2a6f68F69ad1587014AbF101A20B61"
   },
   "main": {
-    "idara": "FILL IN: Idara's address, from Account details on phone A",
-    "ubong": "FILL IN: Ubong's address, phone B",
-    "aniekan": "FILL IN: Aniekan's address, phone B",
+    "eddy": "FILL IN: Eddy's address, from Account details on phone A",
+    "maya": "FILL IN: Maya's address, phone B",
+    "daniel": "FILL IN: Daniel's address, phone B",
     "caterer": "FILL IN: the Caterer's address, phone A",
     "eventHall": "FILL IN: the Event hall's address, phone B",
     "pot": null
   },
   "bounty": {
-    "ubong": "FILL IN: the 2 minute cut's Ubong, phone B"
+    "maya": "FILL IN: the 2 minute cut's Maya, phone B"
   },
   "testClose": {
     "pot": null

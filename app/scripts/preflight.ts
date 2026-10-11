@@ -33,15 +33,15 @@ export const KNOWN = {
   third: getAddress("0xa5057F32DB2a6f68F69ad1587014AbF101A20B61"),
 } as const;
 
-export type Role = "idara" | "ubong" | "aniekan" | "caterer" | "eventHall" | "bountyUbong" | "phoneA" | "phoneB" | "third";
+export type Role = "eddy" | "maya" | "daniel" | "caterer" | "eventHall" | "bountyMaya" | "phoneA" | "phoneB" | "third";
 
 export const ROLE_NAMES: Record<Role, string> = {
-  idara: "Idara",
-  ubong: "Ubong",
-  aniekan: "Aniekan",
+  eddy: "Eddy",
+  maya: "Maya",
+  daniel: "Daniel",
   caterer: "Caterer",
   eventHall: "Event hall",
-  bountyUbong: "Ubong (2 min cut)",
+  bountyMaya: "Maya (2 min cut)",
   phoneA: "Phone A account",
   phoneB: "Phone B account",
   third: "Third test account",
@@ -53,8 +53,8 @@ export type Config = {
   /** The time zone of phone A, where the pot is made. Its closing date is the end of the day there. */
   timeZone?: string;
   cast?: Partial<Record<"phoneA" | "phoneB" | "third", string>>;
-  main?: Partial<Record<"idara" | "ubong" | "aniekan" | "caterer" | "eventHall", string>> & { pot?: number | null };
-  bounty?: { ubong?: string };
+  main?: Partial<Record<"eddy" | "maya" | "daniel" | "caterer" | "eventHall", string>> & { pot?: number | null };
+  bounty?: { maya?: string };
   testClose?: { pot?: number | null };
   /** Requests an account sent that the script doesn't plan for, acknowledged by hand (a lost claim race, Code 62). */
   extraSent?: Record<string, number>;
@@ -98,10 +98,10 @@ function addressAt(config: Config, role: Role): Address {
   const raw =
     role === "phoneA" || role === "phoneB" || role === "third"
       ? (config.cast?.[role] ?? KNOWN[role])
-      : role === "bountyUbong"
-        ? config.bounty?.ubong
+      : role === "bountyMaya"
+        ? config.bounty?.maya
         : config.main?.[role];
-  const where = role === "bountyUbong" ? "bounty.ubong" : role in KNOWN ? `cast.${role}` : `main.${role}`;
+  const where = role === "bountyMaya" ? "bounty.maya" : role in KNOWN ? `cast.${role}` : `main.${role}`;
   if (!raw || !isAddress(raw, { strict: false })) {
     throw new ConfigError(`${where} is not filled in with ${ROLE_NAMES[role]}'s address (SEEDING.md, "The cast": copy it from Account details)`);
   }
@@ -200,7 +200,7 @@ const mamaPot = (p: Pick<PotExpect, "total" | "shares" | "closed" | "fix"> & { c
   ref: "mama",
   name: MAMA,
   threshold: 2,
-  deciders: ["idara", "ubong", "aniekan"],
+  deciders: ["eddy", "maya", "daniel"],
   payees: mamaPayees(p.caterer, p.hall),
   total: p.total,
   shares: p.shares,
@@ -219,7 +219,7 @@ export const TAKES: Take[] = [
     title: "3 min cut, take M1: make the pot (DEMO.md section 2)",
     section: "M1",
     accounts: [
-      ...cast('SEEDING.md M1, "Seed it", steps 1 to 6', ["idara", "10000", 1], ["ubong", "10000", 1], ["aniekan", "10000", 1]),
+      ...cast('SEEDING.md M1, "Seed it", steps 1 to 6', ["eddy", "10000", 1], ["maya", "10000", 1], ["daniel", "10000", 1]),
       ...cast('SEEDING.md M1, "Seed it", steps 7 and 8', ["caterer", "0", 0], ["eventHall", "0", 0]),
     ].map((a) => ({ ...a, onNoPot: true })),
     pots: [SHOWCASE],
@@ -233,15 +233,15 @@ export const TAKES: Take[] = [
     section: "M2",
     accounts: cast(
       'SEEDING.md M2, "Seed it"',
-      ["idara", "10000", 2],
-      ["ubong", "10000", 1],
-      ["aniekan", "10000", 1],
+      ["eddy", "10000", 2],
+      ["maya", "10000", 1],
+      ["daniel", "10000", 1],
       ["caterer", "0", 0],
       ["eventHall", "0", 0],
     ),
     pots: [
       SHOWCASE,
-      mamaPot({ total: usd("0"), caterer: "0", hall: "0", closed: false, shares: { idara: 0n, ubong: 0n, aniekan: 0n }, fix: 'SEEDING.md M2, "Seed it", step 2' }),
+      mamaPot({ total: usd("0"), caterer: "0", hall: "0", closed: false, shares: { eddy: 0n, maya: 0n, daniel: 0n }, fix: 'SEEDING.md M2, "Seed it", step 2' }),
     ],
     claimsOnCamera: 0,
     pair: false,
@@ -253,9 +253,9 @@ export const TAKES: Take[] = [
     section: "M3",
     accounts: cast(
       'SEEDING.md M3, "Seed it"',
-      ["idara", "9500", 3],
-      ["ubong", "9600", 2],
-      ["aniekan", "9900", 2],
+      ["eddy", "9500", 3],
+      ["maya", "9600", 2],
+      ["daniel", "9900", 2],
       ["caterer", "0", 0],
       ["eventHall", "0", 0],
     ),
@@ -266,7 +266,7 @@ export const TAKES: Take[] = [
         caterer: "0",
         hall: "0",
         closed: false,
-        shares: { idara: usd("500"), ubong: usd("400"), aniekan: usd("100") },
+        shares: { eddy: usd("500"), maya: usd("400"), daniel: usd("100") },
         fix: 'SEEDING.md M3, "Seed it", step 2',
       }),
     ],
@@ -280,9 +280,9 @@ export const TAKES: Take[] = [
     section: "M4",
     accounts: cast(
       'SEEDING.md M4, "Seed it"',
-      ["idara", "9500", 4],
-      ["ubong", "9600", 3],
-      ["aniekan", "9900", 4],
+      ["eddy", "9500", 4],
+      ["maya", "9600", 3],
+      ["daniel", "9900", 4],
       ["caterer", "600", 0],
       ["eventHall", "280", 0],
     ),
@@ -293,7 +293,7 @@ export const TAKES: Take[] = [
         caterer: "600",
         hall: "280",
         closed: false,
-        shares: { idara: usd("57.80"), ubong: usd("46.24"), aniekan: usd("11.56") },
+        shares: { eddy: usd("57.80"), maya: usd("46.24"), daniel: usd("11.56") },
         fix: 'SEEDING.md M4, "Seed it", steps 2 and 3',
       }),
     ],
@@ -307,9 +307,9 @@ export const TAKES: Take[] = [
     section: "M5",
     accounts: cast(
       'SEEDING.md M5, "Seed it"',
-      ["idara", "9557.80", 6],
-      ["ubong", "9646.24", 5],
-      ["aniekan", "9911.56", 5],
+      ["eddy", "9557.80", 6],
+      ["maya", "9646.24", 5],
+      ["daniel", "9911.56", 5],
       ["caterer", "600", 0],
       ["eventHall", "280", 0],
     ),
@@ -320,7 +320,7 @@ export const TAKES: Take[] = [
         caterer: "600",
         hall: "280",
         closed: true,
-        shares: { idara: 0n, ubong: 0n, aniekan: 0n },
+        shares: { eddy: 0n, maya: 0n, daniel: 0n },
         fix: 'SEEDING.md M5, "Seed it"',
       }),
     ],
@@ -332,7 +332,7 @@ export const TAKES: Take[] = [
     name: "bounty",
     title: "2 min cut, take B1: the Agora bounty path (DEMO.md, The 2 minute bounty path)",
     section: "B1",
-    accounts: [{ role: "bountyUbong", ausd: 0n, sent: 0, onNoPot: true, fix: 'SEEDING.md B1, "Seed it", step 1: a fresh Ubong' }],
+    accounts: [{ role: "bountyMaya", ausd: 0n, sent: 0, onNoPot: true, fix: 'SEEDING.md B1, "Seed it", step 1: a fresh Maya' }],
     pots: [SHOWCASE],
     claimsOnCamera: 1,
     pair: true,
