@@ -13,7 +13,12 @@ export function mapLines(p: { account: Address; city: string; me: boolean; name:
   return { city: p.me ? copy.youCap : named ? p.name : copy.mapEnding(p.account), sub: alone };
 }
 
-/** The letters in a decider's circle: their initial when named, else the last two characters of their account. */
-export function initialsOf(account: Address, name: string, named: boolean): string {
+/**
+ * The letters in a decider's circle: "You" for the person looking, as the map
+ * says; else their initial when named, else the last two characters of their
+ * account.
+ */
+export function initialsOf(account: Address, name: string, named: boolean, me = false): string {
+  if (me) return copy.youCap;
   return named && name ? name.charAt(0).toUpperCase() : account.slice(-2).toUpperCase();
 }

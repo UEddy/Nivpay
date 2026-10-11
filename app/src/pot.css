@@ -304,6 +304,18 @@
   margin-top: 1px;
 }
 
+/* The chosen close date in the app's own form, under the phone's date field. */
+.chosen-day {
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* A draft's footer is in the page's flow: sticky, its lines and button would cover the Closes row. */
+.screen-foot.in-flow {
+  position: static;
+}
+
 .screen-foot {
   position: sticky;
   bottom: 0;
@@ -977,6 +989,10 @@
   font-family: var(--font-body);
   color: var(--ink);
   cursor: pointer;
+  /* A long press opens the pot; it must not start selecting its text. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .home-pot:first-of-type {
@@ -1234,6 +1250,8 @@
 .voter-face.mine {
   border: 2.5px dashed var(--voter);
   color: var(--voter);
+  /* "You", as on the map, in place of an initial. */
+  font-size: 13px;
 }
 
 .voter-face.yes {

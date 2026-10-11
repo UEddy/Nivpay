@@ -399,3 +399,12 @@ test("no em or en dash in any tracked or newly added file except package-lock.js
   assert.ok(checked > 50, `checked ${checked} text files`);
   assert.deepEqual(offenders, [], "em or en dash found");
 });
+
+test("name, payee and amount placeholders are neutral: no cast names, no sample amounts", () => {
+  const cast = /\b(Eddy|Maya|Daniel|Idara|Ubong|Aniekan|Caterer|Hall|Mama)\b/i;
+  for (const key of ["namePlaceholder", "theirNamePlaceholder", "payeeNamePlaceholder", "amountPlaceholder"] as const) {
+    const text = copy[key];
+    assert.doesNotMatch(text, cast, key);
+    assert.doesNotMatch(text, /\d|\$/, key);
+  }
+});

@@ -162,7 +162,7 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
           <p className="hint">{copy.receiveHint}</p>
           <label className="field">
             <span>{copy.requestAmountOptional}</span>
-            <input inputMode="decimal" value={amountText} onChange={(e) => setAmountText(e.target.value)} placeholder="25" />
+            <input inputMode="decimal" value={amountText} onChange={(e) => setAmountText(e.target.value)} placeholder={copy.amountPlaceholder} />
           </label>
           <button type="button" className="pill-btn" onClick={share}>
             <Icon name="share" />

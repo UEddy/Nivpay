@@ -19,3 +19,8 @@ test("a decider's circle shows their initial, or two characters of their account
   assert.equal(initialsOf(A, "aniekan", true), "A");
   assert.equal(initialsOf(A, "account ending 8C9d", false), "9D");
 });
+
+test("your own circle says You, as the map does, never two characters of your account", () => {
+  assert.equal(initialsOf(A, "You", false, true), "You");
+  assert.equal(initialsOf(A, "Aniekan", true, true), "You");
+});

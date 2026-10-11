@@ -470,7 +470,7 @@ export function CreateScreen(props: {
         )}
       </div>
 
-      <div className="screen-foot enter" style={{ animationDelay: "420ms" }}>
+      <div className={`screen-foot enter${made ? "" : " in-flow"}`} style={{ animationDelay: "420ms" }}>
         <p className="sr-only" aria-live="polite">
           {announce}
         </p>
@@ -561,6 +561,12 @@ export function CreateScreen(props: {
             <span>{copy.closes}</span>
             <input type="date" value={draft.closes} min={tomorrow()} onChange={(e) => update((d) => ({ ...d, closes: e.target.value }))} />
           </label>
+          {/* The phone writes the date its own way (10/30/2026); this line says it the app's way. */}
+          {draft.closes && (
+            <p className="chosen-day" aria-live="polite">
+              {copy.closesOn(formatDay(draft.closes))}
+            </p>
+          )}
           <p className="hint">{copy.timeZoneLine(draft.me.timeZone)}</p>
           <button type="button" className="btn primary" onClick={() => setSheet(null)}>
             {copy.done}
@@ -822,7 +828,7 @@ function DecidersSheet(props: {
       {!full && (
         <label className="field">
           <span>{copy.inviteeName}</span>
-          <input value={inviteName} onChange={(e) => setInviteName(stripInvisible(e.target.value))} maxLength={40} placeholder={copy.namePlaceholder} autoComplete="off" />
+          <input value={inviteName} onChange={(e) => setInviteName(stripInvisible(e.target.value))} maxLength={40} placeholder={copy.theirNamePlaceholder} autoComplete="off" />
         </label>
       )}
       <button type="button" className="btn" disabled={full || !inviteName.trim()}
@@ -985,7 +991,7 @@ function PayeesSheet(props: {
             </label>
             <label className="field">
               <span>{copy.limit}</span>
-              <input value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="decimal" placeholder="$700" disabled={decimals === null} />
+              <input value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="decimal" placeholder={copy.amountPlaceholder} disabled={decimals === null} />
             </label>
           </div>
           {name.trim() && !nameOk && <p className="error">{copy.payeeNameTooLong}</p>}

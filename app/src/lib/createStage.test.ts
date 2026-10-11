@@ -90,6 +90,7 @@ test("once everyone is added: still a draft, and Make the pot is the one primary
   assert.equal(v.editable, true);
   assert.equal(v.progress, "Everyone has replied: Ubong and Caterer.");
   assert.equal(v.line, copy.createReady);
+  assert.equal(`${v.progress} ${v.line}`.split("Everyone has replied").length - 1, 1, "said once, not twice");
   assert.deepEqual(v.primary, { action: "make", label: "Make the pot", enabled: true, busy: false });
 });
 

@@ -361,7 +361,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
               <div className="card enter" style={{ display: "flex", flexDirection: "column", gap: 8, animationDelay: "80ms" }}>
                 <label className="field">
                   <span>{copy.howMuch}</span>
-                  <input inputMode="decimal" value={amountText} disabled={step !== null || stuck} onChange={(e) => setAmountText(e.target.value)} placeholder="25" />
+                  <input inputMode="decimal" value={amountText} disabled={step !== null || stuck} onChange={(e) => setAmountText(e.target.value)} placeholder={copy.amountPlaceholder} />
                 </label>
                 {request && request.amount > 0n && <p className="hint">{copy.requestedAmount(money(request.amount))}</p>}
                 {holding && <p className="hint">{copy.yourBalanceIs(formatAmount(holding.balance, decimals, "cents"))}</p>}

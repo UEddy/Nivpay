@@ -379,8 +379,9 @@ export function RequestScreen(props: {
     const index = people.findIndex((x) => isAddressEqual(x.account, a));
     const mine = isAddressEqual(a, me);
     const yes = saidYes(a) || (mine && acting === "yes" && step === "landing");
-    const label = isAddressEqual(a, request.asker) ? copy.chipAsked : mine ? copy.youCap : yes ? copy.chipSaidYes : copy.chipWaiting;
-    const initial = initialsOf(a, p?.name ?? "", info.labelsOk);
+    // The circle already says You, so the line under it says where you are.
+    const label = isAddressEqual(a, request.asker) ? copy.chipAsked : yes ? copy.chipSaidYes : copy.chipWaiting;
+    const initial = initialsOf(a, p?.name ?? "", info.labelsOk, mine);
     return { account: a, initial, index, mine, yes, holding: mine && acting === "yes" && step === "landing", label };
   });
 
