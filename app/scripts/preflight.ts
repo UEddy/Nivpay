@@ -14,6 +14,8 @@ import { retryingReadTransport, type ReadTransportOptions } from "../src/lib/rpc
 import { fromText32 } from "../src/lib/text32.ts";
 import { MAX_SENT_TXS } from "../api/fund/index.ts";
 
+/** Phone A's time zone when the config names none: the recording phones show "Times show in Africa/Lagos". */
+export const DEFAULT_TIME_ZONE = "Africa/Lagos";
 export const STATUS_URL = "https://nivpay.vercel.app/api/fund/status";
 /** A gas grant is asked for below this much MON, and only by an account with fewer than MAX_SENT_TXS sent (app/api/fund). */
 const GRANT_THRESHOLD = 75_000_000_000_000_000n;
@@ -430,7 +432,10 @@ export async function runTake(take: Take, config: Config, deps: Deps): Promise<R
   const { client } = deps;
   const rows: Row[] = [];
   const add = (row: Row) => rows.push(row);
-  const tz = config.timeZone ?? "Europe/London";
+  // The pot closes at the end of the chosen day in the maker's phone time zone
+  // (draft.me.timeZone, from phoneTimeZone(), in src/lib/draft.ts endTimeFor).
+  // The recording phones are set to Lagos.
+  const tz = config.timeZone ?? DEFAULT_TIME_ZONE;
 
   // Every address and pot number first, so a config gap stops the run before any request.
   const addressOf = new Map<Role, Address>();

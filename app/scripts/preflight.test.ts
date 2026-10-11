@@ -18,6 +18,7 @@ import {
   runTake,
   TAKES,
   usd,
+  DEFAULT_TIME_ZONE,
   type Config,
   type Deps,
   type Report,
@@ -28,7 +29,12 @@ import {
 
 const ABI = [...POTS_ABI, ...ERC20_READ_ABI, ...FAUCET_ABI, ...SETTLEMENT_PAIR_ABI] as const;
 const NOW = 1_791_700_000n; // 11 Oct 2026
-const MAMA_END = endTimeFor("2026-12-31", "Europe/London")!;
+const MAMA_END = endTimeFor("2026-12-31", "Africa/Lagos")!;
+
+test("preflight: with no timeZone in the config, Mama's 60th closes at the end of 31 Dec 2026 in Lagos, 23:00 UTC", () => {
+  assert.equal(DEFAULT_TIME_ZONE, "Africa/Lagos");
+  assert.equal(new Date(Number(MAMA_END) * 1000).toISOString(), "2026-12-31T23:00:00.000Z");
+});
 
 const EDDY = getAddress("0x1111111111111111111111111111111111111111");
 const MAYA = getAddress("0x2222222222222222222222222222222222222222");

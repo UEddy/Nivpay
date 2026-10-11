@@ -223,7 +223,9 @@ Both phones, before every take:
   out of shot.
 * Clock: automatic time on (the closing date and "Closed 10 Oct" style dates
   come from it), both phones in the same time zone, which must match
-  `timeZone` in the config. Status bar time visible and plausible.
+  `timeZone` in the config (Africa/Lagos when it names none). The pot closes
+  at the end of the chosen day in the zone of the phone that makes it, not in
+  the city typed in. Status bar time visible and plausible.
 * Airplane mode off. No take in DEMO.md calls for it; turn it on only if you
   add a take that shows being offline.
 * Screen recording: Samsung's recorder, sound off or media only, show taps
@@ -304,7 +306,7 @@ Starting state:
 Mama's 60th: holds **$0.00**, open, not frozen, 2 of 3 deciders (Eddy,
 Maya, Daniel; suggested shares $500, $400, $100), payees Caterer up to $700
 paid $0 and Event hall up to $300 paid $0, closes at the end of **Thu 31 Dec
-2026** in London (1 Jan 2027 00:00 UTC). No requests.
+2026** in phone A's time zone, Lagos (31 Dec 2026 23:00 UTC). No requests.
 
 ### Seed it
 

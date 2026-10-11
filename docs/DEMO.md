@@ -97,7 +97,7 @@ take only if you reuse the accounts, which you shouldn't (see below).
 | 2.1 | A, Eddy | Make a pot. Pot name **Mama's 60th** | Draft, not made yet; the lid sits open |
 | 2.2 | A, Eddy | Who decides: your city **London**, your suggested share **$500**. Invite someone to decide, **Maya**, Send them a link. Again for **Daniel**. How many must say yes: **2** of 3 | two invites waiting for a reply |
 | 2.3 | A, Eddy | Pours only to: Add a place to pay, **Caterer**, up to **$700**, Send them a link. Again for **Event hall**, up to **$300** | |
-| 2.4 | A, Eddy | Closes: choose **Thu 31 Dec 2026** | "Closes at the end of Thu 31 Dec 2026", the end of that day in London. Early close in section 5 is what the video shows |
+| 2.4 | A, Eddy | Closes: choose **Thu 31 Dec 2026** | "Closes at the end of Thu 31 Dec 2026", the end of that day in phone A's time zone (Lagos), whatever city is typed. Early close in section 5 is what the video shows |
 | 2.5 | B, Maya | Open Maya's invite from the chat, city **Houston**, Make my reply, Send the reply back to phone A | |
 | 2.6 | B, Daniel | Switch account, open Daniel's invite, city **Uyo**, reply | |
 | 2.7 | B, Event hall | Switch account, open the hall's invite, reply | |
