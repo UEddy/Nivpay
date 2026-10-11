@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Address, Hex } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
+import { recipientDetail } from "../lib/recipient.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
 import { ERC20_READ_ABI } from "../lib/abi.ts";
 import { liveWriteChain } from "../lib/chain.ts";
@@ -325,7 +326,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
                 <div className="list-row">
                   <div className="grow">
                     <span className="name">{copy.sendingTo(to.name)}</span>
-                    <span className="meta">{copy.accountEnding(to.account)}</span>
+                    {recipientDetail(to) && <span className="meta">{recipientDetail(to)}</span>}
                   </div>
                   {!step && !stuck && (
                     <button type="button" className="btn ghost small" onClick={() => setTo(null)}>
@@ -426,7 +427,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
               <div className="grow">
                 <span className="meta">{copy.confirmTo}</span>
                 <span className="name">{to.name}</span>
-                <span className="meta">{copy.accountEnding(to.account)}</span>
+                {recipientDetail(to) && <span className="meta">{recipientDetail(to)}</span>}
               </div>
             </div>
             <div className="list-row">
@@ -481,7 +482,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
               <div className="grow">
                 <span className="meta">{copy.confirmTo}</span>
                 <span className="name">{to.name}</span>
-                <span className="meta">{copy.accountEnding(to.account)}</span>
+                {recipientDetail(to) && <span className="meta">{recipientDetail(to)}</span>}
               </div>
             </div>
             <div className="list-row">
