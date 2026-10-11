@@ -144,7 +144,11 @@ test("request: my yes would pay it but the pot can't cover it yet, or it's over 
 });
 
 test("request: paid, withdrawn and expired are final, and only a waiting yes can be taken back", () => {
-  const paid = requestView(request({ status: "paid", yes: [ANIEKAN, UBONG] }), pot({ totalAssets: $(397) }), UBONG, ASKED);
+  const paidPayees = [
+    { name: "Caterer", cap: $(700), spent: $(600) },
+    { name: "Event hall", cap: $(300), spent: 0n },
+  ];
+  const paid = requestView(request({ status: "paid", yes: [ANIEKAN, UBONG] }), pot({ totalAssets: $(397), payees: paidPayees }), UBONG, ASKED);
   assert.equal(paid.stage, "paid");
   assert.equal(paid.canTakeBack, false);
   assert.equal(paid.leftAfter, $(397), "after paying, what is left is what the pot holds");
@@ -294,4 +298,16 @@ test("the Ask button never offers to pay $0 while the amount is empty (footage 1
   assert.equal(askButtonText(null, "Event Center", fmt), "Ask for a payment");
   assert.equal(askButtonText(0n, "Event Center", fmt), "Ask for a payment");
   assert.equal(askButtonText(50n, "Event Center", fmt), "Ask to pay $50 to Event Center");
+});
+
+test("a request read as paid before the pot is never shows the old balance as what's left (footage 1000335865 at 292.5 s)", () => {
+  // The pot as read just before the payment landed: $1,000 in it, nothing paid to the Caterer yet.
+  const view = requestView(request({ status: "paid", yes: [ANIEKAN, UBONG] }), pot(), UBONG, ASKED);
+  assert.equal(view.stage, "paid");
+  assert.equal(view.leftAfter, $(397), "$1,000 less $600 and its $3 fee");
+  assert.equal(view.limitAfter, $(600), "Caterer limit reads $600 of $700, not $0");
+  // Once the pot is read again, the same figures come straight from it.
+  const fresh = requestView(request({ status: "paid", yes: [ANIEKAN, UBONG] }), pot({ totalAssets: $(397), payees: [{ name: "Caterer", cap: $(700), spent: $(600) }, { name: "Event hall", cap: $(300), spent: 0n }] }), UBONG, ASKED);
+  assert.equal(fresh.leftAfter, $(397));
+  assert.equal(fresh.limitAfter, $(600));
 });

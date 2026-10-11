@@ -185,7 +185,18 @@ export function requestView(request: RequestFacts, pot: PotFacts, me: Address, n
     canTakeBack: iSaid && request.status === "waiting" && !expired,
   };
   const at = (stage: RequestStage, refusal: AppError | null = null): RequestView => ({ ...base, stage, refusal });
-  if (request.status === "paid") return { ...at("paid"), leftAfter: pot.totalAssets, canTakeBack: false };
+  if (request.status === "paid") {
+    // The request can be read as paid a moment before the pot is: then the
+    // payee's total doesn't include this payment yet, and the figures still
+    // come from before it. Never show the old balance as what's left.
+    const potIsBehind = !closing && payee !== undefined && payee.spent < request.amount;
+    return {
+      ...at("paid"),
+      leftAfter: potIsBehind ? pot.totalAssets - request.amount - request.fee : pot.totalAssets,
+      limitAfter: potIsBehind ? payee.spent + request.amount : base.limitAfter,
+      canTakeBack: false,
+    };
+  }
   if (request.status === "withdrawn") return at("withdrawn", refuse.decided());
   if (expired) return at("expired", refuse.expired());
   if (!isDecider(pot, me)) return at("watching", refuse.notDecider());
