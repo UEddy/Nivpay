@@ -1,0 +1,152 @@
+{
+  "id": "agora-bounty",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "minSeconds": 30,
+  "capSeconds": 120,
+  "target": [105, 115],
+  "words": "technical",
+  "provesBy": { "seconds": 90, "proofs": ["passkey", "balance", "settled"] },
+  "segments": [
+    {
+      "id": "hook",
+      "shot": "card",
+      "kind": "card",
+      "plan": "Opening question card",
+      "seconds": 3.5,
+      "title": "What if sending dollars felt like sending a text?",
+      "subtitle": "NivPay, in test mode"
+    },
+    {
+      "id": "create-account",
+      "shot": "B03",
+      "kind": "phone",
+      "plan": "Phone A, welcome screen: type the name, Create your account, the passkey sheet, fingerprint, Home",
+      "take": { "clip": null, "in": 0, "out": 15 },
+      "caption": "A brand new account, made with a passkey",
+      "callout": "No password, no app to install. {cast.eddy.name}'s phone.",
+      "proves": ["passkey"]
+    },
+    {
+      "id": "balance-zero",
+      "shot": "B03",
+      "kind": "phone",
+      "plan": "Phone A, Home: Your balance, Dollars $0.00, Held as AUSD, a digital dollar issued by Agora",
+      "take": { "clip": null, "in": 15, "out": 21 },
+      "caption": "Its balance is in AUSD, a digital dollar from Agora"
+    },
+    {
+      "id": "claim-wait",
+      "shot": "B04",
+      "kind": "phone",
+      "plan": "Phone A, Add test dollars: Getting your account ready, fingerprint, Adding test dollars",
+      "take": { "clip": null, "in": 0, "out": 10 },
+      "speed": 2,
+      "caption": "Add test dollars"
+    },
+    {
+      "id": "claim-settled",
+      "shot": "B04",
+      "kind": "phone",
+      "plan": "Phone A: Added $10,000 test dollars. Settled in 0.Xs. Dollars $10,000.00",
+      "take": { "clip": null, "in": 10, "out": 15 },
+      "settle": true,
+      "caption": "{bounty.testDollars} in AUSD. Settled in {measured.claimSettle}",
+      "callout": "Test dollars from Agora's faucet, not real money",
+      "proves": ["balance"]
+    },
+    {
+      "id": "ask",
+      "shot": "B05",
+      "kind": "phone",
+      "plan": "Phone B, Maya's Receive: Amount to ask for 25, Copy link, paste it into the chat to phone A",
+      "take": { "clip": null, "in": 0, "out": 8 },
+      "caption": "{cast.maya.name} asks for {bounty.send} with a link"
+    },
+    {
+      "id": "review",
+      "shot": "B06",
+      "kind": "phone",
+      "plan": "Phone A: open the link, Send dollars with 25 filled in, Review: To Maya, Amount $25, Fee None",
+      "take": { "clip": null, "in": 0, "out": 10 },
+      "caption": "To {cast.maya.name}, {bounty.send}, no fee",
+      "callout": "NivPay covers the fee"
+    },
+    {
+      "id": "send-receive",
+      "shot": "B07",
+      "kind": "pair",
+      "plan": "Both phones in step: A sends $25 with the fingerprint to Payment final; B shows +$25.00 from account ending, Just arrived",
+      "take": { "clip": null, "in": 0, "out": 12 },
+      "takeB": { "clip": null, "in": 0, "out": 12 },
+      "labelA": "{cast.eddy.name} sends",
+      "labelB": "{cast.maya.name} receives",
+      "settle": true,
+      "caption": "Sent and received. Settled in {measured.sendSettle}",
+      "callout": "From the account ending {measured.senderLastFour}",
+      "proves": ["settled"]
+    },
+    {
+      "id": "settled-line",
+      "shot": "B07",
+      "kind": "phone",
+      "plan": "Phone A, held on Payment final: Sent $25 to Maya. Settled in 0.Xs.",
+      "take": { "clip": null, "in": 12, "out": 16 },
+      "settle": true,
+      "zoom": { "from": 1, "to": 1.6, "x": 0.5, "y": 0.45 },
+      "caption": "Settled in {measured.sendSettle}, measured on the phone"
+    },
+    {
+      "id": "receipt",
+      "shot": "B08",
+      "kind": "explorer",
+      "device": "phone",
+      "plan": "Phone A, View receipt: MonadVision opens the transfer of 25 AUSD to Maya's account, finalized",
+      "take": { "clip": null, "in": 0, "out": 10 },
+      "caption": "The receipt on Monad: {bounty.send} in AUSD",
+      "callout": "Transaction hash {hashes.send|short}"
+    },
+    {
+      "id": "other-currency",
+      "shot": "B09",
+      "kind": "phone",
+      "plan": "Phone A: the same request link, How much 10, They receive CTK, the line on what CTK is, Review",
+      "take": { "clip": null, "in": 0, "out": 12 },
+      "caption": "Pay in another currency: {bounty.otherCurrency}",
+      "callout": "{bounty.otherCurrency} is a test currency from Agora, standing in for a local currency"
+    },
+    {
+      "id": "other-currency-steps",
+      "shot": "B10",
+      "kind": "phone",
+      "plan": "Phone A: Send $10 as CTK, one fingerprint, Step 1 of 3, Step 2 of 3, Step 3 of 3",
+      "take": { "clip": null, "in": 0, "out": 8 },
+      "speed": 2,
+      "caption": "One fingerprint, three steps, each final before the next"
+    },
+    {
+      "id": "other-currency-settled",
+      "shot": "B10",
+      "kind": "pair",
+      "plan": "A: Sent $10 to Maya. They received 10.00 CTK. Settled in 0.Xs. B: +10.00 CTK from Agora's settlement",
+      "take": { "clip": null, "in": 8, "out": 16 },
+      "takeB": { "clip": null, "in": 0, "out": 8 },
+      "labelA": "{cast.eddy.name} sends {bounty.otherCurrencySend}",
+      "labelB": "{cast.maya.name} receives {bounty.otherCurrency}",
+      "settle": true,
+      "caption": "{cast.maya.name} receives {measured.otherCurrencyReceived}. Settled in {measured.otherCurrencySettle}",
+      "callout": "Rate {measured.otherCurrencyRate}, set by Agora"
+    },
+    {
+      "id": "end",
+      "shot": "card",
+      "kind": "card",
+      "plan": "End card",
+      "seconds": 5,
+      "title": "NivPay",
+      "subtitle": "A passkey, a dollar balance, a payment that settles while you watch.",
+      "url": true
+    }
+  ]
+}

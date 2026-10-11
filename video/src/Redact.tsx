@@ -2,7 +2,7 @@ import { AbsoluteFill, OffthreadVideo, Sequence, staticFile, useCurrentFrame, us
 import { regionsAt, timeline, type ClipEntry, type Redactions } from "./redactions.ts";
 import { FPS, pieceFrames } from "./timing.ts";
 
-export type RedactedClipProps = { clip: string; from: number; to: number; map: Redactions | null };
+export type RedactedClipProps = { clip: string; from: number; to: number; map: Redactions | null; speed?: number; holdFontSize?: number };
 
 /** A strong blur plus an 85 percent tint, over a region and its padding. Fractions are of the uncropped frame. */
 export function Redact(props: { entry: ClipEntry; t: number }) {
@@ -30,10 +30,10 @@ export function Redact(props: { entry: ClipEntry; t: number }) {
 }
 
 /** The phone frame with the status bar and notification area cropped off the top, always, and any bottom bar. */
-function Cropped(props: { entry: ClipEntry; from: number; to: number }) {
+function Cropped(props: { entry: ClipEntry; from: number; to: number; speed: number }) {
   const { entry } = props;
   const frame = useCurrentFrame();
-  const t = props.from + frame / FPS;
+  const t = props.from + (frame * props.speed) / FPS;
   const visible = 1 - entry.statusBar - (entry.bottomBar ?? 0);
   return (
     <AbsoluteFill style={{ overflow: "hidden", background: "black" }}>
@@ -42,6 +42,7 @@ function Cropped(props: { entry: ClipEntry; from: number; to: number }) {
         trimBefore={Math.round(props.from * FPS)}
         trimAfter={Math.round(props.to * FPS)}
         muted
+        playbackRate={props.speed}
         style={{ position: "absolute", left: 0, top: `${(-entry.statusBar / visible) * 100}%`, width: "100%", height: `${(1 / visible) * 100}%` }}
       />
       <Redact entry={entry} t={t} />
@@ -50,11 +51,11 @@ function Cropped(props: { entry: ClipEntry; from: number; to: number }) {
 }
 
 /** A black hold in place of a cut or of the phone's own blackout, with its true caption. */
-function BlackHold(props: { caption: string }) {
+function BlackHold(props: { caption: string; fontSize?: number }) {
   const { width } = useVideoConfig();
   return (
     <AbsoluteFill style={{ background: "black", alignItems: "center", justifyContent: "center" }}>
-      <p style={{ color: "#f7efe4", fontFamily: "Work Sans, sans-serif", fontSize: width * 0.05, margin: 0 }}>{props.caption}</p>
+      <p style={{ color: "#f7efe4", fontFamily: "Work Sans, sans-serif", fontSize: props.fontSize ?? width * 0.05, margin: 0, textAlign: "center" }}>{props.caption}</p>
     </AbsoluteFill>
   );
 }
@@ -63,14 +64,15 @@ function BlackHold(props: { caption: string }) {
 export function RedactedClip(props: RedactedClipProps) {
   const entry = props.map?.clips[props.clip];
   if (!entry?.reviewed) throw new Error(`clip ${props.clip} has no reviewed entry in redactions.json, so it can't be rendered`);
+  const speed = props.speed ?? 1;
   let at = 0;
   return (
     <AbsoluteFill style={{ background: "black" }}>
       {timeline(entry, props.from, props.to).map((p, i) => {
-        const frames = pieceFrames(p);
+        const frames = pieceFrames(p, speed);
         const seq = (
           <Sequence key={i} from={at} durationInFrames={frames}>
-            {p.kind === "clip" ? <Cropped entry={entry} from={p.from} to={p.to} /> : <BlackHold caption={p.caption} />}
+            {p.kind === "clip" ? <Cropped entry={entry} from={p.from} to={p.to} speed={speed} /> : <BlackHold caption={p.caption} fontSize={props.holdFontSize} />}
           </Sequence>
         );
         at += frames;

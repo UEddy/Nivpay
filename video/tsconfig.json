@@ -8,9 +8,10 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
     "skipLibCheck": true,
     "types": ["node"],
     "lib": ["ES2023", "DOM"]
   },
-  "include": ["src", "scripts", "remotion.config.ts"]
+  "include": ["src", "scripts", "timelines/*.json", "remotion.config.ts"]
 }

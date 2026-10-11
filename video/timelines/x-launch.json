@@ -1,0 +1,75 @@
+{
+  "id": "x-launch",
+  "width": 1080,
+  "height": 1080,
+  "fps": 30,
+  "minSeconds": 30,
+  "capSeconds": 45,
+  "target": [30, 45],
+  "words": "consumer",
+  "segments": [
+    {
+      "id": "hook",
+      "shot": "M06",
+      "kind": "phone",
+      "plan": "Pushed in on the pot as it fills to $1,000, pulling out",
+      "take": { "clip": null, "in": 4, "out": 7 },
+      "zoom": { "from": 1.8, "to": 1.2, "x": 0.5, "y": 0.35 },
+      "caption": "Who holds the money for {pot.name}?"
+    },
+    {
+      "id": "rules",
+      "shot": "M01",
+      "kind": "phone",
+      "plan": "Making the pot: the two places it can pay, with their limits",
+      "take": { "clip": null, "in": 28, "out": 52 },
+      "speed": 4,
+      "caption": "It can only pay the {cast.caterer.name} and the {cast.eventHall.name}"
+    },
+    {
+      "id": "pours",
+      "shot": "M04",
+      "kind": "phone",
+      "plan": "A coin flies in from London and the pot fills",
+      "take": { "clip": null, "in": 0, "out": 12 },
+      "speed": 2,
+      "caption": "Everyone puts in. {pot.total} together"
+    },
+    {
+      "id": "ask",
+      "shot": "M07",
+      "kind": "phone",
+      "plan": "The ask sheet: 1 more yes pays Caterer",
+      "take": { "clip": null, "in": 2, "out": 9 },
+      "zoom": { "from": 1, "to": 1.4, "x": 0.5, "y": 0.6 },
+      "caption": "Paying needs {pot.yesNeeded} of {pot.deciders} to say yes"
+    },
+    {
+      "id": "pocket",
+      "shot": "M08",
+      "kind": "phone",
+      "plan": "The second yes: the stream runs to the Caterer and nowhere else",
+      "take": { "clip": null, "in": 3, "out": 10 },
+      "zoom": { "from": 1.3, "to": 1, "x": 0.5, "y": 0.4 },
+      "caption": "Nobody can pocket it. Not even the one who made it."
+    },
+    {
+      "id": "split",
+      "shot": "M13",
+      "kind": "phone",
+      "plan": "See the split: streams back to each city with each amount",
+      "take": { "clip": null, "in": 4, "out": 10 },
+      "caption": "Close it early and everyone takes their share"
+    },
+    {
+      "id": "end",
+      "shot": "card",
+      "kind": "card",
+      "plan": "End card",
+      "seconds": 5,
+      "title": "NivPay",
+      "subtitle": "Pool money with people you trust.",
+      "url": true
+    }
+  ]
+}

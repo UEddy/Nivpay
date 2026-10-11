@@ -13,20 +13,11 @@ import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
-import { assertRenderable, parseRedactions, type ScanHit } from "../src/redactions.ts";
+import { assertRenderable, parseRedactions } from "../src/redactions.ts";
 import { checkVideo, readDenylist } from "./privacy-check.ts";
+import { scanHits } from "./scans.ts";
 
 const root = join(import.meta.dirname, "..");
-
-export function scanHits(clip: string): ScanHit[] | null {
-  const f = join(root, "footage", "_scans", `${clip}.scan.json`);
-  if (!existsSync(f)) return null;
-  const scan = JSON.parse(readFileSync(f, "utf8"));
-  return scan.frames.flatMap((fr: { t: number; hits: { category: string; box: ScanHit["box"] }[]; keypad: boolean }) => [
-    ...fr.hits.map((h) => ({ t: fr.t, category: h.category, box: h.box })),
-    ...(fr.keypad ? [{ t: fr.t, category: "PIN or password entry", box: { x: 0, y: 0.5, w: 1, h: 0.5 } }] : []),
-  ]);
-}
 
 const [clip, fromText, toText, name] = process.argv.slice(2);
 if (!clip || !fromText || !toText || !name || !/^[\w-]+$/.test(name)) {
