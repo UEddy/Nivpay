@@ -16,6 +16,7 @@
     "video:render:demo": "node scripts/render-video.ts technical-demo",
     "video:render:x": "node scripts/render-video.ts x-launch",
     "video:privacy-check": "node scripts/privacy-check.ts",
+    "video:denylist-lint": "node scripts/denylist-lint.ts",
     "video:check": "npm run typecheck && npm test && node scripts/check.ts"
   },
   "dependencies": {

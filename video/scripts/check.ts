@@ -2,9 +2,10 @@
  * video:check. Fails unless the redaction map loads, every clip in it is
  * reviewed and covers what its frame scan found, every timeline would render
  * as a final (no rule broken, inside its duration cap, no placeholder, no
- * fact not measured yet), facts.ts has no null left, no committed file under
- * video/ holds an en or em dash, and video:privacy-check passes on everything
- * in out/ and anything left in .render/.
+ * fact not measured yet), facts.ts has no null left, video:denylist-lint
+ * passes, no committed file under video/ holds an en or em dash, and
+ * video:privacy-check passes on everything in out/ and anything left in
+ * .render/.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -67,6 +68,12 @@ if (dashed.length) {
   failed = true;
   console.log(`FAIL en or em dash in ${dashed.join(", ")}`);
 } else console.log("PASS no en or em dashes");
+
+try {
+  execFileSync(process.execPath, [join(root, "scripts", "denylist-lint.ts")], { stdio: "inherit" });
+} catch {
+  failed = true;
+}
 
 const videos = ["out", ".render"].flatMap((d) =>
   existsSync(join(root, d)) ? readdirSync(join(root, d)).filter((f) => f.endsWith(".mp4")).map((f) => join(root, d, f)) : [],

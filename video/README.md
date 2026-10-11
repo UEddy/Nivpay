@@ -112,10 +112,15 @@ npm run video:render:demo -- [--draft]
 npm run video:render:x -- [--draft]
 npm run video:render -- <clip> <from s> <to s> <name>
 npm run video:privacy-check -- [file.mp4 ...]
+npm run video:denylist-lint
 npm run video:check
 ```
 
 `video:render` renders one redacted stretch of one clip, for review.
+`video:denylist-lint` reads `privacy-denylist.txt` and reports, by line
+number and reason only, lines that would not match as meant: under 4
+characters, a label ("something: value"), a `;` list, a cast name, a
+duplicate; and how many blank lines there are. `video:check` runs it.
 `video:privacy-check` samples every 0.25 s, reads each frame with OCR on this
 PC (tesseract.js and its English data, pinned, nothing fetched), and fails on
 any "@", any phone-number-like run, or any line of `privacy-denylist.txt`. It
