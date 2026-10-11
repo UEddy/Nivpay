@@ -68,10 +68,10 @@
       "id": "review",
       "shot": "B04",
       "kind": "phone",
-      "plan": "Phone A: open the link, Send dollars with 25 filled in, Review: To Maya, Amount $25, Fee None",
+      "plan": "Phone A: open the link, Send dollars with 25 filled in, Sending to account ending ####, Review: Amount $25, Fee None",
       "take": { "clip": null, "in": 0, "out": 10 },
-      "caption": "To {cast.maya.name}, {bounty.send}, no fee",
-      "callout": "NivPay covers the fee"
+      "caption": "Sending to the account ending {measured.recipientLastFour}",
+      "callout": "{bounty.send}, no fee. NivPay covers it"
     },
     {
       "id": "send-receive",
@@ -84,7 +84,7 @@
       "labelB": "{cast.maya.name} receives",
       "settle": true,
       "caption": "Sent and received. Settled in {measured.sendSettle}",
-      "callout": "From the account ending {measured.senderLastFour}",
+      "callout": "{cast.maya.name}'s balance: {bounty.received}",
       "proves": ["settled"]
     },
     {
@@ -105,7 +105,7 @@
       "plan": "Phone A, View receipt: MonadVision opens the transfer of 25 AUSD to Maya's account, finalized",
       "take": { "clip": null, "in": 0, "out": 10 },
       "caption": "The receipt on Monad: {bounty.send} in AUSD",
-      "callout": "Transaction hash {hashes.send|short}"
+      "callout": "Transaction hash {hashes.take.send|short}"
     },
     {
       "id": "other-currency",

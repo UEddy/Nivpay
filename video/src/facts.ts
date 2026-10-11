@@ -71,8 +71,8 @@ export const FACTS = {
     /** The CTK amount and rate on the Check and send sheet: Agora sets them. */
     otherCurrencyReceived: null as string | null,
     otherCurrencyRate: null as string | null,
-    /** The last four characters of the new Eddy account, as phone B shows them. */
-    senderLastFour: null as string | null,
+    /** The last four characters of the 2 minute Maya account, as phone A's Send screen shows them before the fingerprint: "Sending to account ending ####". */
+    recipientLastFour: null as string | null,
   },
 
   /** docs/APP-CONTRACT-MAP.md section 6, measured on testnet. */
@@ -91,22 +91,35 @@ export const FACTS = {
     ctk: "0x7BEb5D9DB0d85cBEa543C04f0dE8c23c2176cd9D",
   },
 
-  /** README, Monad integration. The explorer segment shows pot 0's, "Anniversary". */
+  /** README, Monad integration. Every one is also a row there; facts.test.ts checks the two agree. */
   hashes: {
-    claim: "0xcf032c4555429aa1dacf086276a7d880fa587ed3bfbc5457137697ed9bd6fcdf",
-    createPot: "0x6d1d6bdc5a942458c994e2735a684fb5b0665d77a692c3763c33f2962495199c",
-    fundWithPermit: "0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe",
-    /** The $25 send in the bounty take: from View receipt on phone A. */
-    send: null as string | null,
-    /** The exchange through Agora's pair in the bounty take. */
-    swap: null as string | null,
-  },
-  explorer: {
-    potName: "Anniversary",
-    potMade: "9 Oct 2026",
-    firstPour: "$200",
+    /** Pot 0, "Anniversary", the showcase reviewers can open at any time. Not shown in the videos. */
+    showcase: {
+      claim: "0xcf032c4555429aa1dacf086276a7d880fa587ed3bfbc5457137697ed9bd6fcdf",
+      createPot: "0x6d1d6bdc5a942458c994e2735a684fb5b0665d77a692c3763c33f2962495199c",
+      fundWithPermit: "0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe",
+    },
+    /** From the recorded takes: copied from the app's own Receipt links right after each take (SHOTLIST.md). */
+    take: {
+      /** Mama's 60th being made (M03): the story's first row, Receipt. */
+      createPot: null as string | null,
+      /** Eddy's $500 into Mama's 60th (M04): its story row, Receipt. */
+      fundWithPermit: null as string | null,
+      /** The $25 send in the bounty take: View receipt on phone A (B06). */
+      send: null as string | null,
+      /** The exchange through Agora's pair in the bounty take (B08). */
+      swap: null as string | null,
+    },
   },
 } as const;
+
+/** README, Monad integration: the row that holds each take hash. */
+export const README_ROWS: Record<keyof Facts["hashes"]["take"], string> = {
+  createPot: "CreatePot, Mama's 60th in the demo video",
+  fundWithPermit: "FundWithPermit, Eddy's $500 into Mama's 60th in the demo video",
+  send: "Send dollars, a plain AUSD payment to another person",
+  swap: "Send in another currency, the exchange through Agora's pair",
+};
 
 export type Facts = typeof FACTS;
 

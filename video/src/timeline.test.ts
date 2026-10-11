@@ -19,7 +19,7 @@ test("a caption may not hold an en or em dash, a typed digit or an unknown fact"
   assert.match(textProblems("Pays {pot.nope}", "technical", false).join(), /not in facts\.ts/);
   assert.equal(resolve("Fee {pot.caterer.fee}"), "Fee $3.00");
   assert.equal(resolve("Settled in {measured.sendSettle}"), `Settled in ${NOT_MEASURED}`);
-  assert.equal(resolve("{hashes.createPot|short}"), "0x6d1d...199c");
+  assert.equal(resolve("{hashes.showcase.createPot|short}"), "0x6d1d...199c");
 });
 
 test("crypto words never; Monad, AUSD and transaction hash in technical captions only; chain words on the explorer only", () => {

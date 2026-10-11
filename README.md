@@ -236,6 +236,8 @@ block, then the first `Funded` log for pot 0 after it.
 | FundWithPermit, the first deposit in pot 0 | [`0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe`](https://testnet.monadvision.com/tx/0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe) | 69,611,378 | 9 Oct 2026, 18:31:36 | `fundWithPermit` from a second app account, `0x97936c44214231002051A601e2065732382Df8b4`: the permit's `Approval`, the AUSD `Transfer` and `Funded` for $200, in one request |
 | Send dollars, a plain AUSD payment to another person | [PLACEHOLDER: fill in after the phone test] | | | |
 | Send in another currency, the exchange through Agora's pair | [PLACEHOLDER: fill in after the phone test] | | | |
+| CreatePot, Mama's 60th in the demo video | [PLACEHOLDER: fill in after the recording] | | | |
+| FundWithPermit, Eddy's $500 into Mama's 60th in the demo video | [PLACEHOLDER: fill in after the recording] | | | |
 
 Pot 0 has had two more since, on 10 Oct 2026: a second $200 put in by its
 maker
@@ -245,6 +247,12 @@ maker
 08:34:05 UTC), which is waiting for its second yes. It holds $400. Neither
 account has sent a plain AUSD payment or used Agora's pair yet, so those two
 rows wait for the phone test.
+
+The two demo video rows are the Mama's 60th made on camera for the technical
+demo, whose explorer segment shows them. They are copied from the app's own
+Receipt links right after that take ([video/SHOTLIST.md](video/SHOTLIST.md),
+After recording), and `video/src/facts.test.ts` fails unless each matches
+`video/src/facts.ts`. Pot 0 stays the showcase reviewers can open.
 
 ## Contract addresses
 

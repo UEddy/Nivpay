@@ -299,11 +299,33 @@ Record from 2 s before each shot's first step to the end of its hold.
 
 ## Explorer, on the PC: E01 to E03
 
-Any time after M03; free to retake. Record the Chrome window only (Windows:
-Win+Alt+R records the focused window), 1920x1080, in a **guest window** (no
-profile, no bookmarks bar, no extensions, no other tabs). Page zoom 125
-percent so text reads at phone size. Each page loaded before recording
-starts, then scroll slowly.
+The explorer shows the Mama's 60th made in this take, not pot 0 (pot 0 stays
+in the README as the showcase). Do this right after M16, while phone A is
+still on Eddy, so the links are this take's.
+
+### Getting the take's two links to the PC (off camera)
+
+1. Phone A, Eddy: Mama's 60th, See the pot's story. Wait until "Loading
+   earlier history" is gone.
+2. Find the row for the pot being made (the oldest, at the bottom) and the
+   row for Eddy's $500. Each has a **Receipt** link: the app's own link to
+   that transaction on MonadVision.
+3. Long-press each Receipt link, **Copy link address** (Chrome's own menu, not
+   the share sheet), and paste each into the chat to yourself, one message
+   per link.
+4. On the PC, open that chat (desktop app or web), copy the two links, and
+   close the chat window before recording. Each link ends in the
+   transaction hash after `/tx/`.
+5. Paste each hash into `src/facts.ts` now: `hashes.take.createPot` and
+   `hashes.take.fundWithPermit`. Fill the README rows in the same sitting
+   ([After recording](#after-recording)).
+
+### Recording the PC
+
+Free to retake. Record the Chrome window only (Windows: Win+Alt+R records the
+focused window), 1920x1080, in a **guest window** (no profile, no bookmarks
+bar, no extensions, no other tabs). Page zoom 125 percent so text reads at
+phone size. Each page loaded before recording starts, then scroll slowly.
 
 ### E01. The pot contract
 
@@ -312,25 +334,25 @@ starts, then scroll slowly.
 - **Steps:** hold on the header with the address; open the contract tab to
   show the verified source.
 - **Hold:** 8 s in all.
-- **Used in:** technical-demo explorer-contract.
-- **Not on screen:** a sign-in, the browser's profile picture, other tabs.
+- **Used in:** technical-demo explorer-contract ("The contract on Monad that
+  holds the pot we just made").
+- **Not on screen:** a sign-in, the browser's profile picture, other tabs,
+  the chat window.
 
 ### E02. CreatePot
 
 - **Clip:** `explorer-pc`. **PC.**
-- **Page:** https://testnet.monadvision.com/tx/0x6d1d6bdc5a942458c994e2735a684fb5b0665d77a692c3763c33f2962495199c
-- **Steps:** the transaction summary, then its logs with `PotCreated` (pot 0,
-  "Anniversary").
+- **Page:** the first link from the phone (the pot being made).
+- **Steps:** the transaction summary, then its logs with `PotCreated`.
 - **Hold:** 8 s.
-- **Used in:** technical-demo explorer-create. Its caption names the pot as
-  Anniversary, made 9 Oct 2026, because that is what this transaction made.
+- **Used in:** technical-demo explorer-create ("the pot we just made").
 
 ### E03. FundWithPermit
 
 - **Clip:** `explorer-pc`. **PC.**
-- **Page:** https://testnet.monadvision.com/tx/0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe
+- **Page:** the second link from the phone (Eddy's $500).
 - **Steps:** the summary, then the logs: the permit's Approval, the AUSD
-  Transfer and Funded for $200.
+  Transfer and Funded for $500.
 - **Hold:** 8 s.
 - **Used in:** technical-demo explorer-fund.
 
@@ -380,12 +402,16 @@ passes. Record both phones from B01 to the end of B08 (mobile data on one).
 ### B04. Eddy opens the request and reviews
 
 - **Clip:** `bounty-A`. **Phone A, Eddy.**
-- **Steps:** open the link from the chat; Send dollars, "Maya asked you to
-  pay them", 25 filled in; Review.
-- **End:** Check and send: To Maya, Amount $25, Fee "None. NivPay covers
+- **Steps:** open the link from the chat; Send dollars with 25 filled in.
+  Stop on **"Sending to account ending ####"** and hold, so the last four
+  characters of Maya's account can be read; then Review.
+- **End:** the Check and send sheet: Amount $25, Fee "None. NivPay covers
   it."
-- **Hold:** 3 s on the sheet.
-- **Used in:** agora-bounty review.
+- **Hold:** 3 s on "Sending to account ending ####", then 3 s on the sheet.
+- **Used in:** agora-bounty review ("Sending to the account ending ####", the
+  confirm step).
+- **Check:** the four characters match the end of Maya's address on phone B
+  (Account details), off camera.
 
 ### B05. Send and receive (two phones)
 
@@ -393,8 +419,7 @@ passes. Record both phones from B01 to the end of B08 (mobile data on one).
   Receive.**
 - **Steps:** on A, Send $25, fingerprint. Do not touch B.
 - **End:** A: Payment final, "Sent $25 to Maya. Settled in 0.Xs.", View
-  receipt. B: +$25.00, "From account ending" and four characters, "Just
-  arrived"; Your balance $25.00.
+  receipt. B: +$25.00, "Just arrived"; Your balance $25.00.
 - **Hold:** 6 s on both (the bounty cut pushes in on A's Settled in line).
 - **Used in:** agora-bounty send-receive (never sped up) and settled-line.
 
@@ -460,12 +485,28 @@ Fill these in `src/facts.ts` from the footage, never from memory, then run
 | --- | --- |
 | `measured.claimSettle` | B02, the Settled in figure, as shown (for example `0.7s`) |
 | `measured.sendSettle` | B05, phone A |
-| `measured.senderLastFour` | B05, phone B, "From account ending" |
+| `measured.recipientLastFour` | B04, phone A, "Sending to account ending ####" |
 | `measured.otherCurrencyReceived` | B08, phone A, "They received" (for example `10.00 CTK`) |
 | `measured.otherCurrencyRate` | B07, the Rate line on Check and send |
 | `measured.otherCurrencySettle` | B08, phone A |
-| `hashes.send` | B06, the transaction hash on MonadVision |
-| `hashes.swap` | B08, View receipt, off camera |
+| `hashes.take.createPot` | after M16, the Receipt link of the pot being made |
+| `hashes.take.fundWithPermit` | after M16, the Receipt link of Eddy's $500 |
+| `hashes.take.send` | B06, the transaction hash on MonadVision |
+| `hashes.take.swap` | B08, View receipt, off camera |
 
-The two hashes also fill the two `[PLACEHOLDER: fill in after the phone test]`
-rows under Monad integration in the README.
+Every take hash also goes into its row under Monad integration in the README,
+in the same sitting: replace the row's `[PLACEHOLDER: ...]` with the hash
+linked to `https://testnet.monadvision.com/tx/<hash>`, and fill the block,
+the time (UTC) and what it shows, read from MonadVision. The rows:
+
+| Fact | README row |
+| --- | --- |
+| `hashes.take.createPot` | CreatePot, Mama's 60th in the demo video |
+| `hashes.take.fundWithPermit` | FundWithPermit, Eddy's $500 into Mama's 60th in the demo video |
+| `hashes.take.send` | Send dollars, a plain AUSD payment to another person |
+| `hashes.take.swap` | Send in another currency, the exchange through Agora's pair |
+
+The test `the README and facts.ts agree on every take hash` fails while a hash
+is in one and not the other, or differs. (The app's own
+`app/src/docs.test.ts` counts the two Send rows' placeholders, so update its
+count when those two are filled.)

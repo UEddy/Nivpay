@@ -18,8 +18,8 @@ For the Agora bounty judges. The three things they look for (passkey onboarding,
 | 24.5 to 29.5 s | B02 | Phone A, Add test dollars: Getting your account ready, fingerprint, Adding test dollars. (one phone; Sped up x2) | Add test dollars |  |
 | 29.5 to 34.5 s | B02 | Phone A: Added $10,000 test dollars. Settled in 0.Xs. Dollars $10,000.00. (one phone; never sped up; proves balance) | $10,000 in AUSD. Settled in [not measured yet] | Test dollars from Agora's faucet, not real money |
 | 34.5 to 42.5 s | B03 | Phone B, Maya's Receive: Amount to ask for 25, Copy link, paste it into the chat to phone A. (one phone) | Maya asks for $25 with a link |  |
-| 42.5 to 52.5 s | B04 | Phone A: open the link, Send dollars with 25 filled in, Review: To Maya, Amount $25, Fee None. (one phone) | To Maya, $25, no fee | NivPay covers the fee |
-| 52.5 to 64.5 s | B05 | Both phones in step: A sends $25 with the fingerprint to Payment final; B shows +$25.00 from account ending, Just arrived. (both phones side by side; never sped up; proves settled) Labels: Eddy sends / Maya receives. | Sent and received. Settled in [not measured yet] | From the account ending [not measured yet] |
+| 42.5 to 52.5 s | B04 | Phone A: open the link, Send dollars with 25 filled in, Sending to account ending ####, Review: Amount $25, Fee None. (one phone) | Sending to the account ending [not measured yet] | $25, no fee. NivPay covers it |
+| 52.5 to 64.5 s | B05 | Both phones in step: A sends $25 with the fingerprint to Payment final; B shows +$25.00 from account ending, Just arrived. (both phones side by side; never sped up; proves settled) Labels: Eddy sends / Maya receives. | Sent and received. Settled in [not measured yet] | Maya's balance: $25.00 |
 | 64.5 to 68.5 s | B05 | Phone A, held on Payment final: Sent $25 to Maya. Settled in 0.Xs. (one phone; never sped up; pushed in) | Settled in [not measured yet], measured on the phone |  |
 | 68.5 to 78.5 s | B06 | Phone A, View receipt: MonadVision opens the transfer of 25 AUSD to Maya's account, finalized. (explorer) | The receipt on Monad: $25 in AUSD | Transaction hash [not measured yet] |
 | 78.5 to 90.5 s | B07 | Phone A: the same request link, How much 10, They receive CTK, the line on what CTK is, Review. (one phone) | Pay in another currency: CTK | CTK is a test currency from Agora, standing in for a local currency |
@@ -51,9 +51,9 @@ Mama's 60th in the real app, then one explorer segment on the PC. Monad, AUSD an
 | 120.0 to 130.0 s | M14 | B: Maya, Take my $46.24, coin to Houston. A: Eddy, Take my $57.80, coin to London. (both phones side by side) Labels: Eddy takes $57.80 / Maya takes $46.24. | Each person takes their own share |  |
 | 130.0 to 136.0 s | M15 | Phone B, Daniel: Take my $11.56, the pot holds $0.00. (one phone) | Daniel takes $11.56. Nothing is left, to the cent |  |
 | 136.0 to 145.0 s | M16 | Phone A, Eddy: See the pot's story, then the replay button: the whole story in about 7 s. (one phone) | Every step, replayed |  |
-| 145.0 to 153.0 s | E01 | PC, MonadVision: the NivPayPots on AUSD contract page, verified source. (explorer) | The pot contract on Monad. No owner, no upgrade | 0xB9E6...9EfB |
-| 153.0 to 161.0 s | E02 | PC, MonadVision: the CreatePot transaction for pot 0, Anniversary, its PotCreated log. (explorer) | CreatePot: the pot named Anniversary, made 9 Oct 2026 | Transaction hash 0x6d1d...199c |
-| 161.0 to 169.0 s | E03 | PC, MonadVision: the FundWithPermit transaction, the Approval, the AUSD Transfer and Funded for $200 in one. (explorer) | FundWithPermit: $200 in AUSD with one signature | Blocks land about 300 ms apart |
+| 145.0 to 153.0 s | E01 | PC, MonadVision: the NivPayPots on AUSD contract page that holds the pot just made, verified source. (explorer) | The contract on Monad that holds the pot we just made. No owner, no upgrade | 0xB9E6...9EfB |
+| 153.0 to 161.0 s | E02 | PC, MonadVision: the CreatePot transaction of the Mama's 60th just made, from its Receipt link, and its PotCreated log. (explorer) | CreatePot: the pot we just made, Mama's 60th | Transaction hash [not measured yet] |
+| 161.0 to 169.0 s | E03 | PC, MonadVision: Eddy's FundWithPermit into the pot just made, from its Receipt link: the Approval, the AUSD Transfer and Funded for $500 in one. (explorer) | FundWithPermit: Eddy's $500 into the pot we just made, with one signature | Transaction hash [not measured yet]. Blocks land about 300 ms apart |
 | 169.0 to 173.0 s | card | End card. (card) | NivPay / Pool money with people you trust. Nobody can pocket it. / the link |  |
 
 ## x-launch

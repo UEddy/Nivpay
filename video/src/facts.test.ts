@@ -1,11 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { copy } from "../../app/src/copy.ts";
 import { formatAmount } from "../../app/src/lib/money.ts";
 import { feeFor } from "../../app/src/lib/payout.ts";
 import { replaySteps } from "../../app/src/lib/story.ts";
 import type { PotEvent } from "../../app/src/lib/feed.ts";
-import { fact, FACTS, nullFacts, shortHex } from "./facts.ts";
+import { fact, FACTS, nullFacts, README_ROWS, shortHex } from "./facts.ts";
 
 const doc = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
@@ -103,10 +104,9 @@ test("the names, cities, pot and closing time are docs/SEEDING.md's and docs/DEM
 test("every address and hash is the README's, and the measured block time is the map's", () => {
   const README = doc("README.md");
   for (const [k, a] of Object.entries(FACTS.contracts)) assert.ok(README.includes(`[\`${a}\`](https://testnet.monadvision.com/address/${a})`), k);
-  for (const [k, h] of Object.entries(FACTS.hashes)) if (h !== null) assert.ok(README.includes(`[\`${h}\`](https://testnet.monadvision.com/tx/${h})`), k);
-  assert.match(README, new RegExp(`CreatePot, pot 0.*"${FACTS.explorer.potName}"`));
-  assert.match(README, /`Funded` for \$200/);
-  assert.equal(FACTS.explorer.firstPour, "$200");
+  for (const [k, h] of Object.entries(FACTS.hashes.showcase)) assert.ok(README.includes(`[\`${h}\`](https://testnet.monadvision.com/tx/${h})`), k);
+  // Pot 0 stays in the README as the showcase.
+  assert.match(README, /^\| CreatePot, pot 0 \|/m);
   assert.match(doc("docs/APP-CONTRACT-MAP.md"), /\*\*Block time: 0\.31 s\.\*\*/);
   assert.equal(FACTS.chain.blockTime, "about 300 ms");
 });
@@ -117,6 +117,43 @@ test("fact() reads a path, says null for unmeasured and undefined for unknown; n
   assert.equal(fact("pot.nothing"), undefined);
   assert.equal(fact("pot"), undefined);
   assert.deepEqual(nullFacts({ a: { b: null, c: "x" }, d: null }), ["a.b", "d"]);
-  assert.ok(nullFacts().includes("hashes.send"));
-  assert.equal(shortHex(FACTS.hashes.createPot), "0x6d1d...199c");
+  assert.ok(nullFacts().includes("hashes.take.send"));
+  assert.equal(shortHex(FACTS.hashes.showcase.createPot), "0x6d1d...199c");
+});
+
+/** What disagrees between the README's take rows and facts.ts. Empty when they agree. */
+function takeRowProblems(readme: string, take: Record<string, string | null>): string[] {
+  const section = readme.slice(readme.indexOf("## Monad integration"), readme.indexOf("## Contract addresses"));
+  const out: string[] = [];
+  for (const [key, name] of Object.entries(README_ROWS)) {
+    const row = section.split("\n").find((l) => l.startsWith(`| ${name} |`));
+    const h = take[key] ?? null;
+    const link = h === null ? "" : `[\`${h}\`](https://testnet.monadvision.com/tx/${h})`;
+    if (!row) out.push(`${key}: no README row "${name}"`);
+    else if (h === null && !row.includes("[PLACEHOLDER:")) out.push(`${key}: null in facts.ts but the README row is filled in`);
+    else if (h !== null && row.includes("[PLACEHOLDER:")) out.push(`${key}: the README row still says PLACEHOLDER`);
+    else if (h !== null && !row.includes(link)) out.push(`${key}: facts.ts and the README row differ`);
+  }
+  return out;
+}
+
+test("the README and facts.ts agree on every take hash: both blank, or both the same hash", () => {
+  assert.deepEqual(takeRowProblems(doc("README.md"), FACTS.hashes.take), []);
+  const h = `0x${"ab".repeat(32)}`;
+  const g = `0x${"cd".repeat(32)}`;
+  const doc_ = (rows: string[]) => ["## Monad integration", ...rows, "## Contract addresses"].join("\n");
+  const filled = (name: string, x: string) => `| ${name} | [\`${x}\`](https://testnet.monadvision.com/tx/${x}) | 1 | t | w |`;
+  const blank = (name: string) => `| ${name} | [PLACEHOLDER: fill in after the recording] | | | |`;
+  const rest = [README_ROWS.fundWithPermit, README_ROWS.send, README_ROWS.swap].map(blank);
+  const none = { createPot: null, fundWithPermit: null, send: null, swap: null };
+  assert.deepEqual(takeRowProblems(doc_([filled(README_ROWS.createPot, h), ...rest]), { ...none, createPot: h }), []);
+  assert.match(takeRowProblems(doc_([filled(README_ROWS.createPot, h), ...rest]), none).join(), /null in facts\.ts but the README row is filled in/);
+  assert.match(takeRowProblems(doc_([blank(README_ROWS.createPot), ...rest]), { ...none, createPot: h }).join(), /still says PLACEHOLDER/);
+  assert.match(takeRowProblems(doc_([filled(README_ROWS.createPot, g), ...rest]), { ...none, createPot: h }).join(), /differ/);
+  assert.match(takeRowProblems(doc_(rest), none).join(), /no README row/);
+});
+
+test("the confirm step is the app's own sheet: Sending to account ending and the last four", () => {
+  const id = "0x00000000000000000000000000000000000AbCd1";
+  assert.equal(copy.sendingTo(copy.accountEnding(id)), "Sending to account ending bCd1");
 });

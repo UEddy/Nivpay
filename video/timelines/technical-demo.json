@@ -168,28 +168,28 @@
       "id": "explorer-contract",
       "shot": "E01",
       "kind": "explorer",
-      "plan": "PC, MonadVision: the NivPayPots on AUSD contract page, verified source",
+      "plan": "PC, MonadVision: the NivPayPots on AUSD contract page that holds the pot just made, verified source",
       "take": { "clip": null, "in": 0, "out": 8 },
-      "caption": "The pot contract on Monad. No owner, no upgrade",
+      "caption": "The contract on Monad that holds the pot we just made. No owner, no upgrade",
       "callout": "{contracts.potsAusd|short}"
     },
     {
       "id": "explorer-create",
       "shot": "E02",
       "kind": "explorer",
-      "plan": "PC, MonadVision: the CreatePot transaction for pot 0, Anniversary, its PotCreated log",
+      "plan": "PC, MonadVision: the CreatePot transaction of the Mama's 60th just made, from its Receipt link, and its PotCreated log",
       "take": { "clip": null, "in": 0, "out": 8 },
-      "caption": "CreatePot: the pot named {explorer.potName}, made {explorer.potMade}",
-      "callout": "Transaction hash {hashes.createPot|short}"
+      "caption": "CreatePot: the pot we just made, {pot.name}",
+      "callout": "Transaction hash {hashes.take.createPot|short}"
     },
     {
       "id": "explorer-fund",
       "shot": "E03",
       "kind": "explorer",
-      "plan": "PC, MonadVision: the FundWithPermit transaction, the Approval, the AUSD Transfer and Funded for $200 in one",
+      "plan": "PC, MonadVision: Eddy's FundWithPermit into the pot just made, from its Receipt link: the Approval, the AUSD Transfer and Funded for $500 in one",
       "take": { "clip": null, "in": 0, "out": 8 },
-      "caption": "FundWithPermit: {explorer.firstPour} in AUSD with one signature",
-      "callout": "Blocks land {chain.blockTime} apart"
+      "caption": "FundWithPermit: {cast.eddy.name}'s {pot.pours.eddy} into the pot we just made, with one signature",
+      "callout": "Transaction hash {hashes.take.fundWithPermit|short}. Blocks land {chain.blockTime} apart"
     },
     {
       "id": "end",
