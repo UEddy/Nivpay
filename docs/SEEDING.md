@@ -77,7 +77,7 @@ Accounts that already exist (pot 0's people, read on chain 11 Oct 2026):
 
 | Account | Phone | Short ID | Address | For |
 | --- | --- | --- | --- | --- |
-| Phone A account | A, Galaxy S24 | ending 7bC1 | `0x725C9cd75b2C8C29AEbf6a14eE84a3b54C787bC1` | Made pot 0 and is one of its two deciders. Has sent 10 requests, so it gets no more gas grants (0.0149 MON left): use it only to be paid. Payee of "Test close" in R1 |
+| Phone A account | A, Galaxy S24 | ending 7bC1 | `0x725C9cd75b2C8C29AEbf6a14eE84a3b54C787bC1` | Made pot 0 and is one of its two deciders. Has sent 10 requests (0.0149 MON left); under the limit of 30 it gets gas grants again, but it stays only the payee of "Test close" in R1 |
 | Phone B account | B, Galaxy S10 | ending f8b4 | `0x97936c44214231002051A601e2065732382Df8b4` | Pot 0's second decider. 2 sent, $9,850. Makes "Test close" in R1 |
 | Third test account | [FILL IN: which phone] | ending 0B61 | `0xa5057F32DB2a6f68F69ad1587014AbF101A20B61` | Pot 0's payee, "Carter". 1 sent, $10,000. Second decider of "Test close" in R1 |
 
@@ -131,7 +131,7 @@ reviewers at a different pot in SUBMISSION.md.
 | A request asked | nothing in the app; it waits 7 days, then expires | a fresh pot |
 | A yes that makes 2 of 3 | nothing; the payment or the close happens at once | a fresh pot |
 | A pot closed | nothing; it can't be reopened | a fresh pot |
-| A request sent, of any kind | nothing; it counts toward the 10 that end gas grants | a fresh account once near 10 |
+| A request sent, of any kind | nothing; it counts toward the 30 that end gas grants | a fresh account once near 30 |
 | A payment to Maya (2 min) | nothing; it shows under Payments in | a fresh Maya |
 
 Phone side, which can be undone: site data (accounts list, drafts, saved
@@ -152,27 +152,31 @@ sit next to the old one on Home, and the balances would not match.
 4. Change the addresses and the pot number in the config, and run the take's
    preflight.
 
-What each run uses:
+What each run uses. Fresh accounts are for what shows on screen (no old pot
+on Home, balances that match the script), not for gas: with the limit at 30
+sent, no account in a run comes near it.
 
-| Run | Fresh accounts | Faucet claims (test AUSD) | Gas grants (MON) |
-| --- | ---: | --- | --- |
-| Main cut, full or one section | 5 | 3 (30,000), off camera | 4 (0.4) |
-| 2 minute cut | 2 | 1 (10,000), on camera | 1 (0.1) |
-| R1, Test close | 0 | 0 | up to 2 (0.2) |
+| Run | Fresh accounts | Faucet claims (test AUSD) | Gas grants (MON) | Most sent by one account |
+| --- | ---: | --- | --- | ---: |
+| Main cut, full or one section | 5 | 3 (30,000), off camera | 4 (0.4): Eddy 2, Maya 1, Daniel 1 | 6 (Eddy) |
+| 2 minute cut | 2 | 1 (10,000), on camera | 1 (0.1) | 5 (Eddy) |
+| R1, Test close | 0 | 0 | up to 2 (0.2) | 4 (Phone B account) |
 
-For a rehearsal plus N takes of both cuts: 7 x (N + 1) fresh accounts,
-4 x (N + 1) claims, and 5 x (N + 1) + 2 grants. Each grant also costs the
-funder about 0.002 MON of its own gas.
+One rehearsal plus one final take of each cut, with R1 once:
 
-| Session | Fresh accounts | Claims (test AUSD) | Grants | Funder MON needed |
-| --- | ---: | --- | ---: | --- |
-| Rehearsal + 1 take | 14 | 8 (80,000) | 12 | 1 floor + 1.2 + 0.03 = 2.3 |
-| Rehearsal + 2 takes | 21 | 12 (120,000) | 17 | 1 floor + 1.7 + 0.04 = 2.8 |
-| Rehearsal + 3 takes | 28 | 16 (160,000) | 22 | 1 floor + 2.2 + 0.05 = 3.3 |
+| Part | Runs | Fresh accounts | Claims (test AUSD) | Grants (MON) |
+| --- | ---: | ---: | --- | --- |
+| Main cut | 2 | 10 | 6 (60,000) | 8 (0.8) |
+| 2 minute cut | 2 | 4 | 2 (20,000) | 2 (0.2) |
+| R1 | 1 | 0 | 0 | up to 2 (0.2) |
+| **Session** | | **14** | **8 (80,000)** | **12 (1.2)** |
 
-The funder may make at most 20 grants an hour in all (anyone's, not only
-yours). Rehearsal plus 2 takes uses 17: spread it over more than an hour, or
-the last grants are refused with Code 13 until the hour rolls on.
+Each grant also costs the funder about 0.002 MON of its own gas, 0.024 for
+12. The funder needs at least 1 MON floor + 1.2 + 0.024 = **2.3 MON** before
+the session. 12 grants fit under the 20 an hour the funder makes in all
+(anyone's, not only yours); a session with more takes that goes past 20 in
+an hour is refused with Code 13 until the hour rolls on. Each further take
+of both cuts adds 7 fresh accounts, 4 claims and 5 grants (0.5 MON).
 
 ## Test money
 
@@ -200,7 +204,9 @@ preflight.
 
 Every sent request is paid for in MON from a gas grant of 0.1 MON, which the
 app asks for when the account holds under 0.075 MON and has sent fewer than
-10 requests. Before the session, open
+30 requests (`MAX_SENT_TXS` in `app/api/fund/index.ts`). A full take sends at
+most 6 from one account, so the limit never decides a take: fresh accounts
+are for what shows on screen. Before the session, open
 `https://nivpay.vercel.app/api/fund/status`: `"enabled": true`,
 `"keyMatches": true`, and the funder balance at least the figure in the table
 under [Retakes](#retakes). It held 3.19 MON on 11 Oct 2026 at 11:35 UTC.
@@ -449,14 +455,15 @@ ones with other pots on their Home.
 ### Who
 
 * Maker and first decider: the Phone B account (ending f8b4). After seeding
-  it must have sent 8 requests or fewer, so asking to close and taking its
-  share still come under the gas grant limit of 10.
+  it must have sent 28 requests or fewer, so asking to close and taking its
+  share still come under the gas grant limit of 30.
 * Second decider: the third test account (ending 0B61), which says yes.
 * Payee: the Phone A account (ending 7bC1), labelled **Test payee**, up to
-  $10. It has sent 10 requests, so it only receives.
+  $10. Being paid sends nothing.
 
-R1 can be run twice on these accounts; after that the Phone B account is at
-10 sent and needs a fresh account in its place.
+A run of R1 sends 4 from the Phone B account (make the pot, pour in, ask to
+close, take its share) and 1 from the third account. From 2 and 1 sent on
+11 Oct 2026, R1 can run 7 times before the Phone B account reaches 30.
 
 Starting state: "Test close" holds **$20.00**, all from the Phone B account
 (its share $20.00, the third account's $0.00), open, not frozen, 2 of 2,

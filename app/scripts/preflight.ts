@@ -344,11 +344,12 @@ export const TAKES: Take[] = [
     title: 'Rehearsal R1: early close and take-share on the throwaway "Test close" pot (never recorded)',
     section: "R1",
     // Older accounts whose balances move between sessions: only their room for the
-    // rehearsal is checked. The Phone A account is only the payee: it had sent 10
-    // requests by 11 Oct 2026, so it gets no more gas grants, and being paid sends nothing.
+    // rehearsal is checked. After seeding, the maker still asks to close and takes
+    // its share (2 more), the second decider says yes (1 more). The Phone A
+    // account is only the payee, and being paid sends nothing.
     accounts: [
-      { role: "phoneB", sent: { atMost: 8 }, fix: 'make the pot from another account (SEEDING.md R1, "Who")' },
-      { role: "third", sent: { atMost: 9 }, fix: 'use another second decider (SEEDING.md R1, "Who")' },
+      { role: "phoneB", sent: { atMost: MAX_SENT - 2 }, fix: 'make the pot from another account (SEEDING.md R1, "Who")' },
+      { role: "third", sent: { atMost: MAX_SENT - 1 }, fix: 'use another second decider (SEEDING.md R1, "Who")' },
     ],
     pots: [
       SHOWCASE,
