@@ -11,6 +11,23 @@ hall (up to $300), and 2 of 3 must say yes. Idara puts in $500, Ubong $400,
 Aniekan $100. The Caterer is paid $600 and the hall $280. Idara asks to
 close early, Ubong agrees, and each takes their share of the $115.60 left.
 
+## Seeding and the preflight
+
+[SEEDING.md](SEEDING.md) is the checklist for putting the phones and the
+chain in each take's exact starting state: the cast and their addresses, the
+seeding steps for every take below (M1 to M5 for the main cut, B1 for the 2
+minute path, R1 to rehearse closing on a throwaway pot so pot 0 is never
+closed), what can't be undone, and how many fresh accounts, test dollars and
+gas grants a session needs. Before each take, from `app/`:
+
+```
+node scripts/preflight-take.mjs main-make
+```
+
+It reads the chain, sends nothing, and prints PASS or FAIL for every balance,
+pot and request the take expects, with the SEEDING.md step that fixes each
+failure.
+
 ## Before you record
 
 * `https://nivpay.vercel.app/api/fund/status` answers `"enabled": true` and
@@ -238,7 +255,9 @@ setup, the allowance and the exchange behind one fingerprint) and gets one
 gas grant, before the claim. Ubong sends none: receiving sends nothing. A
 second take on the same Idara account would end at 10 sent, the gas grant
 limit, and would not show the one-time setup, so every take needs a new
-sender. Ubong can stay. Between takes: delete phone A's site data and
+sender. Ubong could stay, but his Payments in list and balance would carry
+the last take's $25 and CTK, so [SEEDING.md](SEEDING.md) uses a new Ubong too.
+Between takes: delete phone A's site data and
 Idara's passkey as in [Between takes](#between-takes), and wait 60 s after
 the last claim.
 
