@@ -20,7 +20,8 @@ import { assertSameQuote, fromCurrencyLabel, quote, received, settlementCalls, s
 import { readSettlement } from "../lib/settleLive.ts";
 import { checkSend, SEND_LABEL, transferData, transferRefused } from "../lib/transfer.ts";
 import { followSequence, followToFinality, type PendingWrite } from "../lib/writes.ts";
-import { Icon, NoticeLine, Sheet, useOnline, type Notice } from "./ui.tsx";
+import { Icon, NoticeLine, Sheet, STOPPED, useCancellable, useOnline, type Notice } from "./ui.tsx";
+import { beforePasskey } from "../lib/cancel.ts";
 import { balanceNote } from "../lib/connection.ts";
 
 type Recipient = { account: Address; name: string };
@@ -79,6 +80,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
   shownRef.current = shown;
   otherSymbolRef.current = otherSymbol;
   const alive = useRef(true);
+  const running = useCancellable();
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -223,6 +225,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
     if (!to || !holding) return;
     setResult(null);
     setStep("preparing");
+    const run = running.start();
     try {
       const code = await readClient.getCode({ address: to.account });
       const problem = checkSend({ me, to: to.account, amount: amount ?? 0n, balance: holding.balance, decimals, recipientHasCode: (code?.length ?? 0) > 2 });
@@ -232,18 +235,19 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         if (await transferRefused(readClient, DOLLAR, me, SETTLEMENT_PAIR, amount!)) throw new AppError(copy.errSendRefused, ERROR_CODES.SEND_REFUSED);
         const { state, deadline } = await readSettlement(readClient, SETTLEMENT, me, amount!);
         const q = quote(state, amount!, deadline);
-        if (!alive.current) return;
+        if (!alive.current || run.signal.aborted) return;
         setShown(q);
         setSheetNotice(null);
         setConfirming(true);
         return;
       }
       if (await transferRefused(readClient, DOLLAR, me, to.account, amount!)) throw new AppError(copy.errSendRefused, ERROR_CODES.SEND_REFUSED);
-      if (alive.current) setConfirming(true);
+      if (alive.current && !run.signal.aborted) setConfirming(true);
     } catch (e) {
-      if (alive.current) setResult({ tone: "bad", ...(e instanceof AppError ? { text: e.message, code: e.code } : describeFailure(e)) });
+      if (alive.current && !run.signal.aborted) setResult({ tone: "bad", ...(e instanceof AppError ? { text: e.message, code: e.code } : describeFailure(e)) });
     } finally {
-      if (alive.current) setStep(null);
+      // Stopped by X: the screen already says so, and may have started again.
+      if (alive.current && !run.signal.aborted) setStep(null);
     }
   };
 
@@ -251,11 +255,20 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
     if (!to || amount === null) return;
     setConfirming(false);
     setResult(null);
-    const call = { from: me, to: DOLLAR, data: transferData(to.account, amount), label: labelFor(to.account, amount), onStep: (s: Step) => setStep(s) };
+    const run = running.start();
+    const call = {
+      from: me,
+      to: DOLLAR,
+      data: transferData(to.account, amount),
+      label: labelFor(to.account, amount),
+      signal: run.signal,
+      onStep: run.track((s: Step) => setStep(s)),
+    };
     try {
       const write = retry ? await retryStuckWrite(call) : await sendWrite(call);
       await land(write, to, amount);
     } catch (e) {
+      if (run.signal.aborted) return;
       setStep(null);
       setResult({ tone: "bad", ...describeFailure(e) });
     }
@@ -266,9 +279,11 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
     if (!to || amount === null || !shown) return;
     setSheetNotice(null);
     setStep("preparing");
+    const run = running.start();
     let fresh: Quote;
     try {
       const { state, deadline } = await readSettlement(readClient, SETTLEMENT, me, amount);
+      if (run.signal.aborted) return;
       fresh = quote(state, amount, deadline);
       try {
         assertSameQuote(shown, fresh);
@@ -278,6 +293,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         throw changed;
       }
     } catch (e) {
+      if (run.signal.aborted) return;
       setStep(null);
       setSheetNotice({ tone: "bad", ...(e instanceof AppError ? { text: e.message, code: e.code } : describeFailure(e)) });
       return;
@@ -285,9 +301,10 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
     setConfirming(false);
     setResult(null);
     try {
-      const write = await sendSequence(me, settlementCalls(SETTLEMENT, fresh, me, to.account), (st) => setStep(st), retry);
+      const write = await sendSequence(me, settlementCalls(SETTLEMENT, fresh, me, to.account), run.track((st: Step) => setStep(st)), retry, run.signal);
       await landSequence(write, to, amount, fresh.needsSetup);
     } catch (e) {
+      if (run.signal.aborted) return;
       setStep(null);
       setResult({ tone: "bad", ...describeFailure(e) });
     }
@@ -297,10 +314,19 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
   const other = (v: bigint) => (shown ? formatCurrency(v, shown.outDecimals, shown.outSymbol) : "");
   const symbol = otherSymbol ?? copy.anotherCurrency;
 
+  // X before the passkey stops the check or the send and stays, saying nothing was sent; otherwise it closes.
+  const stop = (say: (notice: Notice) => void) => {
+    if (running.cancel()) {
+      setStep(null);
+      say(STOPPED);
+    }
+  };
+  const closeOrStop = () => (beforePasskey(step) ? stop(setResult) : props.onClose());
+
   return (
     <div className="screen">
       <div className="bar">
-        <button type="button" className="icon-btn" aria-label={copy.close} onClick={props.onClose}>
+        <button type="button" className="icon-btn" aria-label={copy.close} onClick={closeOrStop}>
           <Icon name="close" size={22} />
         </button>
         <div className="bar-title">{copy.sendTitle}</div>
@@ -422,7 +448,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         )}
       </div>
       {confirming && to && amount !== null && currency === "other" && shown && (
-        <Sheet title={copy.confirmSendTitle} onClose={() => step === null && setConfirming(false)}>
+        <Sheet title={copy.confirmSendTitle} onClose={() => (beforePasskey(step) ? stop(setSheetNotice) : step === null && setConfirming(false))}>
           <div className="list">
             <div className="list-row">
               <div className="grow">

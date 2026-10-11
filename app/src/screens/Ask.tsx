@@ -12,7 +12,8 @@ import { rememberReceipt } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
-import { Icon, NoticeLine, Sheet, type Notice } from "./ui.tsx";
+import { Icon, NoticeLine, Sheet, STOPPED, useCancellable, type Notice } from "./ui.tsx";
+import { beforePasskey } from "../lib/cancel.ts";
 
 export type Asking = { payee: number; amount: bigint };
 
@@ -29,6 +30,7 @@ export function useAskFlow(me: Address, potId: bigint, onAsked: (proposalId: big
   const [stuck, setStuck] = useState<Asking | null>(null);
   const [result, setResult] = useState<Notice | null>(null);
   const alive = useRef(true);
+  const running = useCancellable();
   const askedRef = useRef(onAsked);
   askedRef.current = onAsked;
 
@@ -90,22 +92,32 @@ export function useAskFlow(me: Address, potId: bigint, onAsked: (proposalId: big
   const ask = async (what: Asking, facts: PotFacts, retry: boolean) => {
     setResult(null);
     setAsking(what);
+    const run = running.start();
     try {
       setStep("preparing");
       // Run it as a call first: a refusal costs no gas grant and no passkey prompt.
       const refusal = await refusalOf(readClient, POTS, me, askCall(potId, what.payee, what.amount), facts, what);
       if (refusal) throw refusal;
-      const call = { from: me, to: POTS, data: askData(potId, what.payee, what.amount), label: askLabel(potId), onStep: setStep };
+      const call = { from: me, to: POTS, data: askData(potId, what.payee, what.amount), label: askLabel(potId), signal: run.signal, onStep: run.track((s: Step) => setStep(s)) };
       const write = retry ? await retryStuckWrite(call) : await sendWrite(call);
       await land(write, what);
     } catch (e) {
-      if (!alive.current) return;
+      // Stopped: the sheet already says so.
+      if (!alive.current || run.signal.aborted) return;
       setStep(null);
       setResult({ tone: "bad", ...describeFailure(e) });
     }
   };
 
-  return { step, asking, stuck, result, resumable, ask };
+  /** Stops an ask that has not reached the passkey, and says nothing was sent. True when it stopped it. */
+  const stop = () => {
+    if (!beforePasskey(step) || !running.cancel()) return false;
+    setStep(null);
+    setResult(STOPPED);
+    return true;
+  };
+
+  return { step, asking, stuck, result, resumable, ask, stop };
 }
 
 /** The ask sheet: one of the pot's payees, an amount, and the fee before the asker's own yes. */
@@ -153,7 +165,8 @@ export function AskSheet(props: {
   const shownRefusal = view?.refusal && (text.trim() !== "" || view.refusal.code !== ERROR_CODES.PAY_NO_AMOUNT) ? view.refusal : null;
 
   return (
-    <Sheet title={copy.askForPayment} onClose={props.onClose}>
+    // Closing the sheet before the passkey stops the ask and keeps the sheet open, saying nothing was sent.
+    <Sheet title={copy.askForPayment} onClose={() => flow.stop() || beforePasskey(flow.step) || props.onClose()}>
       <p className="hint">{copy.askLede}</p>
       <div className="payee-choice" role="radiogroup" aria-label={copy.whoToPay}>
         {facts.payees.map((p, i) => (

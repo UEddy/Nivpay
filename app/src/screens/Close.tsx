@@ -24,7 +24,8 @@ import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { mapLines } from "./mapNames.ts";
 import { PotMap, type Coin, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { layersOf, peopleOf } from "./Request.tsx";
-import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, type Notice } from "./ui.tsx";
+import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, STOPPED, useCancellable, type Notice } from "./ui.tsx";
+import { beforePasskey } from "../lib/cancel.ts";
 
 type Action = "take" | "ask close";
 const FLIGHT_MS = 900;
@@ -58,6 +59,7 @@ export function CloseScreen(props: {
   const [announce, setAnnounce] = useState("");
   const [shareNote, setShareNote] = useState<string | null>(null);
   const alive = useRef(true);
+  const running = useCancellable();
   const myTx = useRef<Hex | null>(null);
   const openRequest = useRef(props.onOpenRequest);
   openRequest.current = props.onOpenRequest;
@@ -205,6 +207,7 @@ export function CloseScreen(props: {
     setActing(action);
     const myShares = state.shares[me.toLowerCase()] ?? 0n;
     const amount = state.held[me.toLowerCase()] ?? 0n;
+    const run = running.start();
     try {
       setStep("preparing");
       const take = takeView({ closed: state.closed, myShares, myWorth: amount });
@@ -218,19 +221,21 @@ export function CloseScreen(props: {
         to: POTS,
         data: dataOf(call),
         label: action === "take" ? takeLabel(potId) : askCloseLabel(potId),
-        onStep: (s: Step) => {
+        signal: run.signal,
+        onStep: run.track((s: Step) => {
           setStep(s);
           // The coin leaves the pot once the fingerprint has signed, and waits by the city until final.
           if (s === "sending" && action === "take") {
             setCoin("start");
             requestAnimationFrame(() => requestAnimationFrame(() => setCoin("hold")));
           }
-        },
+        }),
       };
       const write = retry ? await retryStuckWrite(req) : await sendWrite(req);
       await land(write, action, amount);
     } catch (e) {
-      if (!alive.current) return;
+      // Stopped by X: the screen already says so.
+      if (!alive.current || run.signal.aborted) return;
       setStep(null);
       setActing(null);
       setCoin(null);
@@ -238,9 +243,20 @@ export function CloseScreen(props: {
     }
   };
 
+  // Back before the passkey stops Close or Take my share and stays, saying nothing was sent; otherwise it goes back.
+  const backOrStop = () => {
+    if (!beforePasskey(step)) return props.onBack();
+    if (running.cancel()) {
+      setStep(null);
+      setActing(null);
+      setCoin(null);
+      setResult(STOPPED);
+    }
+  };
+
   const bar = (
     <div className="bar">
-      <button type="button" className="icon-btn" aria-label={copy.back} onClick={props.onBack}>
+      <button type="button" className="icon-btn" aria-label={copy.back} onClick={backOrStop}>
         <Icon name="back" size={22} />
       </button>
       <div className="bar-title">{state?.name ?? props.pot.name ?? copy.closeAndSplit}</div>

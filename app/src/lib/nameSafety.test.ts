@@ -23,7 +23,7 @@ test("the gas grant request carries the address and nothing else", () => {
 });
 
 test("the code that builds and signs requests never reads the account store", () => {
-  for (const name of ["send.ts", "writes.ts", "chain.ts", "permit.ts", "pour.ts", "payout.ts", "close.ts", "transfer.ts", "settle.ts", "passkey.ts"]) {
+  for (const name of ["send.ts", "writes.ts", "chain.ts", "permit.ts", "pour.ts", "payout.ts", "close.ts", "transfer.ts", "settle.ts", "passkey.ts", "passkeyCore.ts", "sendCore.ts", "cancel.ts"]) {
     const text = readFileSync(join(SRC, "lib", name), "utf8");
     assert.doesNotMatch(text, /accounts\.ts|StoredAccount|shownName/, name);
   }

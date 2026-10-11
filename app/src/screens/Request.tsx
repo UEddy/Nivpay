@@ -21,7 +21,8 @@ import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { initialsOf, mapLines } from "./mapNames.ts";
 import { usePayMotion } from "./payMotion.ts";
 import { PotMap, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
-import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, phoneTimeZone, shareLink, type Notice } from "./ui.tsx";
+import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, phoneTimeZone, shareLink, STOPPED, useCancellable, type Notice } from "./ui.tsx";
+import { beforePasskey } from "../lib/cancel.ts";
 
 type Action = "yes" | "take back";
 type Who = Person & { me: boolean };
@@ -90,6 +91,7 @@ export function RequestScreen(props: {
   const [now, setNow] = useState(() => Date.now());
   const { motion, run } = usePayMotion();
   const alive = useRef(true);
+  const stoppable = useCancellable();
   const myTx = useRef<Hex | null>(null);
 
   useEffect(() => {
@@ -256,6 +258,7 @@ export function RequestScreen(props: {
     setResult(null);
     setShareNote(null);
     setActing(action);
+    const run = stoppable.start();
     try {
       setStep("preparing");
       // Run it as a call first: a refusal costs no gas grant and no passkey prompt.
@@ -266,12 +269,14 @@ export function RequestScreen(props: {
         to: POTS,
         data: action === "yes" ? yesData(proposalId) : takeBackData(proposalId),
         label: action === "yes" ? yesLabel(proposalId) : takeBackLabel(proposalId),
-        onStep: setStep,
+        signal: run.signal,
+        onStep: run.track((s: Step) => setStep(s)),
       };
       const write = retry ? await retryStuckWrite(call) : await sendWrite(call);
       await land(write, action);
     } catch (e) {
-      if (!alive.current) return;
+      // Stopped by X: the screen already says so.
+      if (!alive.current || run.signal.aborted) return;
       setStep(null);
       setActing(null);
       setResult({ tone: "bad", ...describeFailure(e) });
@@ -280,9 +285,19 @@ export function RequestScreen(props: {
 
   const requestUrl = (block: bigint) => linkUrl(location.origin, { kind: "ask", deployment: props.pot.deployment, potId, block, proposalId });
 
+  // X before the passkey stops Say yes (or taking it back) and stays, saying nothing was sent; otherwise it closes.
+  const closeOrStop = () => {
+    if (!beforePasskey(step)) return props.onClose();
+    if (stoppable.cancel()) {
+      setStep(null);
+      setActing(null);
+      setResult(STOPPED);
+    }
+  };
+
   const bar = (
     <div className="bar">
-      <button type="button" className="icon-btn" aria-label={copy.close} onClick={props.onClose}>
+      <button type="button" className="icon-btn" aria-label={copy.close} onClick={closeOrStop}>
         <Icon name="close" size={22} />
       </button>
       <div className="bar-title">{copy.paymentRequest}</div>

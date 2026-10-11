@@ -81,6 +81,7 @@ const words = {
   upToAtATime: (max: string) => `Up to ${max} at a time.`,
   stepPreparing: "Getting ready…",
   stepGettingReady: "Getting your account ready…",
+  cancelledNothingSent: "Stopped. Nothing was sent.",
   slowPreparing: "Still checking your account and the pot. A slow connection can make this take a while. Nothing has been sent.",
   slowGettingReady: "Still getting your account ready to send. This can take a while. Nothing has been sent.",
   stepConfirm: "Confirm with your fingerprint",

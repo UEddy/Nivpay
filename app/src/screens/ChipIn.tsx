@@ -24,7 +24,8 @@ import { usePayMotion } from "./payMotion.ts";
 import { PotMap, type Coin, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { mapLines } from "./mapNames.ts";
 import { factsOf } from "./Request.tsx";
-import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, Sheet, useSlowStepLine, type Notice } from "./ui.tsx";
+import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, Sheet, STOPPED, useCancellable, useSlowStepLine, type Notice } from "./ui.tsx";
+import { beforePasskey } from "../lib/cancel.ts";
 
 const orList = new Intl.ListFormat("en-GB", { style: "long", type: "disjunction" });
 const FLIGHT_MS = 900;
@@ -92,6 +93,7 @@ export function ChipInScreen(props: {
   const [shareNote, setShareNote] = useState<string | null>(null);
   const [askOpen, setAskOpen] = useState(false);
   const alive = useRef(true);
+  const running = useCancellable();
   const myTx = useRef<Hex | null>(null);
   const { motion, run } = usePayMotion();
   // The feed's handler reads the numbers on screen without restarting the feed when they change.
@@ -298,6 +300,7 @@ export function ChipInScreen(props: {
     if (!state || amount === null) return;
     setResult(null);
     setShareNote(null);
+    const run = running.start();
     try {
       setStep("preparing");
       const terms = await readPermitTerms(state.asset, me, BigInt(Math.floor(Date.now() / 1000)));
@@ -306,19 +309,22 @@ export function ChipInScreen(props: {
         to: POTS,
         data: NO_DATA,
         label: `${POUR_LABEL} ${potId}`,
-        onStep: (s: Step) => {
+        signal: run.signal,
+        onStep: run.track((s: Step) => {
           setStep(s);
           // The flight starts once the fingerprint has signed, and holds at the rim until final.
           if (s === "sending") {
             setMyCoin("start");
             requestAnimationFrame(() => requestAnimationFrame(() => setMyCoin("hold")));
           }
-        },
+        }),
         presign: { gasHint: POUR_GAS_HINT, build: (signer: Parameters<typeof pourData>[0]) => pourData(signer, POTS, potId, amount, terms) },
       };
       const write = retry ? await retryStuckWrite(call) : await sendWrite(call);
       await land(write);
     } catch (e) {
+      // Stopped by X: the screen already says so.
+      if (run.signal.aborted) return;
       setStep(null);
       if (myCoin !== null) setMyCoin("back");
       setTimeout(() => alive.current && setMyCoin(null), FLIGHT_MS);
@@ -330,9 +336,18 @@ export function ChipInScreen(props: {
   const potText = useTicker(state?.totalAssets ?? null, decimals);
   const slowLine = useSlowStepLine(step);
 
+  // X before the passkey stops the pour and stays, saying nothing was sent; otherwise it closes.
+  const closeOrStop = () => {
+    if (!beforePasskey(step)) return props.onClose();
+    if (running.cancel()) {
+      setStep(null);
+      setResult(STOPPED);
+    }
+  };
+
   const close = (
     <div className="bar">
-      <button type="button" className="icon-btn" aria-label={copy.close} onClick={props.onClose}>
+      <button type="button" className="icon-btn" aria-label={copy.close} onClick={closeOrStop}>
         <Icon name="close" size={22} />
       </button>
       <div className="bar-title">{state?.name ?? props.pot.name}</div>

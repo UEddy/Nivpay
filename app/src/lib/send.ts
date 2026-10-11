@@ -1,38 +1,17 @@
-import { keccak256, type Address, type Hex, type LocalAccount } from "viem";
-import { CHAIN_ID } from "./config.ts";
+import type { Address, Hex } from "viem";
 import { waitForFinalized, liveWriteChain } from "./chain.ts";
 import { copy, ERROR_CODES } from "../copy.ts";
-import { NotEnoughGasError, SendFailure, setupFailure, type SendStage } from "./errors.ts";
+import { NotEnoughGasError, setupFailure } from "./errors.ts";
 import { idbWriteStore } from "./idb.ts";
 import { withSigner } from "./passkey.ts";
 import { readClient } from "./rpc.ts";
-import { nonceForNewWrite, nonceForReplacement, replace, submit, type PendingWrite, type SequenceCall, type SignedNext } from "./writes.ts";
+import * as core from "./sendCore.ts";
+import type { Call, Fees, SendDeps, Step } from "./sendCore.ts";
+import type { PendingWrite, SequenceCall } from "./writes.ts";
 
-export type Step = "preparing" | "getting-ready" | "confirm" | "sending";
+export type { Call, Step };
 
-type Call = {
-  from: Address;
-  to: Address;
-  data: Hex;
-  label: string;
-  onStep?: (step: Step) => void;
-  /**
-   * Signs something more in the same passkey step, over the transaction's
-   * hash, before the session ends and before anything is broadcast. Making a
-   * pot uses it to sign the pot's labels, so it takes one fingerprint.
-   */
-  cosign?: (account: LocalAccount, hash: Hex) => Promise<void>;
-  /**
-   * Builds the call data inside the passkey session, for calls that carry a
-   * signature of their own: a pour-in signs its permit here, so the permit
-   * and the transaction take one fingerprint. `data` is then unused. The
-   * gas is estimated from the real data inside the session, so the account
-   * is made ready first for `gasHint`, before the session opens.
-   */
-  presign?: { gasHint: bigint; build: (account: LocalAccount) => Promise<Hex> };
-};
-
-async function fees() {
+async function fees(): Promise<Fees> {
   const [price, tip] = await Promise.all([readClient.getGasPrice(), readClient.estimateMaxPriorityFeePerGas()]);
   // Monad charges the gas limit at the effective price, and checks the
   // sender's balance against limit x max fee. A 5% margin over the current
@@ -90,133 +69,29 @@ async function estimate(from: Address, to: Address, data: Hex): Promise<bigint> 
   }
 }
 
-async function signAndSubmit(call: Call, nonce: number, replacing: boolean): Promise<PendingWrite> {
-  let stage: SendStage = "preparing";
-  let broadcast = false;
-  try {
-    call.onStep?.("preparing");
-    const f = await fees();
-    let gas = call.presign ? call.presign.gasHint : await estimate(call.from, call.to, call.data);
-
-    stage = "gas grant";
-    call.onStep?.("getting-ready");
-    await ensureGas(call.from, gas * f.maxFeePerGas);
-
-    stage = "passkey";
-    call.onStep?.("confirm");
-    const raw = await withSigner(call.from, async (account) => {
-      stage = "signing";
-      let data = call.data;
-      if (call.presign) {
-        data = await call.presign.build(account);
-        // One estimate on the real data. Monad charges the limit, so no padding.
-        stage = "preparing";
-        gas = await readClient.estimateGas({ account: call.from, to: call.to, data });
-        const balance = await readClient.getBalance({ address: call.from });
-        if (balance < gas * f.maxFeePerGas) throw new NotEnoughGasError(copy.errSetupFailed, ERROR_CODES.SETUP_REFUSED);
-        stage = "signing";
-      }
-      const signed = await account.signTransaction({ chainId: CHAIN_ID, type: "eip1559", to: call.to, data, value: 0n, nonce, gas, ...f });
-      await call.cosign?.(account, keccak256(signed));
-      return signed;
-    });
-
-    stage = "broadcast";
-    call.onStep?.("sending");
-    const write: PendingWrite = {
-      address: call.from,
-      nonce,
-      raw,
-      hash: keccak256(raw),
-      label: call.label,
-      submittedAt: Date.now(),
-      replaceable: false,
-    };
-    // submit and replace save the record, then broadcast, and swallow
-    // broadcast errors. So if they throw, it was before any broadcast, and
-    // once they return the bytes have been handed to the network.
-    if (replacing) await replace(idbWriteStore, liveWriteChain, write);
-    else await submit(idbWriteStore, liveWriteChain, write);
-    broadcast = true;
-    return write;
-  } catch (error) {
-    throw new SendFailure(stage, broadcast, error);
-  }
-}
+/** The live send flow: the RPC, this phone's IndexedDB and its passkeys (sendCore.ts). */
+const live: SendDeps = {
+  store: idbWriteStore,
+  chain: liveWriteChain,
+  fees,
+  estimate,
+  ensureGas,
+  withSigner,
+  estimateGas: (args) => readClient.estimateGas(args),
+  getBalance: (address) => readClient.getBalance({ address }),
+};
 
 /** A brand new write. Refused while this account has one in flight. */
-export async function sendWrite(call: Call): Promise<PendingWrite> {
-  let nonce: number;
-  try {
-    nonce = await nonceForNewWrite(idbWriteStore, liveWriteChain, call.from);
-  } catch (error) {
-    throw new SendFailure("preparing", false, error);
-  }
-  return signAndSubmit(call, nonce, false);
+export function sendWrite(call: Call): Promise<PendingWrite> {
+  return core.sendWrite(live, call);
 }
 
 /** Replaces a stuck write, on the same nonce, after re-checking it is safe. */
-export async function retryStuckWrite(call: Call): Promise<PendingWrite> {
-  let nonce: number;
-  try {
-    nonce = await nonceForReplacement(idbWriteStore, liveWriteChain, call.from);
-  } catch (error) {
-    throw new SendFailure("preparing", false, error);
-  }
-  return signAndSubmit(call, nonce, true);
+export function retryStuckWrite(call: Call): Promise<PendingWrite> {
+  return core.retryStuckWrite(live, call);
 }
 
-/**
- * Several requests behind one confirm and one fingerprint. The gas for all of
- * them is made ready first, then one passkey session signs each on the next
- * nonce, and only the first is broadcast. lib/writes.ts followSequence sends
- * each next one once the one before it is final. With `replacing`, the first
- * takes the nonce of a stuck request, as a retry of a single write does.
- */
-export async function sendSequence(from: Address, calls: SequenceCall[], onStep?: (step: Step) => void, replacing = false): Promise<PendingWrite> {
-  if (calls.length === 0) throw new Error("nothing to send");
-  let stage: SendStage = "preparing";
-  let broadcast = false;
-  try {
-    onStep?.("preparing");
-    const nonce = replacing ? await nonceForReplacement(idbWriteStore, liveWriteChain, from) : await nonceForNewWrite(idbWriteStore, liveWriteChain, from);
-    const f = await fees();
-    const gas = await Promise.all(calls.map((c) => c.gas ?? estimate(from, c.to, c.data)));
-
-    stage = "gas grant";
-    onStep?.("getting-ready");
-    await ensureGas(from, gas.reduce((a, b) => a + b, 0n) * f.maxFeePerGas);
-
-    stage = "passkey";
-    onStep?.("confirm");
-    const signed = await withSigner(from, async (account) => {
-      stage = "signing";
-      const out: SignedNext[] = [];
-      for (const [i, c] of calls.entries()) {
-        const raw = await account.signTransaction({ chainId: CHAIN_ID, type: "eip1559", to: c.to, data: c.data, value: 0n, nonce: nonce + i, gas: gas[i]!, ...f });
-        out.push({ nonce: nonce + i, raw, hash: keccak256(raw), label: c.label });
-      }
-      return out;
-    });
-
-    stage = "broadcast";
-    onStep?.("sending");
-    const [first, ...rest] = signed;
-    const write: PendingWrite = {
-      address: from,
-      nonce: first!.nonce,
-      raw: first!.raw,
-      hash: first!.hash,
-      label: first!.label,
-      submittedAt: Date.now(),
-      replaceable: false,
-      then: rest.length ? rest : undefined,
-    };
-    if (replacing) await replace(idbWriteStore, liveWriteChain, write);
-    else await submit(idbWriteStore, liveWriteChain, write);
-    broadcast = true;
-    return write;
-  } catch (error) {
-    throw new SendFailure(stage, broadcast, error);
-  }
+/** Several requests behind one confirm and one fingerprint (sendCore.ts). */
+export function sendSequence(from: Address, calls: SequenceCall[], onStep?: (step: Step) => void, replacing = false, signal?: AbortSignal): Promise<PendingWrite> {
+  return core.sendSequence(live, from, calls, onStep, replacing, signal);
 }

@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { copy } from "../copy.ts";
 import { SLOW_AFTER_MS, slowStepLine } from "../lib/slowStep.ts";
+import { Cancellable } from "../lib/cancel.ts";
 import type { ShareResult } from "../lib/share.ts";
 
 export type Notice = { tone: "ok" | "bad"; text: string; code?: number };
@@ -33,6 +34,18 @@ export function useSlowStepLine(step: string | null): string | null {
   }, [step]);
   return slow.step === step ? slowStepLine(step, slow.elapsed) : null;
 }
+
+/** The screen's action, cancellable before the passkey (lib/cancel.ts), and stopped if the screen goes away. */
+export function useCancellable(): Cancellable {
+  const ref = useRef<Cancellable | null>(null);
+  ref.current ??= new Cancellable();
+  const running = ref.current;
+  useEffect(() => () => running.dispose(), [running]);
+  return running;
+}
+
+/** What a screen shows when X stopped its action. */
+export const STOPPED: Notice = { tone: "bad", text: copy.cancelledNothingSent };
 
 /** A result line. Failures end with a neutral code people can read out to support. */
 export function NoticeLine({ notice }: { notice: Notice }) {
