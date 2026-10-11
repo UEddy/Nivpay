@@ -603,7 +603,7 @@ person's own. Sizes come from the gas measured in
 | --- | --- | --- |
 | Grant | 0.1 MON, fixed | a decider's whole story costs about 0.071 MON, a creator's first three actions about 0.084 |
 | Only when the account holds under | 0.075 MON | above the most expensive single action, the first payment in another currency, about 0.059 (making a pot is about 0.044) |
-| Only while the account has sent fewer than | 10 transactions | a full story is 5 or 6 per person, and the last grant is asked for by 3 sent (recounted in `docs/APP-CONTRACT-MAP.md` section 11) |
+| Only while the account has sent fewer than | 30 transactions | a full story is 5 or 6 per person, and the last grant is asked for by 3 sent (recounted in `docs/APP-CONTRACT-MAP.md` section 11); 30 leaves room for an account that keeps using NivPay after its first story |
 | Only accounts with | no contract code | |
 | Funder floor | 1 MON | granting stops before the funder can run dry |
 | Grants an hour, from every server instance together | 20 | counted from the funder's own nonce now and about an hour of blocks ago (11,600), so it needs no storage; a full demo take uses 5. If the past nonce can't be read, nothing is granted |
@@ -617,8 +617,8 @@ else about the key), and the funder's balance. Each grant is logged with the add
 transaction hash; nothing else from the request is logged, and the key never
 is.
 
-**The honest limit.** These rules bound what one address can take, about 10
-grants or 1 MON if someone deliberately spends each grant away. They do not
+**The honest limit.** These rules bound what one address can take, about 30
+grants or 3 MON if someone deliberately spends each grant away. They do not
 bound how many addresses someone can make, and new addresses cost nothing.
 A determined abuser can therefore still drain the funder down to its 1 MON
 floor, where granting stops until it is refilled, but no faster than 20

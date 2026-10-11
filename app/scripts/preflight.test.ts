@@ -310,10 +310,18 @@ test("preflight: an extra request acknowledged in the config passes", async () =
 
 test("preflight: an account at the gas grant limit with too little MON fails", async () => {
   const chain = seededForClose();
+  chain.nonce.set(k(DANIEL), 30);
+  chain.mon.set(k(DANIEL), 10_000_000_000_000_000n);
+  const report = await runTake(take("main-close"), { ...MAIN, extraSent: { [DANIEL]: 26 } }, mockRpc(chain).deps);
+  assert.deepEqual(failed(report).map((r) => r.what), ["Daniel (ending 3333) MON for gas"]);
+});
+
+test("preflight: an account at 10 sent, the old limit, can still be topped up", async () => {
+  const chain = seededForClose();
   chain.nonce.set(k(DANIEL), 10);
   chain.mon.set(k(DANIEL), 10_000_000_000_000_000n);
   const report = await runTake(take("main-close"), { ...MAIN, extraSent: { [DANIEL]: 6 } }, mockRpc(chain).deps);
-  assert.deepEqual(failed(report).map((r) => r.what), ["Daniel (ending 3333) MON for gas"]);
+  assert.deepEqual(failed(report).map((r) => r.what), []);
 });
 
 test("preflight: the 2 minute cut fails while the faucet cools down, the pair is paused or the funder is low", async () => {

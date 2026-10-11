@@ -116,7 +116,7 @@ test("the key is never read on any refusal", async () => {
     [{ chainId: 1 }, 503],
     [{ code: true }, 409],
     [{ userBalance: THRESHOLD }, 409],
-    [{ sent: 10 }, 409],
+    [{ sent: 30 }, 409],
     [{ funderBalance: FLOOR }, 503],
   ];
   for (const [script, status] of cases) {
@@ -131,7 +131,7 @@ test("the threshold covers the largest single action, so no account is stuck bet
   assert.equal(THRESHOLD, parseEther("0.075"));
   assert.ok(THRESHOLD > parseEther("0.059"));
   assert.equal(GRANT, parseEther("0.1"));
-  assert.equal(MAX_SENT_TXS, 10);
+  assert.equal(MAX_SENT_TXS, 30);
   assert.equal(FLOOR, parseEther("1"));
 });
 
@@ -156,15 +156,16 @@ test("bad input is refused and not logged", async () => {
   assert.equal((await handleFund(notJson, env(), () => chain().c)).status, 400);
 });
 
-test("eligibility: chain, no code, under the threshold, fewer than 10 sent, funder above its floor", async () => {
+test("eligibility: chain, no code, under the threshold, fewer than 30 sent, funder above its floor", async () => {
   // Each run is a separate question about the same address, not a second grant moments after the first.
   const run = (s: Script) => (forgetRecentGrants(), handleFund(req({ address: USER }), env(), () => chain(s).c, () => {}));
   assert.equal((await run({ chainId: 1 })).status, 503);
   assert.equal((await run({ code: true })).status, 409);
   assert.equal((await run({ userBalance: THRESHOLD })).status, 409);
   assert.equal((await run({ userBalance: THRESHOLD - 1n })).status, 200);
-  assert.equal((await run({ sent: 10 })).status, 409);
-  assert.equal((await run({ sent: 9 })).status, 200);
+  assert.equal((await run({ sent: 30 })).status, 409);
+  assert.equal((await run({ sent: 29 })).status, 200);
+  assert.equal((await run({ sent: 10 })).status, 200, "the old cap of 10 no longer stops an account");
   // Exactly at the floor after the grant and its gas is allowed; one wei less is not.
   const gasCost = 21_000n * 107_000_000_000n;
   assert.equal((await run({ funderBalance: FLOOR + GRANT + gasCost })).status, 200);
@@ -375,4 +376,18 @@ test("an attacker with endless fresh addresses gets GRANTS_PER_HOUR an hour, not
   }
   assert.equal(granted, GRANTS_PER_HOUR);
   assert.equal(sentWith.length, GRANTS_PER_HOUR);
+});
+
+test("what one address and what everyone together can take: 30 grants (3 MON) an address, still 2 MON an hour in all", () => {
+  // A grant needs fewer than MAX_SENT_TXS sent, and spending a grant away takes
+  // at least one transaction, so one address gets at most MAX_SENT_TXS grants.
+  // Was 10 grants, 1 MON.
+  assert.equal(BigInt(MAX_SENT_TXS) * GRANT, parseEther("3"));
+  // The hourly cap counts every grant to every address, so it alone bounds an
+  // attacker with many fresh addresses: unchanged by the per-address cap.
+  assert.equal(GRANTS_PER_HOUR, 20);
+  assert.equal(BigInt(GRANTS_PER_HOUR) * GRANT, parseEther("2"));
+  assert.equal(RECENT_MS, 120_000);
+  assert.equal(MAX_BODY_BYTES, 1_024);
+  assert.equal(FLOOR, parseEther("1"));
 });

@@ -23,7 +23,7 @@ const cents = (v: bigint) => formatAmount(v, DECIMALS, "cents");
 const FEE_BPS = 50n;
 const FEE_CAP = 50_000_000n;
 // The gas grant function's limit on sent requests (app/api/fund/index.ts, MAX_SENT_TXS).
-const MAX_SENT = 10;
+const MAX_SENT = 30;
 
 /** NivPayPots' conversions: virtual shares and assets, offset 3, rounded down for the caller. */
 const OFFSET = 1_000n;
@@ -85,11 +85,12 @@ test("every account in the demo stays under the gas grant's limit of sent reques
   const counts = [...DEMO.matchAll(/^\| (Eddy|Maya|Daniel|Caterer, Event hall) \| .* \| (\d+) \|$/gm)].map((m) => Number(m[2]));
   assert.deepEqual(counts, [6, 5, 5, 0]);
   for (const n of counts) assert.ok(n < MAX_SENT);
-  // The bounty path: Eddy sends 5 in a take, under the limit, and a second take on that account would reach it.
+  // The bounty path: Eddy sends 5 in a take, well under the limit.
   const bounty = /Eddy sends (\d+) \(the claim, the \$25 payment, then the\s+setup, the allowance and the exchange/.exec(DEMO);
   const sent = Number(bounty?.[1]);
   assert.equal(sent, 5);
-  assert.ok(sent < MAX_SENT && sent * 2 >= MAX_SENT);
+  assert.ok(sent < MAX_SENT);
+  assert.match(DEMO, /limit of 30 sent requests/);
 });
 
 test("every code the demo names is a code the app can show", () => {

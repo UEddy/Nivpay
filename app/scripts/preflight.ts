@@ -12,11 +12,12 @@ import { FAUCET_ABI } from "../src/lib/faucet.ts";
 import { formatAmount } from "../src/lib/money.ts";
 import { retryingReadTransport, type ReadTransportOptions } from "../src/lib/rpc.ts";
 import { fromText32 } from "../src/lib/text32.ts";
+import { MAX_SENT_TXS } from "../api/fund/index.ts";
 
 export const STATUS_URL = "https://nivpay.vercel.app/api/fund/status";
-/** A gas grant is asked for below this much MON, and only by an account with fewer than 10 sent (app/api/fund). */
+/** A gas grant is asked for below this much MON, and only by an account with fewer than MAX_SENT_TXS sent (app/api/fund). */
 const GRANT_THRESHOLD = 75_000_000_000_000_000n;
-const MAX_SENT = 10;
+const MAX_SENT = MAX_SENT_TXS;
 const FUNDER_FLOOR_MON = 1;
 /** The most pots read when checking that a fresh account is named on none. */
 const MAX_POTS_SCANNED = 200;

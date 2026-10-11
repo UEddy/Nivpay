@@ -4,7 +4,7 @@
 // Abuse limits, stated honestly (also in the README):
 //  * An address gets a grant only while it holds under THRESHOLD, has sent
 //    fewer than MAX_SENT_TXS transactions, and has no contract code.
-//  * The worst case per address is about MAX_SENT_TXS grants, 1 MON, if
+//  * The worst case per address is about MAX_SENT_TXS grants, 3 MON, if
 //    someone deliberately spends each grant away.
 //  * New addresses cost nothing to make, so a determined abuser with many
 //    addresses can drain the funder down to FLOOR, where granting stops.
@@ -44,7 +44,7 @@ export const CHAIN_ID = 10143;
 export const RPC_URL = "https://testnet-rpc.monad.xyz";
 export const GRANT = parseEther("0.1");
 export const THRESHOLD = parseEther("0.075");
-export const MAX_SENT_TXS = 10;
+export const MAX_SENT_TXS = 30;
 export const FLOOR = parseEther("1");
 export const GRANT_GAS = 21_000n;
 /** The most grants in about an hour, from every instance together. A full demo take uses 5. */

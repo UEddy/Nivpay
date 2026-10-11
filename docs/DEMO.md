@@ -41,8 +41,9 @@ failure.
 * Both phones: Chrome, Google Password Manager on the throwaway Google
   account (passkeys are saved there), screen recording ready, notifications
   off.
-* Fresh accounts for every take (see [Between takes](#between-takes)): an
-  account that has sent 10 requests gets no more gas grants, and a full take
+* Fresh accounts for every take (see [Between takes](#between-takes)): a
+  reused account brings last take's pot, balance and history on screen. An
+  account that has sent 30 requests gets no more gas grants; a full take
   sends 6 from Eddy's.
 * Links pass between the phones through a chat (WhatsApp to yourself, or
   any chat on both phones). A link pasted into the address bar works too.
@@ -193,7 +194,7 @@ these figures against the app's own fee and share arithmetic.
 | Daniel | Add test dollars, pour in $100, ask for the Caterer, ask for the hall, take a share | 5 |
 | Caterer, Event hall | none: replies are links, and being paid sends nothing | 0 |
 
-Every account stays under the gas grant's limit of 10 sent requests; the last
+Every account stays under the gas grant's limit of 30 sent requests; the last
 grant anyone needs is asked for with 3 sent (`docs/APP-CONTRACT-MAP.md`
 section 11). A retry on the same nonce sends no extra request; one that is
 included and fails does, and so does a test dollar claim that loses the
@@ -201,8 +202,10 @@ race to another claimer (Code 62).
 
 ## Between takes
 
-Use five new accounts for every take. Reusing Eddy's account would put it
-past 10 sent requests in the second take, and the gas grants would stop.
+Use five new accounts for every take. A reused account still has the last
+take's pot on Home and different balances, so nothing on screen would match
+this script. (Gas grants are not the reason: an account can send 30 requests
+before they stop, and a take sends at most 6 from one account.)
 
 1. On both phones, Chrome, nivpay.vercel.app, the site settings, Delete data.
    This clears the accounts list, drafts and the saved history on that phone.
@@ -260,9 +263,8 @@ number before it shows.
 Requests in one take: Eddy sends 5 (the claim, the $25 payment, then the
 setup, the allowance and the exchange behind one fingerprint) and gets one
 gas grant, before the claim. Maya sends none: receiving sends nothing. A
-second take on the same Eddy account would end at 10 sent, the gas grant
-limit, and would not show the one-time setup, so every take needs a new
-sender. Maya could stay, but that account's Payments in list and balance would carry
+second take on the same Eddy account would not show the one-time setup
+(it is done once per account), so every take needs a new sender. Maya could stay, but that account's Payments in list and balance would carry
 the last take's $25 and CTK, so [SEEDING.md](SEEDING.md) uses a new Maya too.
 Between takes: delete phone A's site data and
 Eddy's passkey as in [Between takes](#between-takes), and wait 60 s after
