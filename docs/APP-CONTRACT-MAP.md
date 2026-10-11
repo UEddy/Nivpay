@@ -428,6 +428,11 @@ contracts, if you want one in the demo. I have not planned it in.
 
 * **Reads** retry with exponential backoff and full jitter, with a timeout on
   every call and a cap on attempts. Reads are idempotent, so this is safe.
+  Each try waits 5 s (10 s for `eth_getLogs`), 5 tries, backoff 300 ms
+  doubling to a 4 s cap: one read fails after 29.5 s at worst (54.5 s for
+  logs) (`app/src/lib/rpc.ts`). Home starts no balance read while one is
+  waiting, and after 12 s shows the last balance known, dimmed, with when
+  it was checked (`app/src/lib/balanceRead.ts`).
 * **Writes are signed once.** The signed transaction's raw bytes and hash are
   kept (in IndexedDB, keyed by account, so a reload resumes tracking; a
   signed transaction is not a secret). A retry re-broadcasts the same bytes

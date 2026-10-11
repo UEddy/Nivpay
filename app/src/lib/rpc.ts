@@ -73,6 +73,25 @@ export const READ_RETRY: Omit<RetryOptions, "isRetryable"> = {
   capMs: 4_000,
 };
 
+/**
+ * How long one try of a read may wait for an answer. A healthy read answers
+ * in 0.2 to 0.8 s, with spikes to 4.5 s (measured 11 Oct 2026). Log scans
+ * cover thousands of blocks and keep the longer limit.
+ */
+export const READ_TIMEOUT_MS = 5_000;
+export const LOGS_TIMEOUT_MS = 10_000;
+
+export function readTimeoutFor(method: string): number {
+  return method === "eth_getLogs" ? LOGS_TIMEOUT_MS : READ_TIMEOUT_MS;
+}
+
+/** The longest one read can take before it fails: every try timing out, with the longest backoff between. */
+export function worstCaseReadMs(method: string): number {
+  let sleeps = 0;
+  for (let retry = 0; retry < READ_RETRY.attempts - 1; retry++) sleeps += Math.min(READ_RETRY.capMs, READ_RETRY.baseMs * 2 ** retry);
+  return READ_RETRY.attempts * readTimeoutFor(method) + sleeps;
+}
+
 /** Injected by tests and scripts: a stand-in fetch, and a sleep that needn't wait. */
 export type ReadTransportOptions = {
   fetchFn?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -81,9 +100,11 @@ export type ReadTransportOptions = {
 
 /** HTTP transport with a timeout per call and jittered retries, for reads only. */
 export function retryingReadTransport(url: string = RPC_URL, options: ReadTransportOptions = {}): Transport {
-  const inner = http(url, { retryCount: 0, timeout: 10_000, fetchFn: options.fetchFn });
+  const inner = http(url, { retryCount: 0, timeout: READ_TIMEOUT_MS, fetchFn: options.fetchFn });
+  const logs = http(url, { retryCount: 0, timeout: LOGS_TIMEOUT_MS, fetchFn: options.fetchFn });
   return (params) => {
     const base = inner({ ...params, retryCount: 0 });
+    const logsBase = logs({ ...params, retryCount: 0 });
     return createTransport(
       {
         key: "read",
@@ -94,7 +115,8 @@ export function retryingReadTransport(url: string = RPC_URL, options: ReadTransp
           if (WRITE_METHODS.has(args.method)) {
             throw new Error(`${args.method} must not go through the read client`);
           }
-          return withRetry(() => base.request(args), { ...READ_RETRY, isRetryable: isRetryableReadError, sleep: options.sleep });
+          const to = readTimeoutFor(args.method) === LOGS_TIMEOUT_MS ? logsBase : base;
+          return withRetry(() => to.request(args), { ...READ_RETRY, isRetryable: isRetryableReadError, sleep: options.sleep });
         }) as EIP1193RequestFn,
       },
       base.value,

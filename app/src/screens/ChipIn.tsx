@@ -12,7 +12,7 @@ import { idbWriteStore } from "../lib/idb.ts";
 import type { PotLink } from "../lib/invites.ts";
 import { formatAmount, parseAmount } from "../lib/money.ts";
 import { MAX_DRAWN_PEOPLE } from "../lib/potmap.ts";
-import { NO_DATA, POUR_GAS_HINT, POUR_LABEL, pourData, readPermitTerms } from "../lib/pour.ts";
+import { NO_DATA, POUR_GAS_HINT, POUR_LABEL, pourData, readPermitTerms, type PermitTerms } from "../lib/pour.ts";
 import { linkFor, type StoredPot } from "../lib/potstore.ts";
 import { openPot, potFeed, putIn, readPotState, type PotInfo, type PotState } from "../lib/potview.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
@@ -301,9 +301,10 @@ export function ChipInScreen(props: {
     setResult(null);
     setShareNote(null);
     const run = running.start();
+    // Read with the nonce and fees (sendCore.ts), and used inside the passkey session.
+    let terms: PermitTerms | undefined;
     try {
       setStep("preparing");
-      const terms = await readPermitTerms(state.asset, me, BigInt(Math.floor(Date.now() / 1000)));
       const call = {
         from: me,
         to: POTS,
@@ -318,7 +319,13 @@ export function ChipInScreen(props: {
             requestAnimationFrame(() => requestAnimationFrame(() => setMyCoin("hold")));
           }
         }),
-        presign: { gasHint: POUR_GAS_HINT, build: (signer: Parameters<typeof pourData>[0]) => pourData(signer, POTS, potId, amount, terms) },
+        presign: {
+          gasHint: POUR_GAS_HINT,
+          ready: async () => {
+            terms = await readPermitTerms(state.asset, me, BigInt(Math.floor(Date.now() / 1000)));
+          },
+          build: (signer: Parameters<typeof pourData>[0]) => pourData(signer, POTS, potId, amount, terms!),
+        },
       };
       const write = retry ? await retryStuckWrite(call) : await sendWrite(call);
       await land(write);

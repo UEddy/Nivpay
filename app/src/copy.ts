@@ -69,6 +69,7 @@ const words = {
   close: "Close",
   yourBalance: "Your balance",
   readingBalance: "Reading your balance…",
+  readingBalanceSlow: "Taking longer than usual…",
   dollars: "Dollars",
   dollarsLine: "Held as AUSD, a digital dollar issued by Agora.",
   testDollars: "Test dollars",
@@ -107,6 +108,7 @@ const words = {
   youreOfflineRequestInFlight:
     "You're offline. Your request is saved on this phone and isn't finished. NivPay checks on it again when you're back online. Don't send it again.",
   balanceNotLive: (time: string) => `Not up to date. Last checked at ${time}.`,
+  balanceSlow: (time: string) => `Taking longer than usual. Last checked at ${time}.`,
   notUpToDate: "Not up to date",
 
   // Hosts

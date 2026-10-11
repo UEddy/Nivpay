@@ -77,7 +77,8 @@ test("with no X, the flow reaches the passkey and sends", async () => {
   h.answerAll();
   const write = await pending;
   assert.equal(write.nonce, 7);
-  assert.deepEqual(h.log, ["nonce", "fees", "estimate", "gas grant", "passkey", "broadcast"]);
+  assert.deepEqual(h.log.slice(0, 2).sort(), ["fees", "nonce"], "asked together");
+  assert.deepEqual(h.log.slice(2), ["estimate", "gas grant", "passkey", "broadcast"]);
   assert.deepEqual(steps, ["preparing", "getting-ready", "confirm", "sending"]);
 });
 
@@ -159,4 +160,25 @@ test("Pour in, Send, Ask, Say yes, Close and Take share pass their X to the send
     assert.match(text, /beforePasskey\(/, `${file}: X stops it before the passkey`);
     assert.match(text, /STOPPED/, `${file}: and says nothing was sent`);
   }
+});
+
+test("the nonce, the fees and the permit terms are asked for at the same time, not one after another", async () => {
+  const h = harness();
+  let terms = false;
+  const pending = sendWrite(h.deps, {
+    ...call(new AbortController().signal, []),
+    presign: {
+      gasHint: 90_000n,
+      ready: async () => {
+        h.log.push("permit terms");
+        terms = true;
+      },
+      build: async () => (assert.ok(terms, "built from the terms read before"), "0xabcd" as Hex),
+    },
+  });
+  await until(h.log, "nonce");
+  assert.deepEqual([...h.log].sort(), ["fees", "nonce", "permit terms"], "all three asked before any answered");
+  h.answerAll();
+  await pending;
+  assert.ok(!h.log.includes("estimate"), "a pour-in's gas comes from its hint, then the real data");
 });

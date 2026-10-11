@@ -44,6 +44,7 @@ const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
 const sending = () => reloadOnce(() => import("./lib/send.ts"));
 import { formatDay, NoticeLine, phoneTimeZone, useOnline, type Notice } from "./screens/ui.tsx";
 import { balanceNote } from "./lib/connection.ts";
+import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/balanceRead.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
 
 const accounts = new AccountStore(localStorage);
@@ -52,6 +53,7 @@ const drafts = new DraftStore(localStorage);
 const pots = new PotStore(localStorage);
 const invited = new InvitedStore(localStorage);
 const potBlocks = new PotBlocks(localStorage, DEPLOYMENT);
+const lastBalances = new LastBalanceStore(localStorage);
 
 type Screen =
   | { kind: "home" }
@@ -588,7 +590,6 @@ function NameForm(props: { initial: string; onSave: (name: string) => void; onSk
   );
 }
 
-type Holding = { decimals: number; balance: bigint };
 /**
  * On the AUSD deployment, "Add test dollars" claims test AUSD from Agora's
  * faucet and only Dollars are shown. On TESTUSD it mints test dollars.
@@ -682,12 +683,26 @@ function Home(props: {
   }, [cooldownUntil]);
   const cooldownLeft = cooldownUntil === null ? 0 : secondsUntil(cooldownUntil, now);
 
+  // One balance read at a time; after SLOW_READ_MS the last balance known shows, dimmed (lib/balanceRead.ts).
+  const single = useMemo(() => new SingleRead(), [account.address]);
+  const lastKnown = useMemo(() => lastBalances.get(account.address), [account.address, balances]);
+  const [slow, setSlow] = useState(false);
   const refresh = useCallback(() => {
+    const read = single.run(() => readBalances(account.address));
+    if (!read) return;
+    const slowAfter = setTimeout(() => alive.current && setSlow(true), SLOW_READ_MS);
     connection
-      .track(readBalances(account.address))
-      .then((b) => alive.current && setBalances(b))
-      .catch(() => {});
-  }, [account.address, connection]);
+      .track(read)
+      .then((b) => {
+        lastBalances.put(account.address, { dollars: b.dollars, ...(b.kind === "testusd" ? { testDollars: b.testDollars } : {}), readAt: b.readAt });
+        if (alive.current) setBalances(b);
+      })
+      .catch(() => {})
+      .finally(() => {
+        clearTimeout(slowAfter);
+        if (alive.current) setSlow(false);
+      });
+  }, [account.address, connection, single]);
 
   useEffect(() => {
     alive.current = true;
@@ -752,7 +767,13 @@ function Home(props: {
   }, [account.address, land]);
 
   // The last balance read stays on screen when reads stop, marked as not up to date.
-  const stale = balanceNote(connection.down, balances?.readAt ?? null);
+  // While reads are down or slow, the last balance known stands in, dimmed, with when it was checked.
+  const shown: { dollars: Holding; testDollars?: Holding; readAt: number } | null = balances
+    ? { dollars: balances.dollars, ...(balances.kind === "testusd" ? { testDollars: balances.testDollars } : {}), readAt: balances.readAt }
+    : (connection.down || slow) && lastKnown
+      ? lastKnown
+      : null;
+  const stale = balanceNote(connection.down, shown?.readAt ?? null, undefined, slow);
   const decimals = balances?.kind === "testusd" ? balances.testDollars.decimals : (balances?.dollars.decimals ?? 6);
   const amount = balances?.kind === "ausd" ? balances.faucet.drip : parseAmount(amountText, decimals);
   const tooMuch = amount !== null && balances?.kind === "testusd" && amount > balances.maxMint;
@@ -845,8 +866,8 @@ function Home(props: {
       <section className={`card balances${stale ? " stale" : ""}`} aria-live="polite">
         <p className="eyebrow">{copy.yourBalance}</p>
         {stale && <p className="hint stale-note">{stale}</p>}
-        {!balances ? (
-          <p className="lede">{copy.readingBalance}</p>
+        {!shown ? (
+          <p className="lede">{slow ? copy.readingBalanceSlow : copy.readingBalance}</p>
         ) : (
           <>
             <div className="row balance">
@@ -855,16 +876,16 @@ function Home(props: {
                 <br />
                 <small>{copy.dollarsLine}</small>
               </span>
-              <span className="balance-amount">{formatAmount(balances.dollars.balance, balances.dollars.decimals, "cents")}</span>
+              <span className="balance-amount">{formatAmount(shown.dollars.balance, shown.dollars.decimals, "cents")}</span>
             </div>
-            {balances.kind === "testusd" && (
+            {shown.testDollars && (
               <div className="row balance">
                 <span className="label">
                   {copy.testDollars}
                   <br />
                   <small>{copy.testDollarsLine}</small>
                 </span>
-                <span className="balance-amount">{formatAmount(balances.testDollars.balance, balances.testDollars.decimals, "cents")}</span>
+                <span className="balance-amount">{formatAmount(shown.testDollars.balance, shown.testDollars.decimals, "cents")}</span>
               </div>
             )}
             <div className="money-actions">

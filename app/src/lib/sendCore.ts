@@ -45,9 +45,11 @@ export type Call = {
    * signature of their own: a pour-in signs its permit here, so the permit
    * and the transaction take one fingerprint. `data` is then unused. The
    * gas is estimated from the real data inside the session, so the account
-   * is made ready first for `gasHint`, before the session opens.
+   * is made ready first for `gasHint`, before the session opens. `ready`
+   * reads what `build` needs (a pour-in's permit terms), at the same time as
+   * the nonce and fees.
    */
-  presign?: { gasHint: bigint; build: (account: LocalAccount) => Promise<Hex> };
+  presign?: { gasHint: bigint; ready?: () => Promise<void>; build: (account: LocalAccount) => Promise<Hex> };
 };
 
 async function signAndSubmit(deps: SendDeps, call: Call, replacing: boolean): Promise<PendingWrite> {
@@ -60,9 +62,12 @@ async function signAndSubmit(deps: SendDeps, call: Call, replacing: boolean): Pr
   };
   try {
     step("preparing");
-    const nonce = replacing ? await nonceForReplacement(deps.store, deps.chain, call.from) : await nonceForNewWrite(deps.store, deps.chain, call.from);
-    throwIfCancelled(call.signal);
-    const f = await deps.fees();
+    // Reads that don't depend on each other run at the same time: one wait, not three.
+    const [nonce, f] = await Promise.all([
+      replacing ? nonceForReplacement(deps.store, deps.chain, call.from) : nonceForNewWrite(deps.store, deps.chain, call.from),
+      deps.fees(),
+      call.presign?.ready?.(),
+    ]);
     throwIfCancelled(call.signal);
     let gas = call.presign ? call.presign.gasHint : await deps.estimate(call.from, call.to, call.data);
 
@@ -147,9 +152,10 @@ export async function sendSequence(
   };
   try {
     step("preparing");
-    const nonce = replacing ? await nonceForReplacement(deps.store, deps.chain, from) : await nonceForNewWrite(deps.store, deps.chain, from);
-    throwIfCancelled(signal);
-    const f = await deps.fees();
+    const [nonce, f] = await Promise.all([
+      replacing ? nonceForReplacement(deps.store, deps.chain, from) : nonceForNewWrite(deps.store, deps.chain, from),
+      deps.fees(),
+    ]);
     throwIfCancelled(signal);
     const gas = await Promise.all(calls.map((c) => c.gas ?? deps.estimate(from, c.to, c.data)));
 
