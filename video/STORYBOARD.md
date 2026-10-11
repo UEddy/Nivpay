@@ -24,7 +24,7 @@ For the Agora bounty judges. The three things they look for (passkey onboarding,
 | 68.5 to 78.5 s | B06 | Phone A, View receipt: MonadVision opens the transfer of 25 AUSD to Maya's account, finalized. (explorer) | The receipt on Monad: $25 in AUSD | Transaction hash [not measured yet] |
 | 78.5 to 90.5 s | B07 | Phone A: the same request link, How much 10, They receive CTK, the line on what CTK is, Review. (one phone) | Pay in another currency: CTK | CTK is a test currency from Agora, standing in for a local currency |
 | 90.5 to 94.5 s | B08 | Phone A: Send $10 as CTK, one fingerprint, Step 1 of 3, Step 2 of 3, Step 3 of 3. (one phone; Sped up x2) | One fingerprint, three steps, each final before the next |  |
-| 94.5 to 102.5 s | B08 | A: Sent $10 to Maya. They received 10.00 CTK. Settled in 0.Xs. B: +10.00 CTK from Agora's settlement. (both phones side by side; never sped up) Labels: Eddy sends $10 / Maya receives CTK. | Maya receives [not measured yet]. Settled in [not measured yet] | Rate [not measured yet], set by Agora |
+| 94.5 to 102.5 s | B08 | A: Sent $10 to Maya. They received 10.00 CTK. Settled in 0.Xs. B: +10.00 CTK from Agora's settlement. (both phones side by side; never sped up) Labels: Eddy sends $10 / Maya receives CTK. | Maya receives [not measured yet]. Settled in [not measured yet] | Rate $1 = 1.00 CTK, set by Agora |
 | 102.5 to 107.5 s | card | End card. (card) | NivPay / A passkey, a dollar balance, a payment that settles while you watch. / the link |  |
 
 ## technical-demo

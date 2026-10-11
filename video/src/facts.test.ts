@@ -6,7 +6,7 @@ import { formatAmount } from "../../app/src/lib/money.ts";
 import { feeFor } from "../../app/src/lib/payout.ts";
 import { replaySteps } from "../../app/src/lib/story.ts";
 import type { PotEvent } from "../../app/src/lib/feed.ts";
-import { fact, FACTS, nullFacts, README_ROWS, shortHex } from "./facts.ts";
+import { fact, FACTS, nullFacts, README_ROWS, SHOWCASE_ROWS, shortHex } from "./facts.ts";
 
 const doc = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
@@ -104,9 +104,12 @@ test("the names, cities, pot and closing time are docs/SEEDING.md's and docs/DEM
 test("every address and hash is the README's, and the measured block time is the map's", () => {
   const README = doc("README.md");
   for (const [k, a] of Object.entries(FACTS.contracts)) assert.ok(README.includes(`[\`${a}\`](https://testnet.monadvision.com/address/${a})`), k);
-  for (const [k, h] of Object.entries(FACTS.hashes.showcase)) assert.ok(README.includes(`[\`${h}\`](https://testnet.monadvision.com/tx/${h})`), k);
-  // Pot 0 stays in the README as the showcase.
-  assert.match(README, /^\| CreatePot, pot 0 \|/m);
+  // Each showcase hash is linked in its own row, and pot 0 stays in the README as the showcase.
+  for (const [k, h] of Object.entries(FACTS.hashes.showcase)) {
+    const name = SHOWCASE_ROWS[k as keyof typeof SHOWCASE_ROWS];
+    const row = README.split("\n").find((l) => l.startsWith(`| ${name} |`));
+    assert.ok(row?.includes(`[\`${h}\`](https://testnet.monadvision.com/tx/${h})`), `${k} in the row "${name}"`);
+  }
   assert.match(doc("docs/APP-CONTRACT-MAP.md"), /\*\*Block time: 0\.31 s\.\*\*/);
   assert.equal(FACTS.chain.blockTime, "about 300 ms");
 });
@@ -144,8 +147,8 @@ test("the README and facts.ts agree on every take hash: both blank, or both the 
   const doc_ = (rows: string[]) => ["## Monad integration", ...rows, "## Contract addresses"].join("\n");
   const filled = (name: string, x: string) => `| ${name} | [\`${x}\`](https://testnet.monadvision.com/tx/${x}) | 1 | t | w |`;
   const blank = (name: string) => `| ${name} | [PLACEHOLDER: fill in after the recording] | | | |`;
-  const rest = [README_ROWS.fundWithPermit, README_ROWS.send, README_ROWS.swap].map(blank);
-  const none = { createPot: null, fundWithPermit: null, send: null, swap: null };
+  const rest = [blank(README_ROWS.fundWithPermit)];
+  const none = { createPot: null, fundWithPermit: null };
   assert.deepEqual(takeRowProblems(doc_([filled(README_ROWS.createPot, h), ...rest]), { ...none, createPot: h }), []);
   assert.match(takeRowProblems(doc_([filled(README_ROWS.createPot, h), ...rest]), none).join(), /null in facts\.ts but the README row is filled in/);
   assert.match(takeRowProblems(doc_([blank(README_ROWS.createPot), ...rest]), { ...none, createPot: h }).join(), /still says PLACEHOLDER/);

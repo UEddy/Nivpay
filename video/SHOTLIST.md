@@ -494,19 +494,22 @@ Fill these in `src/facts.ts` from the footage, never from memory, then run
 | `hashes.take.send` | B06, the transaction hash on MonadVision |
 | `hashes.take.swap` | B08, View receipt, off camera |
 
-Every take hash also goes into its row under Monad integration in the README,
-in the same sitting: replace the row's `[PLACEHOLDER: ...]` with the hash
-linked to `https://testnet.monadvision.com/tx/<hash>`, and fill the block,
-the time (UTC) and what it shows, read from MonadVision. The rows:
+`measured.otherCurrencyRate` is already `$1 = 1.00 CTK`, proved by the
+11 Oct 2026 swap in the README. Agora can change it: if B07's sheet shows a
+different rate, put what the sheet shows.
+
+The two Mama's 60th hashes also go into their rows under Monad integration in
+the README, in the same sitting: replace the row's `[PLACEHOLDER: ...]` with
+the hash linked to `https://testnet.monadvision.com/tx/<hash>`, and fill the
+block, the time (UTC) and what it shows, read from MonadVision. The rows:
 
 | Fact | README row |
 | --- | --- |
 | `hashes.take.createPot` | CreatePot, Mama's 60th in the demo video |
 | `hashes.take.fundWithPermit` | FundWithPermit, Eddy's $500 into Mama's 60th in the demo video |
-| `hashes.take.send` | Send dollars, a plain AUSD payment to another person |
-| `hashes.take.swap` | Send in another currency, the exchange through Agora's pair |
 
 The test `the README and facts.ts agree on every take hash` fails while a hash
-is in one and not the other, or differs. (The app's own
-`app/src/docs.test.ts` counts the two Send rows' placeholders, so update its
-count when those two are filled.)
+is in one and not the other, or differs; `app/src/docs.test.ts` counts the
+two placeholders, so set its count to 0 when both are filled. The bounty
+take's two hashes (`hashes.take.send`, `hashes.take.swap`) go in facts.ts
+only: the README's Send rows already hold the verified 11 Oct 2026 sends.

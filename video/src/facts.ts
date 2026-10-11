@@ -70,7 +70,8 @@ export const FACTS = {
     otherCurrencySettle: null as string | null,
     /** The CTK amount and rate on the Check and send sheet: Agora sets them. */
     otherCurrencyReceived: null as string | null,
-    otherCurrencyRate: null as string | null,
+    /** Proved by the swap 0x9d95...93b1 (block 70,177,155): 50 AUSD in, 50 CTK out, SwapFees 0 and 0. Agora can change it: check the take's sheet shows the same. */
+    otherCurrencyRate: "$1 = 1.00 CTK" as string | null,
     /** The last four characters of the 2 minute Maya account, as phone A's Send screen shows them before the fingerprint: "Sending to account ending ####". */
     recipientLastFour: null as string | null,
   },
@@ -98,6 +99,10 @@ export const FACTS = {
       claim: "0xcf032c4555429aa1dacf086276a7d880fa587ed3bfbc5457137697ed9bd6fcdf",
       createPot: "0x6d1d6bdc5a942458c994e2735a684fb5b0665d77a692c3763c33f2962495199c",
       fundWithPermit: "0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe",
+      /** $50 AUSD from the Phone A account (ending 7bC1) to the third test account (ending 0B61), block 70,176,817, finalized; read back 11 Oct 2026. */
+      send: "0xd23cf8e21f928468d7f1d826f6d2cd8d351faf1b3e698d823b37808007641ade",
+      /** $50 AUSD in, 50 CTK out through Agora's pair, same two accounts, block 70,177,155, finalized; read back 11 Oct 2026. */
+      swap: "0x9d95911b7e9b2811bf4063054cb13e573e229260398705d7464844456a1f93b1",
     },
     /** From the recorded takes: copied from the app's own Receipt links right after each take (SHOTLIST.md). */
     take: {
@@ -105,7 +110,7 @@ export const FACTS = {
       createPot: null as string | null,
       /** Eddy's $500 into Mama's 60th (M04): its story row, Receipt. */
       fundWithPermit: null as string | null,
-      /** The $25 send in the bounty take: View receipt on phone A (B06). */
+      /** The $25 send in the bounty take: View receipt on phone A (B06). Shown with "$25" in a caption, so only that take's hash. */
       send: null as string | null,
       /** The exchange through Agora's pair in the bounty take (B08). */
       swap: null as string | null,
@@ -113,10 +118,17 @@ export const FACTS = {
   },
 } as const;
 
-/** README, Monad integration: the row that holds each take hash. */
-export const README_ROWS: Record<keyof Facts["hashes"]["take"], string> = {
+/** README, Monad integration: the row that holds each take hash with a README row. */
+export const README_ROWS: Record<"createPot" | "fundWithPermit", string> = {
   createPot: "CreatePot, Mama's 60th in the demo video",
   fundWithPermit: "FundWithPermit, Eddy's $500 into Mama's 60th in the demo video",
+};
+
+/** README, Monad integration: the rows that hold showcase hashes. */
+export const SHOWCASE_ROWS: Partial<Record<keyof Facts["hashes"]["showcase"], string>> = {
+  createPot: "CreatePot, pot 0",
+  fundWithPermit: "FundWithPermit, the first deposit in pot 0",
+  claim: "Add test dollars, a faucet claim",
   send: "Send dollars, a plain AUSD payment to another person",
   swap: "Send in another currency, the exchange through Agora's pair",
 };

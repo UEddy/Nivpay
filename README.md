@@ -224,7 +224,8 @@ chain:
   Agora's Instant Settlement pair.
 
 Real transactions from the app, each read back with `eth_getTransactionReceipt`
-on 10 Oct 2026: status success, and in a block below the finalized head.
+(the first three on 10 Oct 2026, the two sends on 11 Oct 2026): status
+success, and in a block below the finalized head.
 Pot 0's two were found from its events: `potCount()` bisected over past
 blocks to find the block where pot 0 appears, its `PotCreated` log in that
 block, then the first `Funded` log for pot 0 after it.
@@ -234,8 +235,8 @@ block, then the first `Funded` log for pot 0 after it.
 | Add test dollars, a faucet claim | [`0xcf032c4555429aa1dacf086276a7d880fa587ed3bfbc5457137697ed9bd6fcdf`](https://testnet.monadvision.com/tx/0xcf032c4555429aa1dacf086276a7d880fa587ed3bfbc5457137697ed9bd6fcdf) | 69,524,729 | 9 Oct 2026, 11:13:07 | `requestFunds` on Agora's faucet from the app account `0x725C9cd75b2C8C29AEbf6a14eE84a3b54C787bC1`, for itself: 10,000 AUSD |
 | CreatePot, pot 0 | [`0x6d1d6bdc5a942458c994e2735a684fb5b0665d77a692c3763c33f2962495199c`](https://testnet.monadvision.com/tx/0x6d1d6bdc5a942458c994e2735a684fb5b0665d77a692c3763c33f2962495199c) | 69,610,359 | 9 Oct 2026, 18:26:28 | `createPot` on the AUSD pots from the same account. Its `PotCreated` event names pot 0, "Anniversary", 2 of 2 deciders, one payee, closing 1 Nov 2026 |
 | FundWithPermit, the first deposit in pot 0 | [`0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe`](https://testnet.monadvision.com/tx/0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe) | 69,611,378 | 9 Oct 2026, 18:31:36 | `fundWithPermit` from a second app account, `0x97936c44214231002051A601e2065732382Df8b4`: the permit's `Approval`, the AUSD `Transfer` and `Funded` for $200, in one request |
-| Send dollars, a plain AUSD payment to another person | [PLACEHOLDER: fill in after the phone test] | | | |
-| Send in another currency, the exchange through Agora's pair | [PLACEHOLDER: fill in after the phone test] | | | |
+| Send dollars, a plain AUSD payment to another person | [`0xd23cf8e21f928468d7f1d826f6d2cd8d351faf1b3e698d823b37808007641ade`](https://testnet.monadvision.com/tx/0xd23cf8e21f928468d7f1d826f6d2cd8d351faf1b3e698d823b37808007641ade) | 70,176,817 | 11 Oct 2026, 17:57:44 | `transfer` on AUSD from the app account `0x725C9cd75b2C8C29AEbf6a14eE84a3b54C787bC1` to a third app account, `0xa5057F32DB2a6f68F69ad1587014AbF101A20B61`: one AUSD `Transfer` of $50 |
+| Send in another currency, the exchange through Agora's pair | [`0x9d95911b7e9b2811bf4063054cb13e573e229260398705d7464844456a1f93b1`](https://testnet.monadvision.com/tx/0x9d95911b7e9b2811bf4063054cb13e573e229260398705d7464844456a1f93b1) | 70,177,155 | 11 Oct 2026, 17:59:26 | `swapExactTokensForTokens` on Agora's pair from the same account to the same recipient: 50 AUSD in from the sender, 50 CTK out to the recipient, `SwapFees` 0 and 0, so $1 = 1.00 CTK |
 | CreatePot, Mama's 60th in the demo video | [PLACEHOLDER: fill in after the recording] | | | |
 | FundWithPermit, Eddy's $500 into Mama's 60th in the demo video | [PLACEHOLDER: fill in after the recording] | | | |
 
@@ -244,9 +245,10 @@ maker
 ([`0xa5a64cabcf31608837fe03587734e94ad074548b78007f7e22054a6b4489d738`](https://testnet.monadvision.com/tx/0xa5a64cabcf31608837fe03587734e94ad074548b78007f7e22054a6b4489d738),
 08:32:17 UTC) and a request to pay its payee $100 with a $0.50 fee
 ([`0xa8a0481a8a818baac227d4cf1662c6e3edca933291dce6ae65bff485d8eaeb9a`](https://testnet.monadvision.com/tx/0xa8a0481a8a818baac227d4cf1662c6e3edca933291dce6ae65bff485d8eaeb9a),
-08:34:05 UTC), which is waiting for its second yes. It holds $400. Neither
-account has sent a plain AUSD payment or used Agora's pair yet, so those two
-rows wait for the phone test.
+08:34:05 UTC), which is waiting for its second yes. It holds $400. The two
+sends came from the phone test on 11 Oct 2026, from pot 0's maker to its
+payee's account: each one finalized, with its transfer events decoded from
+the receipt.
 
 The two demo video rows are the Mama's 60th made on camera for the technical
 demo, whose explorer segment shows them. They are copied from the app's own

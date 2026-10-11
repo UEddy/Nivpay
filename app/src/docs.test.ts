@@ -133,13 +133,21 @@ test("every contract in the README's address table is the one the app uses", () 
 test("every transaction under Monad integration links to its own hash on MonadVision, and the missing ones are marked", () => {
   const section = README.slice(README.indexOf("## Monad integration"), README.indexOf("## Contract addresses"));
   const links = [...section.matchAll(/\[`(0x[0-9a-f]{64})`\]\(https:\/\/testnet\.monadvision\.com\/tx\/(0x[0-9a-f]{64})\)/g)];
-  for (const name of ["CreatePot, pot 0", "FundWithPermit, the first deposit in pot 0", "Add test dollars, a faucet claim"]) {
+  for (const name of [
+    "CreatePot, pot 0",
+    "FundWithPermit, the first deposit in pot 0",
+    "Add test dollars, a faucet claim",
+    "Send dollars, a plain AUSD payment to another person",
+    "Send in another currency, the exchange through Agora's pair",
+  ]) {
     assert.match(section, new RegExp(`^\| ${name} \| \[\`0x[0-9a-f]{64}\`\]`, "m"), name);
   }
   assert.ok(links.length >= 5);
   for (const [, shown, linked] of links) assert.equal(shown, linked);
   assert.equal(new Set(links.map((l) => l[1])).size, links.length, "a hash is listed twice");
-  assert.equal([...section.matchAll(/\[PLACEHOLDER: fill in after the phone test\]/g)].length, 2);
+  // Only the demo video's two rows still wait, for the recording; video/src/facts.test.ts checks them against video/src/facts.ts.
+  assert.equal([...section.matchAll(/\[PLACEHOLDER: fill in after the phone test\]/g)].length, 0);
+  assert.equal([...section.matchAll(/\[PLACEHOLDER: fill in after the recording\]/g)].length, 2);
   // Accounts named there are written with their checksum, as the app shows them.
   for (const [, a] of section.matchAll(/`(0x[0-9a-fA-F]{40})`/g)) assert.equal(a, getAddress(a!));
 });
