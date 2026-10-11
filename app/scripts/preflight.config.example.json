@@ -1,0 +1,23 @@
+{
+  "timeZone": "Europe/London",
+  "cast": {
+    "phoneA": "0x725C9cd75b2C8C29AEbf6a14eE84a3b54C787bC1",
+    "phoneB": "0x97936c44214231002051A601e2065732382Df8b4",
+    "third": "0xa5057F32DB2a6f68F69ad1587014AbF101A20B61"
+  },
+  "main": {
+    "idara": "FILL IN: Idara's address, from Account details on phone A",
+    "ubong": "FILL IN: Ubong's address, phone B",
+    "aniekan": "FILL IN: Aniekan's address, phone B",
+    "caterer": "FILL IN: the Caterer's address, phone A",
+    "eventHall": "FILL IN: the Event hall's address, phone B",
+    "pot": null
+  },
+  "bounty": {
+    "ubong": "FILL IN: the 2 minute cut's Ubong, phone B"
+  },
+  "testClose": {
+    "pot": null
+  },
+  "extraSent": {}
+}

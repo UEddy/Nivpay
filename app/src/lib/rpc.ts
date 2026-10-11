@@ -73,9 +73,15 @@ export const READ_RETRY: Omit<RetryOptions, "isRetryable"> = {
   capMs: 4_000,
 };
 
+/** Injected by tests and scripts: a stand-in fetch, and a sleep that needn't wait. */
+export type ReadTransportOptions = {
+  fetchFn?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+  sleep?: (ms: number) => Promise<void>;
+};
+
 /** HTTP transport with a timeout per call and jittered retries, for reads only. */
-export function retryingReadTransport(url: string = RPC_URL): Transport {
-  const inner = http(url, { retryCount: 0, timeout: 10_000 });
+export function retryingReadTransport(url: string = RPC_URL, options: ReadTransportOptions = {}): Transport {
+  const inner = http(url, { retryCount: 0, timeout: 10_000, fetchFn: options.fetchFn });
   return (params) => {
     const base = inner({ ...params, retryCount: 0 });
     return createTransport(
@@ -88,7 +94,7 @@ export function retryingReadTransport(url: string = RPC_URL): Transport {
           if (WRITE_METHODS.has(args.method)) {
             throw new Error(`${args.method} must not go through the read client`);
           }
-          return withRetry(() => base.request(args), { ...READ_RETRY, isRetryable: isRetryableReadError });
+          return withRetry(() => base.request(args), { ...READ_RETRY, isRetryable: isRetryableReadError, sleep: options.sleep });
         }) as EIP1193RequestFn,
       },
       base.value,

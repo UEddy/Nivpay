@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json && tsc -p api/tsconfig.json --noEmit",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
-    "test": "node --test \"src/**/*.test.ts\"",
+    "test": "node --test \"src/**/*.test.ts\" \"scripts/**/*.test.ts\"",
     "test:live": "node --test --test-concurrency=1 \"src/lib/*.live-test.ts\""
   },
   "dependencies": {

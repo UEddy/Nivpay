@@ -45,3 +45,7 @@ UTC--*
 id_rsa*
 id_ed25519*
 .vercel/
+
+# The recording preflight's config: this session's account addresses and pot
+# numbers (docs/SEEDING.md). Only the example is committed.
+app/scripts/preflight.config.json

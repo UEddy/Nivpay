@@ -24,6 +24,7 @@
     "vite.config.ts",
     "sw-build.ts",
     "src/**/*.live-test.ts",
-    "api"
+    "api",
+    "scripts"
   ]
 }
