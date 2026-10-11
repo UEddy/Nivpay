@@ -5,6 +5,7 @@ import { ERROR_CODES } from "../copy.ts";
 import type { PotEvent } from "./feed.ts";
 import {
   askedAt,
+  askButtonText,
   askLabel,
   askView,
   feeFor,
@@ -286,4 +287,11 @@ test("a request to close is told by the feed, and is done once the yes that clos
     ev("Closed", 42, 1, { viaProposal: true, remainingAssets: $(115.6) }, closedTx),
   ]);
   assert.equal(done.find((r) => r.proposalId === 5n)!.status, "paid");
+});
+
+test("the Ask button never offers to pay $0 while the amount is empty (footage 1000335920 at 110.5 s)", () => {
+  const fmt = (v: bigint) => `$${v}`;
+  assert.equal(askButtonText(null, "Event Center", fmt), "Ask for a payment");
+  assert.equal(askButtonText(0n, "Event Center", fmt), "Ask for a payment");
+  assert.equal(askButtonText(50n, "Event Center", fmt), "Ask to pay $50 to Event Center");
 });

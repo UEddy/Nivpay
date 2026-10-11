@@ -20,6 +20,11 @@ import { formatAmount } from "./money.ts";
 
 /** Pending write labels, so a reload resumes the right request on the right screen. */
 export const askLabel = (potId: bigint) => `ask ${potId}`;
+
+/** The Ask button before anything is sent: no "$0" while the amount is empty. */
+export function askButtonText(amount: bigint | null, payeeName: string, fmt: (v: bigint) => string): string {
+  return amount === null || amount <= 0n ? copy.askForPayment : copy.askAction(fmt(amount), payeeName);
+}
 export const yesLabel = (proposalId: bigint) => `yes ${proposalId}`;
 export const takeBackLabel = (proposalId: bigint) => `take back ${proposalId}`;
 

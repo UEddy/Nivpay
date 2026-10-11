@@ -6,7 +6,7 @@ import { POTS } from "../lib/deployment.ts";
 import { describeFailure, SendFailure } from "../lib/errors.ts";
 import { idbWriteStore } from "../lib/idb.ts";
 import { formatAmount, parseAmount } from "../lib/money.ts";
-import { askLabel, askView, ttlDays, type AskedRequest, type PotFacts } from "../lib/payout.ts";
+import { askButtonText, askLabel, askView, ttlDays, type AskedRequest, type PotFacts } from "../lib/payout.ts";
 import { askCall, askData, askIn, proposalIdIn, readFeeTerms, refusalOf, type FeeTerms } from "../lib/payoutLive.ts";
 import { rememberReceipt } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
@@ -149,7 +149,7 @@ export function AskSheet(props: {
             ? copy.askingFor(fmt(what.amount), facts.payees[what.payee]?.name ?? "")
             : flow.step
               ? copy.asking
-              : copy.askAction(fmt(amount ?? 0n), chosen?.name ?? "");
+              : askButtonText(amount, chosen?.name ?? "", fmt);
   const shownRefusal = view?.refusal && (text.trim() !== "" || view.refusal.code !== ERROR_CODES.PAY_NO_AMOUNT) ? view.refusal : null;
 
   return (
