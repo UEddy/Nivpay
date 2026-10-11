@@ -148,7 +148,7 @@ Record from 2 s before each shot's first step to the end of its hold.
 - **Clip:** `main-B-1`. **Phone B, Maya, then Daniel, then Event hall.**
 - **Start:** phone B on Maya's Home, the chat with the invite links open.
 - **Steps:** DEMO.md 2.5 to 2.7: Maya opens her invite, Houston, Make my
-  reply, Copy link back; Switch account to Daniel, Uyo, reply; Event hall,
+  reply, Copy link back; Switch account to Daniel, Nairobi, reply; Event hall,
   reply. (2.8, the Caterer's reply on phone A, can be off camera.)
 - **End:** the last reply link copied.
 - **Hold:** 2 s.

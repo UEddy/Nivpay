@@ -29,7 +29,7 @@ video's captions use these names and no others.
 | --- | --- | --- | --- | --- | --- |
 | Eddy | A, Galaxy S24 | Eddy | London | Makes Mama's 60th, puts in $500, says yes to the hall, asks to close | Sends $25 and $10 as CTK |
 | Maya | B, Galaxy S10 | Maya | Houston | Puts in $400, says yes to the Caterer and to closing | Receives |
-| Daniel | B, Galaxy S10 | Daniel | Uyo | Puts in $100, asks for both payments | not in it |
+| Daniel | B, Galaxy S10 | Daniel | Nairobi | Puts in $100, asks for both payments | not in it |
 
 The Caterer and the Event hall are businesses, not people: accounts named
 **Caterer** (phone A) and **Event hall** (phone B) that only get paid.
@@ -88,7 +88,7 @@ Accounts made fresh for every run (see [Retakes](#retakes)):
 | Eddy | A | Eddy | London | [FILL IN] | `main.eddy` | Makes Mama's 60th, puts in $500, says yes to the hall, asks to close |
 | Caterer | A | Caterer | | [FILL IN] | `main.caterer` | Payee, up to $700. Never sends |
 | Maya | B | Maya | Houston | [FILL IN] | `main.maya` | Puts in $400, says yes to the Caterer and to closing |
-| Daniel | B | Daniel | Uyo | [FILL IN] | `main.daniel` | The third decider. Puts in $100, asks for both payments |
+| Daniel | B | Daniel | Nairobi | [FILL IN] | `main.daniel` | The third decider. Puts in $100, asks for both payments |
 | Event hall | B | Event hall | | [FILL IN] | `main.eventHall` | Payee, up to $300. Never sends |
 | Eddy (2 min) | A | Eddy | | made on camera | none | Sends $25 and $10 as CTK |
 | Maya (2 min) | B | Maya | | [FILL IN] | `bounty.maya` | Receives. Never sends |

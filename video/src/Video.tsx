@@ -159,7 +159,7 @@ function Card(props: { segment: Segment; square: boolean }) {
  * Captions sit beside the footage (16:9) or above it (1:1), never on it, so
  * they can't cover an amount on the phone's screen.
  */
-function SegmentView(props: { segment: Segment; map: Redactions | null; frames: number }) {
+function SegmentView(props: { segment: Segment; map: Redactions | null; frames: number; legend?: string[] }) {
   const { segment: s, map, frames } = props;
   const { width, height } = useVideoConfig();
   const square = width === height;
@@ -187,6 +187,7 @@ function SegmentView(props: { segment: Segment; map: Redactions | null; frames: 
       <div style={square ? { position: "absolute", left: 60, right: 60, top: 50, height: 230, textAlign: "center" } : { position: "absolute", left: 110, width: 640, top: 0, bottom: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
         {words}
       </div>
+      {props.legend && !square && (s.kind === "phone" || s.kind === "pair") ? <Legend lines={props.legend} /> : null}
       <div style={{ position: "absolute", left: area.x, top: area.y, width: area.w, height: area.h, display: "flex", justifyContent: "center", alignItems: "center", gap }}>
         {takes.map((t, i) => (
           <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
@@ -205,17 +206,32 @@ export function TimelineVideo(props: VideoProps) {
   const at = starts(t, map);
   const draft = t.segments.some(isPlaceholder) || t.segments.some((s) => [s.caption, s.callout, s.labelA, s.labelB, s.title, s.subtitle].some((x) => x && resolve(x).includes(NOT_MEASURED)));
   return (
-    <AbsoluteFill style={{ background: `radial-gradient(ellipse at 70% 40%, ${C.glow}, transparent 60%), ${C.ground}` }}>
+    <AbsoluteFill
+      style={{ background: `radial-gradient(ellipse at 70% 40%, ${C.glow}, transparent 60%), ${C.ground}` }}
+    >
       {t.segments.map((s, i) => {
         const frames = segmentFrames(s, map);
         return (
           <Sequence key={s.id} from={at[i]!} durationInFrames={frames} name={s.id}>
-            <SegmentView segment={s} map={map} frames={frames} />
+            <SegmentView segment={s} map={map} frames={frames} legend={t.legend} />
           </Sequence>
         );
       })}
       {draft ? <DraftBadge /> : null}
     </AbsoluteFill>
+  );
+}
+
+/** The example story and who is where, at the top of the caption column. */
+function Legend(props: { lines: string[] }) {
+  return (
+    <div style={{ position: "absolute", left: 110, top: 56, width: 640, fontFamily: SANS, color: C.muted, fontSize: 30, lineHeight: 1.35 }}>
+      {props.lines.map((l, i) => (
+        <div key={i} style={i === 0 ? { color: C.text, fontWeight: 600, marginBottom: 6 } : undefined}>
+          {resolve(l)}
+        </div>
+      ))}
+    </div>
   );
 }
 

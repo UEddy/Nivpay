@@ -145,7 +145,7 @@
       "plan": "End card",
       "seconds": 5,
       "title": "NivPay",
-      "subtitle": "A passkey, a dollar balance, a payment that settles while you watch.",
+      "subtitle": "{app.endLine}",
       "url": true
     }
   ]

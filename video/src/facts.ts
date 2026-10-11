@@ -16,13 +16,15 @@ export const FACTS = {
   app: {
     url: "https://nivpay.vercel.app",
     host: "nivpay.vercel.app",
+    /** The end line on the end frame of every video, as one string. */
+    endLine: "Simple payments for what matters",
   },
 
   /** docs/SEEDING.md, The cast. */
   cast: {
     eddy: { name: "Eddy", city: "London", phone: "A, Galaxy S24" },
     maya: { name: "Maya", city: "Houston", phone: "B, Galaxy S10" },
-    daniel: { name: "Daniel", city: "Uyo", phone: "B, Galaxy S10" },
+    daniel: { name: "Daniel", city: "Nairobi", phone: "B, Galaxy S10" },
     caterer: { name: "Caterer", limit: "$700" },
     eventHall: { name: "Event hall", limit: "$300" },
   },

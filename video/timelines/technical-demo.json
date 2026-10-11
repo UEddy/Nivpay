@@ -7,6 +7,7 @@
   "capSeconds": 180,
   "target": [165, 175],
   "words": "technical",
+  "legend": ["Example: {pot.name}", "{cast.eddy.name}, {cast.eddy.city}", "{cast.maya.name}, {cast.maya.city}", "{cast.daniel.name}, {cast.daniel.city}"],
   "segments": [
     {
       "id": "hook",
@@ -15,7 +16,7 @@
       "plan": "Opening question card",
       "seconds": 4,
       "title": "When a family pays for a party, who holds the money?",
-      "subtitle": "{pot.name}, in NivPay"
+      "subtitle": "Example: {pot.name}, in NivPay"
     },
     {
       "id": "make-pot",
@@ -146,7 +147,7 @@
       "takeB": { "clip": null, "in": 0, "out": 10 },
       "labelA": "{cast.eddy.name} takes {pot.shares.eddy}",
       "labelB": "{cast.maya.name} takes {pot.shares.maya}",
-      "caption": "Each person takes their own share"
+      "caption": "Anyone can leave with their share"
     },
     {
       "id": "take-daniel",
@@ -154,7 +155,8 @@
       "kind": "phone",
       "plan": "Phone B, Daniel: Take my $11.56, the pot holds $0.00",
       "take": { "clip": null, "in": 0, "out": 6 },
-      "caption": "{cast.daniel.name} takes {pot.shares.daniel}. Nothing is left, to the cent"
+      "caption": "{cast.daniel.name} takes {pot.shares.daniel}. Nothing is left, to the cent",
+      "callout": "{cast.eddy.name} {pot.shares.eddy}, {cast.maya.name} {pot.shares.maya}, {cast.daniel.name} {pot.shares.daniel}: all of {pot.left}"
     },
     {
       "id": "replay",
@@ -170,8 +172,8 @@
       "kind": "explorer",
       "plan": "PC, MonadVision: the NivPayPots on AUSD contract page that holds the pot just made, verified source",
       "take": { "clip": null, "in": 0, "out": 8 },
-      "caption": "The contract on Monad that holds the pot we just made. No owner, no upgrade",
-      "callout": "{contracts.potsAusd|short}"
+      "caption": "The contract on Monad that holds the pot we just made",
+      "callout": "Money goes only to the payees fixed when the pot was made"
     },
     {
       "id": "explorer-create",
@@ -198,7 +200,7 @@
       "plan": "End card",
       "seconds": 4,
       "title": "NivPay",
-      "subtitle": "Pool money with people you trust. Nobody can pocket it.",
+      "subtitle": "{app.endLine}",
       "url": true
     }
   ]

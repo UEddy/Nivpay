@@ -40,6 +40,7 @@ export function storyboard(timelines: Timeline[]): string {
       "",
       `${t.width}x${t.height}, ${t.fps} fps, ${total.toFixed(1)} s planned (target ${t.target[0]} to ${t.target[1]} s, cap ${t.capSeconds} s).`,
       ABOUT[t.id] ?? "",
+      ...(t.legend ? ["", `Beside every phone shot: ${t.legend.map(resolve).join("; ")}.`] : []),
       "",
       "| Time | Shot | On screen | Caption | Callout |",
       "| --- | --- | --- | --- | --- |",

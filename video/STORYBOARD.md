@@ -25,16 +25,18 @@ For the Agora bounty judges. The three things they look for (passkey onboarding,
 | 78.5 to 90.5 s | B07 | Phone A: the same request link, How much 10, They receive CTK, the line on what CTK is, Review. (one phone) | Pay in another currency: CTK | CTK is a test currency from Agora, standing in for a local currency |
 | 90.5 to 94.5 s | B08 | Phone A: Send $10 as CTK, one fingerprint, Step 1 of 3, Step 2 of 3, Step 3 of 3. (one phone; Sped up x2) | One fingerprint, three steps, each final before the next |  |
 | 94.5 to 102.5 s | B08 | A: Sent $10 to Maya. They received 10.00 CTK. Settled in 0.Xs. B: +10.00 CTK from Agora's settlement. (both phones side by side; never sped up) Labels: Eddy sends $10 / Maya receives CTK. | Maya receives [not measured yet]. Settled in [not measured yet] | Rate $1 = 1.00 CTK, set by Agora |
-| 102.5 to 107.5 s | card | End card. (card) | NivPay / A passkey, a dollar balance, a payment that settles while you watch. / the link |  |
+| 102.5 to 107.5 s | card | End card. (card) | NivPay / Simple payments for what matters / the link |  |
 
 ## technical-demo
 
 1920x1080, 30 fps, 173.0 s planned (target 165 to 175 s, cap 180 s).
 Mama's 60th in the real app, then one explorer segment on the PC. Monad, AUSD and transaction hash may appear in captions; chain words (block, contract, explorer) only on the explorer segments.
 
+Beside every phone shot: Example: Mama's 60th; Eddy, London; Maya, Houston; Daniel, Nairobi.
+
 | Time | Shot | On screen | Caption | Callout |
 | --- | --- | --- | --- | --- |
-| 0.0 to 4.0 s | card | Opening question card. (card) | When a family pays for a party, who holds the money? / Mama's 60th, in NivPay |  |
+| 0.0 to 4.0 s | card | Opening question card. (card) | When a family pays for a party, who holds the money? / Example: Mama's 60th, in NivPay |  |
 | 4.0 to 20.0 s | M01 | Phone A, Eddy: Make a pot, Mama's 60th, London, $500, invite Maya and Daniel, 2 of 3, Caterer up to $700, Event hall up to $300, Thu 31 Dec 2026. (one phone; Sped up x4) | Eddy makes Mama's 60th. Named people decide, 2 of 3 | It can only ever pay the Caterer, up to $700, and the Event hall, up to $300 |
 | 20.0 to 24.0 s | M02 | Phone B: Maya, Daniel and the Event hall each open their invite and reply with a link. (one phone; Sped up x4) | Everyone named replies with a link |  |
 | 24.0 to 34.0 s | M03 | Phone A: Everyone has replied, set shares $400 and $100, Make the pot, fingerprint, the lid drops and locks at Finalized. (one phone) | Made. It closes Thu 31 Dec 2026 | The rules are fixed the moment it is made |
@@ -48,13 +50,13 @@ Mama's 60th in the real app, then one explorer segment on the PC. Monad, AUSD an
 | 92.0 to 100.0 s | M11 | Phone A, Eddy: Waiting for your yes, Say yes and pay Event hall, the pot has $115.60. (one phone) | Eddy says yes. $115.60 is left |  |
 | 100.0 to 110.0 s | M12 | Phone A, Eddy: Closing and your share, Eddy $57.80, Maya $46.24, Daniel $11.56, You put in $500, half of the pot, Ask to close early. (one phone) | Close early: what is left is shared by what each put in | Eddy put in $500, half the pot, so half of $115.60 |
 | 110.0 to 120.0 s | M13 | Phone B, Maya: Say yes and close it, See the split: streams to each city, $1,000 went in, $880 paid out, $4.40 on fees. (one phone) | $1,000 in. $880 paid out. $4.40 in fees | Closed on Maya's yes |
-| 120.0 to 130.0 s | M14 | B: Maya, Take my $46.24, coin to Houston. A: Eddy, Take my $57.80, coin to London. (both phones side by side) Labels: Eddy takes $57.80 / Maya takes $46.24. | Each person takes their own share |  |
-| 130.0 to 136.0 s | M15 | Phone B, Daniel: Take my $11.56, the pot holds $0.00. (one phone) | Daniel takes $11.56. Nothing is left, to the cent |  |
+| 120.0 to 130.0 s | M14 | B: Maya, Take my $46.24, coin to Houston. A: Eddy, Take my $57.80, coin to London. (both phones side by side) Labels: Eddy takes $57.80 / Maya takes $46.24. | Anyone can leave with their share |  |
+| 130.0 to 136.0 s | M15 | Phone B, Daniel: Take my $11.56, the pot holds $0.00. (one phone) | Daniel takes $11.56. Nothing is left, to the cent | Eddy $57.80, Maya $46.24, Daniel $11.56: all of $115.60 |
 | 136.0 to 145.0 s | M16 | Phone A, Eddy: See the pot's story, then the replay button: the whole story in about 7 s. (one phone) | Every step, replayed |  |
-| 145.0 to 153.0 s | E01 | PC, MonadVision: the NivPayPots on AUSD contract page that holds the pot just made, verified source. (explorer) | The contract on Monad that holds the pot we just made. No owner, no upgrade | 0xB9E6...9EfB |
+| 145.0 to 153.0 s | E01 | PC, MonadVision: the NivPayPots on AUSD contract page that holds the pot just made, verified source. (explorer) | The contract on Monad that holds the pot we just made | Money goes only to the payees fixed when the pot was made |
 | 153.0 to 161.0 s | E02 | PC, MonadVision: the CreatePot transaction of the Mama's 60th just made, from its Receipt link, and its PotCreated log. (explorer) | CreatePot: the pot we just made, Mama's 60th | Transaction hash [not measured yet] |
 | 161.0 to 169.0 s | E03 | PC, MonadVision: Eddy's FundWithPermit into the pot just made, from its Receipt link: the Approval, the AUSD Transfer and Funded for $500 in one. (explorer) | FundWithPermit: Eddy's $500 into the pot we just made, with one signature | Transaction hash [not measured yet]. Blocks land about 300 ms apart |
-| 169.0 to 173.0 s | card | End card. (card) | NivPay / Pool money with people you trust. Nobody can pocket it. / the link |  |
+| 169.0 to 173.0 s | card | End card. (card) | NivPay / Simple payments for what matters / the link |  |
 
 ## x-launch
 
@@ -69,4 +71,4 @@ For X: square, consumer words only, no crypto words at all. A hook in the first 
 | 15.0 to 22.0 s | M07 | The ask sheet: 1 more yes pays Caterer. (one phone; pushed in) | Paying needs 2 of 3 to say yes |  |
 | 22.0 to 29.0 s | M08 | The second yes: the stream runs to the Caterer and nowhere else. (one phone; pushed in) | Nobody can pocket it. Not even the one who made it. |  |
 | 29.0 to 35.0 s | M13 | See the split: streams back to each city with each amount. (one phone) | Close it early and everyone takes their share |  |
-| 35.0 to 40.0 s | card | End card. (card) | NivPay / Pool money with people you trust. / the link |  |
+| 35.0 to 40.0 s | card | End card. (card) | NivPay / Simple payments for what matters / the link |  |

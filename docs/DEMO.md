@@ -5,7 +5,7 @@ accounts on two phones. Everything here is on Monad testnet with test AUSD;
 the app says "Test mode" throughout. Nothing in it is hardcoded in the app:
 the names, cities and amounts are typed in on camera.
 
-The story: Eddy (London), Maya (Houston) and Daniel (Uyo) pay for their
+The story: Eddy (London), Maya (Houston) and Daniel (Nairobi) pay for their
 mother's party. The pot can only pay the Caterer (up to $700) and the Event
 hall (up to $300), and 2 of 3 must say yes. Eddy puts in $500, Maya $400,
 Daniel $100. The Caterer is paid $600 and the hall $280. Eddy asks to
@@ -59,7 +59,7 @@ in place of the share sheet.
 | Phone | Accounts, in the order made | City typed in |
 | --- | --- | --- |
 | A, Galaxy S24 | Eddy, then Caterer | London |
-| B, Galaxy S10 | Maya, then Daniel, then Event hall | Houston, Uyo |
+| B, Galaxy S10 | Maya, then Daniel, then Event hall | Houston, Nairobi |
 
 One phone holds several accounts: Account details, Switch account, Add
 another account. Each account is its own passkey; when the phone asks which
@@ -99,7 +99,7 @@ take only if you reuse the accounts, which you shouldn't (see below).
 | 2.3 | A, Eddy | Pours only to: Add a place to pay, **Caterer**, up to **$700**, Send them a link. Again for **Event hall**, up to **$300** | |
 | 2.4 | A, Eddy | Closes: choose **Thu 31 Dec 2026** | "Closes at the end of Thu 31 Dec 2026", the end of that day in phone A's time zone (Lagos), whatever city is typed. Early close in section 5 is what the video shows |
 | 2.5 | B, Maya | Open Maya's invite from the chat, city **Houston**, Make my reply, Send the reply back to phone A | |
-| 2.6 | B, Daniel | Switch account, open Daniel's invite, city **Uyo**, reply | |
+| 2.6 | B, Daniel | Switch account, open Daniel's invite, city **Nairobi**, reply | |
 | 2.7 | B, Event hall | Switch account, open the hall's invite, reply | |
 | 2.8 | A, Caterer | Switch account, open the Caterer's invite, reply. Open the reply link on phone A: it switches back to Eddy by itself | |
 | 2.9 | A, Eddy | Open each reply link from phone B on phone A. Then in Who decides set Maya's suggested share to **$400** and Daniel's to **$100** | "Everyone has replied" |

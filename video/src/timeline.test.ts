@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import type { ClipEntry, Redactions } from "./redactions.ts";
 import { FINGERPRINT_CAPTION } from "./redactions.ts";
@@ -95,4 +96,30 @@ test("the three committed timelines pass every rule a draft needs, within their 
     const s = totalFrames(t, null) / 30;
     assert.ok(s >= t.target[0] && s <= t.target[1], `${f}: ${s} s`);
   }
+});
+
+test("no owner or upgrade wording in any caption, with the two lines to use instead", () => {
+  for (const t of ["No owner, no upgrade", "It has no owners", "Nobody can upgrade it", "Ownerless and non-upgradeable"]) {
+    assert.match(textProblems(t, "technical", true).join(), /no owner or upgrade wording/, t);
+  }
+  assert.deepEqual(textProblems("Money goes only to the payees fixed when the pot was made", "consumer", false), []);
+  assert.deepEqual(textProblems("Anyone can leave with their share", "consumer", false), []);
+  // A legend line is checked like a caption.
+  assert.match(problems(tl([card("c", 5)], { legend: ["No owner here"] }), null).hard.join(), /legend: .*no owner or upgrade wording/);
+});
+
+test("every video ends on the facts' end line, and the old pool-money phrase is gone from video/", () => {
+  const dir = new URL("../timelines/", import.meta.url);
+  for (const f of ["agora-bounty.json", "technical-demo.json", "x-launch.json"]) {
+    const t = JSON.parse(readFileSync(new URL(f, dir), "utf8")) as Timeline;
+    const last = t.segments.at(-1)!;
+    assert.equal(last.kind, "card", f);
+    assert.equal(last.subtitle, "{app.endLine}", f);
+    assert.equal(resolve(last.subtitle!), "Simple payments for what matters", f);
+  }
+  const root = new URL("../", import.meta.url);
+  const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "."], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter((f) => /\.(ts|tsx|json|md)$/.test(f) && !f.endsWith("package-lock.json") && !f.endsWith("timeline.test.ts"));
+  for (const f of files) assert.doesNotMatch(readFileSync(new URL(f, root), "utf8"), /pool money|people you trust/i, f);
 });

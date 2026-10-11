@@ -160,3 +160,26 @@ test("the confirm step is the app's own sheet: Sending to account ending and the
   const id = "0x00000000000000000000000000000000000AbCd1";
   assert.equal(copy.sendingTo(copy.accountEnding(id)), "Sending to account ending bCd1");
 });
+
+test("the take-share beat: Daniel takes his share, and the three shares are all of what was left", () => {
+  const P = FACTS.pot;
+  const shares = [P.shares.eddy, P.shares.maya, P.shares.daniel].map((s) => usd(Number(s.replace(/[$,]/g, ""))));
+  assert.equal(cents(shares.reduce((a, b) => a + b, 0n)), P.left);
+  const demo = JSON.parse(doc("video/timelines/technical-demo.json")) as { segments: { id: string; caption?: string; callout?: string }[] };
+  const beat = demo.segments.find((s) => s.id === "take-daniel")!;
+  assert.match(beat.caption!, /^\{cast\.daniel\.name\} takes \{pot\.shares\.daniel\}/);
+  for (const t of ["{cast.eddy.name} {pot.shares.eddy}", "{cast.maya.name} {pot.shares.maya}", "{cast.daniel.name} {pot.shares.daniel}", "{pot.left}"]) {
+    assert.ok(beat.callout!.includes(t), t);
+  }
+  assert.deepEqual([P.shares.eddy, P.shares.maya, P.shares.daniel], ["$57.80", "$46.24", "$11.56"]);
+});
+
+test("the technical demo is labelled an example story, with each person's city from facts", () => {
+  const demo = JSON.parse(doc("video/timelines/technical-demo.json")) as { legend: string[] };
+  assert.deepEqual(demo.legend, ["Example: {pot.name}", "{cast.eddy.name}, {cast.eddy.city}", "{cast.maya.name}, {cast.maya.city}", "{cast.daniel.name}, {cast.daniel.city}"]);
+  assert.deepEqual(
+    [FACTS.cast.eddy, FACTS.cast.maya, FACTS.cast.daniel].map((p) => `${p.name}, ${p.city}`),
+    ["Eddy, London", "Maya, Houston", "Daniel, Nairobi"],
+  );
+  assert.equal(FACTS.app.endLine, "Simple payments for what matters");
+});

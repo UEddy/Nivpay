@@ -62,6 +62,8 @@ export type Timeline = {
   words: WordRules;
   /** Every proof listed must be shown by a segment that ends by this time. */
   provesBy?: { seconds: number; proofs: Proof[] };
+  /** Lines shown beside every phone shot, such as "Example: Mama's 60th" and who is where. Checked like captions. */
+  legend?: string[];
   segments: Segment[];
 };
 
@@ -73,6 +75,10 @@ const ALWAYS_BANNED = [
   "crypto", "cryptocurrency", "blockchain", "web3", "web 3", "wallet", "wallets", "token", "tokens", "gas",
   "onchain", "on-chain", "defi", "nft", "nfts", "stablecoin", "stablecoins", "smart contract", "mint", "minted",
   "minting", "seed phrase", "private key", "airdrop", "ether", "ethereum", "metamask", "dapp", "hodl",
+];
+// Never in any caption, though the README keeps its own wording: say what the pot does instead.
+const OWNER_OR_UPGRADE = [
+  "owner", "owners", "ownerless", "owned", "upgrade", "upgrades", "upgraded", "upgradeable", "upgradable", "non-upgradeable",
 ];
 // Allowed in the bounty and technical captions, never in the consumer video.
 const TECHNICAL_ONLY = ["monad", "ausd", "transaction hash", "ctk", "testnet"];
@@ -128,6 +134,9 @@ export function textProblems(text: string, rules: WordRules, explorer: boolean):
   if (rules === "consumer") banned = banned.concat(words(shown, TECHNICAL_ONLY), words(shown, EXPLORER_ONLY));
   else if (!explorer) banned = banned.concat(words(rest, EXPLORER_ONLY));
   for (const w of new Set(banned)) out.push(`uses "${w}", not allowed here`);
+  for (const w of words(shown, OWNER_OR_UPGRADE)) {
+    out.push(`uses "${w}": no owner or upgrade wording in captions; say "Money goes only to the payees fixed when the pot was made" or "Anyone can leave with their share"`);
+  }
   return out;
 }
 
@@ -166,6 +175,10 @@ export function problems(t: Timeline, map: Redactions | null): Problems {
   const final: string[] = [];
   const warnings: string[] = [];
   if (t.fps !== FPS) hard.push(`${t.id}: fps must be ${FPS}`);
+  for (const line of t.legend ?? []) {
+    for (const p of textProblems(line, t.words, false)) hard.push(`${t.id} legend: "${line}" ${p}`);
+    for (const p of factsUsed(line).unmeasured) final.push(`${t.id} legend: {${p}} is not measured yet (null in facts.ts)`);
+  }
   const ids = new Set<string>();
   let at = 0;
   const proofEnds = new Map<Proof, number>();

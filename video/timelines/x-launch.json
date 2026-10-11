@@ -68,7 +68,7 @@
       "plan": "End card",
       "seconds": 5,
       "title": "NivPay",
-      "subtitle": "Pool money with people you trust.",
+      "subtitle": "{app.endLine}",
       "url": true
     }
   ]
