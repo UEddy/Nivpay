@@ -12,6 +12,7 @@ import { findPots, ScanStore, type FoundPot, type Role, type ScanState } from ".
 import { askReader, creatorReader, potsReader } from "./lib/discoverLive.ts";
 import { AskScanStore, findOpenRequests, learnPotBlocks, needingMyYes, PotBlocks, type AskScan } from "./lib/waiting.ts";
 import { AppError, describeFailure, SendFailure } from "./lib/errors.ts";
+import { openedPotMeta, ROLE_TEXT } from "./lib/potRow.ts";
 import { addDollarsField, checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
 import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
 import { InvitedStore, matchInvites, type AnsweredInvite } from "./lib/invited.ts";
@@ -1014,11 +1015,6 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
   return { scan, failed, answered: answeredInvites, asks, starts };
 }
 
-const ROLE_TEXT: Record<Role, string> = {
-  decides: copy.foundRoleDecides,
-  paid: copy.foundRolePaid,
-  putIn: copy.foundRolePutIn,
-};
 
 /**
  * A pot found from the chain whose link hasn't been opened on this phone:
@@ -1194,7 +1190,12 @@ function YourPots(props: {
         >
           <span className="grow">
             <span className="name">{p.name || copy.unnamedPot}</span>
-            <span className="meta">{copy.potRowJoined}</span>
+            <span className="meta">
+              {(() => {
+                const f = scan.found.find((x) => x.potId === p.potId);
+                return openedPotMeta(f, f && scan.decimals !== null ? formatAmount(BigInt(f.totalAssets), scan.decimals, "auto") : "…");
+              })()}
+            </span>
           </span>
           <span className="tag live">{copy.live}</span>
         </button>
