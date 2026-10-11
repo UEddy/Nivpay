@@ -49,3 +49,15 @@ id_ed25519*
 # The recording preflight's config: this session's account addresses and pot
 # numbers (docs/SEEDING.md). Only the example is committed.
 app/scripts/preflight.config.json
+
+# The demo video. Raw phone footage, extracted frames, the redaction map and
+# the privacy denylist show real emails, names and contacts: they stay on the
+# recording PC and are never committed. Only video/out/ is ever uploaded, and
+# only after video:check passes.
+video/footage/
+video/reference/
+video/out/
+video/node_modules/
+video/.cache/
+video/.render/
+video/privacy-denylist.txt

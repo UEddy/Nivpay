@@ -1,0 +1,32 @@
+{
+  "name": "nivpay-video",
+  "private": true,
+  "version": "0.0.0",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "test": "node --test \"src/**/*.test.ts\" \"scripts/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "video:render": "node scripts/render.ts",
+    "video:privacy-check": "node scripts/privacy-check.ts",
+    "video:check": "npm run typecheck && npm test && node scripts/check.ts"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.534",
+    "@remotion/cli": "4.0.534",
+    "@remotion/renderer": "4.0.534",
+    "@tesseract.js-data/eng": "1.0.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.534",
+    "tesseract.js": "7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "@types/react": "19.3.0",
+    "typescript": "7.0.2"
+  }
+}
