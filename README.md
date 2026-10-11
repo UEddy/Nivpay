@@ -1377,6 +1377,22 @@ publicly documented Anvil test account key used by `app/src/api-tests/fund.test.
 and named `PUBLIC_TEST_KEY` there. It is not a secret: Foundry and Hardhat
 publish it as their first local test account.
 
+## Demo videos
+
+The demo videos are built in `video/` with Remotion, from real screen
+recordings of the live app on two phones and of MonadVision on a PC. Nothing
+on screen is mocked up. Every amount, name, hash and settle time in a caption
+comes from `video/src/facts.ts`, which a test checks against the app's own
+fee and share arithmetic and against this README. Settle times and the
+hashes of the recorded send are filled in from the footage, never typed in
+ahead of it. Each video is one timeline file in `video/timelines/`, so
+swapping footage never touches code. A final render refuses while a
+placeholder or an unmeasured figure is left, and every render goes through a
+redaction map and an OCR privacy check that run on the recording PC only;
+raw footage is never committed. Render steps are in
+[video/README.md](video/README.md), the recording plan in
+[video/SHOTLIST.md](video/SHOTLIST.md).
+
 ## Future work
 
 **Usernames for accounts.** Today an account is a 42 character address, and
@@ -1571,6 +1587,7 @@ their parent packages.
     app/src/lib/                  accounts, writes, feeds, links, money, config
     app/api/fund/                 the gas grant function and its status endpoint
     docs/                         design, measurements, error codes, bounty and submission notes
+    video/                        the demo videos: Remotion compositions, timelines, facts, shot list
 
 ## License
 
