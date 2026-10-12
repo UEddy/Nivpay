@@ -1,6 +1,6 @@
 # NivPay
 
-**A pot is a group purse for one purpose that no single person can pocket.**
+**Nivpay is a pot is a group purse for one purpose that no single person can pocket.**
 
 Money goes in from anyone. It can only come out to destinations fixed when the
 pot was created, and only when enough of the named approvers agree. From its
