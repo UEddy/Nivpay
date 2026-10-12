@@ -22,18 +22,23 @@
   "dependencies": {
     "@fontsource/besley": "5.3.0",
     "@fontsource/work-sans": "5.3.0",
+    "@react-three/fiber": "9.8.1",
     "@remotion/bundler": "4.0.534",
     "@remotion/cli": "4.0.534",
+    "@remotion/media": "4.0.534",
     "@remotion/renderer": "4.0.534",
+    "@remotion/three": "4.0.534",
     "@tesseract.js-data/eng": "1.0.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "remotion": "4.0.534",
-    "tesseract.js": "7.0.0"
+    "tesseract.js": "7.0.0",
+    "three": "0.186.1"
   },
   "devDependencies": {
     "@types/node": "24.19.0",
     "@types/react": "19.3.0",
+    "@types/three": "0.186.0",
     "typescript": "7.0.2"
   }
 }

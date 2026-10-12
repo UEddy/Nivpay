@@ -7,6 +7,7 @@ import { parseRedactions, timeline } from "./redactions.ts";
 import { problems, totalFrames, type Timeline } from "./timeline.ts";
 import { FPS, pieceFrames } from "./timing.ts";
 import { TimelineVideo, type VideoProps } from "./Video.tsx";
+import { PhonePrototype, PROTOTYPE_FRAMES, type PrototypeProps } from "./phone/Prototype.tsx";
 
 export const TIMELINES = [agora, demo, x] as unknown as Timeline[];
 
@@ -36,6 +37,18 @@ export function Root() {
             if (hard.length) throw new Error(hard.join("\n"));
             return { props: { ...props, map }, durationInFrames: totalFrames(props.timeline, map) };
           }}
+        />
+      ))}
+      {(["3d", "css"] as const).map((r) => (
+        <Composition
+          key={r}
+          id={`phone-prototype-${r}`}
+          component={PhonePrototype}
+          fps={FPS}
+          width={1920}
+          height={1080}
+          durationInFrames={PROTOTYPE_FRAMES}
+          defaultProps={{ renderer: r } satisfies PrototypeProps}
         />
       ))}
       <Composition

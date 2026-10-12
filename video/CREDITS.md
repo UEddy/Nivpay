@@ -25,6 +25,13 @@ render refuses while one is left.
 layout ([STYLE-NOTES.md](STYLE-NOTES.md)). No music, footage, logo or text
 from them is used.
 
+## The phone frame
+
+Built in code (`src/phone/`): a generic rounded slab with plain side buttons,
+from three's own geometry, lit by three's procedural `RoomEnvironment`. No
+model file, no texture file, no brand, logo or real phone design. Its screen
+shows only redacted renders of the author's footage.
+
 ## Fonts
 
 | Font | Package | License |
@@ -39,5 +46,9 @@ The same fonts and versions as the app.
 | Tool | Version | License |
 | --- | --- | --- |
 | Remotion (`remotion`, `@remotion/cli`, `@remotion/bundler`, `@remotion/renderer`) | 4.0.534 | Remotion License, Free License tier: free for an individual, including commercial use (`node_modules/remotion/LICENSE.md`) |
+| `@remotion/three` | 4.0.534 | MIT |
+| `@remotion/media` | 4.0.534 | no license field in its package and no license file; part of the Remotion monorepo, whose license is the Remotion License above. Not yet confirmed for this package |
+| three | 0.186.1 | MIT |
+| `@react-three/fiber` | 9.8.1 | MIT |
 | tesseract.js and its English data | 7.0.0, 1.0.0 | Apache 2.0, used for the privacy check on this PC only |
 | FFmpeg | 9.0.2 (Gyan.FFmpeg build) | LGPL and GPL, used as a tool on this PC, not shipped |
