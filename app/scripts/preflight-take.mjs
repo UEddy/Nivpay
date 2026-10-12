@@ -12,19 +12,18 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ConfigError, failed, findTake, formatReport, liveDeps, parseConfig, runTake, TAKES } from "./preflight.ts";
+import { ConfigError, failed, findTake, formatReport, liveDeps, parseArgs, parseConfig, runTake, TAKES } from "./preflight.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const args = process.argv.slice(2);
-const configAt = args.indexOf("--config");
-const configPath = configAt >= 0 ? resolve(args[configAt + 1] ?? "") : resolve(here, "preflight.config.json");
-const name = args.find((a, i) => !a.startsWith("--") && i !== configAt + 1);
+const args = parseArgs(process.argv.slice(2));
+const configPath = args.configPath !== undefined ? resolve(args.configPath) : resolve(here, "preflight.config.json");
+const name = args.name;
 
 const list = () => TAKES.map((t) => `  ${t.name.padEnd(12)} ${t.title}`).join("\n");
 
-if (args.includes("--list") || !name) {
+if (args.list || !name) {
   console.log(`Takes, in the order of docs/DEMO.md:\n${list()}`);
-  process.exit(name || args.includes("--list") ? 0 : 2);
+  process.exit(args.list ? 0 : 2);
 }
 
 const take = findTake(name);

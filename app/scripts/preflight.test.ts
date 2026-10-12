@@ -13,6 +13,7 @@ import {
   findTake,
   formatReport,
   KNOWN,
+  parseArgs,
   makeClient,
   parseConfig,
   runTake,
@@ -390,4 +391,12 @@ test("preflight: dollars are read from text without a float", () => {
   assert.equal(usd("9,557.8"), 9_557_800_000n);
   assert.equal(usd("0"), 0n);
   assert.throws(() => usd("1.234"));
+});
+
+test("preflight: the take name is read wherever it sits, with or without --config", () => {
+  assert.deepEqual(parseArgs(["bounty"]), { name: "bounty", configPath: undefined, list: false });
+  assert.deepEqual(parseArgs(["bounty", "--config", "c.json"]), { name: "bounty", configPath: "c.json", list: false });
+  assert.deepEqual(parseArgs(["--config", "c.json", "bounty"]), { name: "bounty", configPath: "c.json", list: false });
+  assert.deepEqual(parseArgs(["--list"]), { name: undefined, configPath: undefined, list: true });
+  assert.equal(parseArgs(["--config"]).configPath, "");
 });

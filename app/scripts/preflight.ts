@@ -65,6 +65,14 @@ export type Config = {
 
 export class ConfigError extends Error {}
 
+/** Reads `<take-name> [--config <path>]` or `--list` from the command line, in any order. */
+export function parseArgs(args: string[]): { name?: string; configPath?: string; list: boolean } {
+  const configAt = args.indexOf("--config");
+  const configPath = configAt >= 0 ? (args[configAt + 1] ?? "") : undefined;
+  const name = args.find((a, i) => !a.startsWith("--") && !(configAt >= 0 && i === configAt + 1));
+  return { name, configPath, list: args.includes("--list") };
+}
+
 const KEYISH_NAME = /key|secret|mnemonic|seed|phrase|password/i;
 const KEYISH_VALUE = /^(0x)?[0-9a-fA-F]{64}$/;
 
