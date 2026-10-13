@@ -1,10 +1,13 @@
 # Submission checklist
 
 What the Monad Metropolis hackathon terms ask of a submission, and where this
-repository stands on each, as of 10 Oct 2026. The terms sections this covers
-are 4.1, 4.3, 5.3, 7.2, 9.2, 9.4 and 10. [CHECK: put each row's section number
-in the first column; they were not matched to rows here because the terms text
-is not in the repository.]
+repository stands on each, as of 10 Oct 2026. The official rules are on the
+application platform, https://hackathon.monad.xyz, behind sign-in, and are
+not copied here, so the rows below are not matched to rule numbers. The
+public page, https://monad.xyz/metropolis (read on 13 Oct 2026), asks for "a
+working product with a public project profile: a demo, a short write-up, and
+a link to the code", built during the six weeks (1 Sep to 13 Oct), in the one
+track chosen when applying: here "Consumer Products & Payments".
 
 Status key: **Done** means it is in the repository and was checked.
 **Owner** means only the author can do it: it needs an account, a camera, a
@@ -12,21 +15,21 @@ phone or a decision.
 
 ## Hackathon terms
 
-| Section | Requirement | Status | Evidence, or what is left |
-| --- | --- | --- | --- |
-| [CHECK] | Public code repository | Done, push pending | https://github.com/UEddy/Nivpay is public (checked 9 Oct 2026). The newest local commits are not pushed yet: the author pushes. |
-| [CHECK] | An open source license | Done | `LICENSE`, MIT, "Copyright (c) 2026 UEddy". Referenced in the README and in `app/package.json` (`"license": "MIT"`). Solidity files carry `SPDX-License-Identifier: MIT`. |
-| [CHECK] | A README a third party can run from | Done | `README.md`: the problem and intended user, the pot rules, why Monad, every contract address with its verification, architecture, tech stack, setup and deployment with every environment variable, the gas grant limits. |
-| [CHECK] | Commit history covering the build window | Done | Commits from 6 Sep 2026 onward, in small steps, none squashed. See `git log --reverse`. The published history was never rewritten: all 17 pushes recorded in this clone are fast-forwards. Two local redos happened before they were pushed, listed in the README, "Pre-existing work". |
-| [CHECK] | Pre-existing work declared | Done | README, "Pre-existing work": nothing predates 1 Sep 2026; first commit `e627991` on 6 Sep 2026. Two [CHECK] items there for the author. |
-| [CHECK] | Demo video, 3 minutes at most, public, showing Monad interactions | **Owner** | Record and upload it publicly, following `docs/DEMO.md` (who does what on which phone, the faucet timing, every amount and fee, and resetting between takes; a separate 2 minute path covers the Agora bounty). Suggested: make an account with a passkey, Add test dollars, make a pot, put money in from a second phone, an approval that pays the caterer, the Caterer's phone receiving it, then Account details, View receipt, to show the finalized transaction on MonadVision. |
-| [CHECK] | Contract addresses | Done | README, "Contract addresses": the three NivPay contracts and Agora's five, on Monad testnet (10143), with explorer links; the three NivPay contracts are exact Sourcify matches. Real transactions from the app (a faucet claim, pot 0's CreatePot and its first FundWithPermit) are under "Monad integration", each checked as successful and finalized on 10 Oct 2026. |
-| [CHECK] | Disclosure of AI tools | Done, with [CHECK] items | README, "AI disclosure": Claude Code, used across contracts, app, tests and docs, and what the author did. The author must settle every [CHECK] in that section before submitting. |
-| [CHECK] | Originality | Done | No file is identical to any file in the author's other repositories (hash comparison, 9 Oct 2026). Third-party code is listed with licenses in the README. |
-| [CHECK] | Documentation | Done | README, plus `docs/APP-CONTRACT-MAP.md`, `docs/BUILD-APP.md`, `docs/MOTION.md`, `docs/ERROR-CODES.md`, `docs/BOUNTIES.md`, `docs/DEMO.md`, `docs/PERF-S10.md`, `BENCHMARK.md`. |
-| [CHECK] | One project, one track | **Owner** | Enter NivPay in one track only on the form. The README names Consumer Products and Payments. |
-| [CHECK] | No secrets in the repository | Done | Full history scan on 9 Oct 2026: no private key, mnemonic, API key, keystore or `.env` file. `.gitignore` covers `.env*`, keystores, key files and `.vercel/`. See README, "Broadcast receipts are committed on purpose". |
-| [CHECK] | The submission form | **Owner** | Fill it in with the repository link, the video link, the live app link (https://nivpay.vercel.app) and the contract addresses. |
+| Requirement | Status | Evidence, or what is left |
+| --- | --- | --- |
+| Public code repository | Done, push pending | https://github.com/UEddy/Nivpay is public (checked 9 Oct 2026). The newest local commits are not pushed yet: the author pushes. |
+| An open source license | Done | `LICENSE`, MIT, "Copyright (c) 2026 UEddy". Referenced in the README and in `app/package.json` (`"license": "MIT"`). Solidity files carry `SPDX-License-Identifier: MIT`. |
+| A README a third party can run from | Done | `README.md`: the problem and intended user, the pot rules, why Monad, every contract address with its verification, architecture, tech stack, setup and deployment with every environment variable, the gas grant limits. |
+| Commit history covering the build window | Done | Commits from 6 Sep 2026 onward, in small steps, none squashed. See `git log --reverse`. The published history was never rewritten: all 17 pushes recorded in this clone are fast-forwards. Two local redos happened before they were pushed, listed in the README, "Pre-existing work". |
+| Pre-existing work declared | Done | README, "Pre-existing work": nothing predates 1 Sep 2026; first commit `e627991` on 6 Sep 2026. One [CHECK] there for the author: that no code was pasted in. |
+| Demo video, 3 minutes at most, public, showing Monad interactions | **Owner** | Record and upload it publicly, following `docs/DEMO.md` (who does what on which phone, the faucet timing, every amount and fee, and resetting between takes; a separate 2 minute path covers the Agora bounty). Suggested: make an account with a passkey, Add test dollars, make a pot, put money in from a second phone, an approval that pays the caterer, the Caterer's phone receiving it, then Account details, View receipt, to show the finalized transaction on MonadVision. |
+| Contract addresses | Done | README, "Contract addresses": the three NivPay contracts and Agora's five, on Monad testnet (10143), with explorer links; the three NivPay contracts are exact Sourcify matches. Real transactions from the app (a faucet claim, pot 0's CreatePot and its first FundWithPermit) are under "Monad integration", each checked as successful and finalized on 10 Oct 2026. |
+| Disclosure of AI tools | Done, with one [CHECK] | README, "AI disclosure": Claude Code wrote about 80 percent, used across contracts, app, tests and docs; the author made the design comps, reviewed each change and tested it on two Android phones, and deployed. One [CHECK] left: the author confirms the product concept line. |
+| Originality | Done | No file is identical to any file in the author's other repositories (hash comparison, 9 Oct 2026). Third-party code is listed with licenses in the README. |
+| Documentation | Done | README, plus `docs/APP-CONTRACT-MAP.md`, `docs/BUILD-APP.md`, `docs/MOTION.md`, `docs/ERROR-CODES.md`, `docs/BOUNTIES.md`, `docs/DEMO.md`, `docs/PERF-S10.md`, `BENCHMARK.md`. |
+| One project, one track | **Owner** | Enter NivPay in one track only on the form. The README names Consumer Products & Payments, as monad.xyz/metropolis spells it. |
+| No secrets in the repository | Done | Full history scan on 9 Oct 2026: no private key, mnemonic, API key, keystore or `.env` file. `.gitignore` covers `.env*`, keystores, key files and `.vercel/`. See README, "Broadcast receipts are committed on purpose". |
+| The submission form | **Owner** | Fill it in with the repository link, the video link, the live app link (https://nivpay.vercel.app) and the contract addresses. |
 
 ## The pot story, screen by screen
 

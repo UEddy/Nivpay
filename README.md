@@ -8,9 +8,8 @@ closing time nothing more can go in or be paid out, and whatever is left
 belongs to the people with money in it, by their share; each takes their own
 whenever they like. Nothing is sent to anyone automatically.
 
-Built for the Monad Metropolis hackathon, Consumer Products and Payments
-track. [CHECK: the track name matches the one you enter on the submission
-form.] The repository has two parts:
+Built for the Monad Metropolis hackathon, Consumer Products & Payments
+track. The repository has two parts:
 
 * **The contracts.** [`src/NivPayPots.sol`](./src/NivPayPots.sol) is the whole
   pot product, deployed and verified on Monad testnet.
@@ -1480,7 +1479,7 @@ project**: the Solidity contracts and deploy scripts, the app and its
 serverless functions, the Foundry and app tests, and the documentation,
 including this README. About 80 percent of the code and prose in this
 repository was written by Claude Code from written instructions and then
-reviewed; the author wrote the rest. No other AI tool was used. [CHECK]
+reviewed; the author wrote the rest. No other AI tool was used.
 
 The instructions it worked from are in the repository: `docs/BUILD-APP.md` is
 the app brief, and the "My notes on this bounty" section of `docs/BOUNTIES.md`
@@ -1497,7 +1496,7 @@ What the human author, UEddy, did:
 * **Design decisions.** The chosen visual direction (the "Clay Pot" look with
   the Three Cities map in `docs/design/`), the motion rules in
   `docs/MOTION.md`, and the product language rule that no crypto word appears
-  in the app. [CHECK: who made the design comps.]
+  in the app. The author made the design comps.
 * **Architecture choices.** Mera passkey accounts that store only an address;
   gas paid through a small grant function so people never see fees; reads
   only at Finalized; AUSD by default with TESTUSD as the fallback; no
@@ -1508,14 +1507,15 @@ What the human author, UEddy, did:
   keystore, the funder key only in Vercel's settings); a kill switch for
   funding; and the rule that the AI tool is never given, shown or asked for a
   private key or seed phrase.
-* **Review** of the changes before they were committed. [CHECK: describe how
-  you reviewed, for example every diff.]
+* **Review** of the changes before they were committed: the author read
+  Claude Code's summary of each change, skimmed the code, and tested each
+  change on the phones.
 * **Testing on real phones.** The passkey, pot and payment flows were tested
   by hand, mainly on two Android phones, a Samsung Galaxy S10 and a Galaxy
   S24, in Chrome with the passkeys saved to Google Password Manager.
 * **Deployment.** Ran the contract deployments and verification from their
   own keystore, created and funded the funder key and entered it in Vercel,
-  and deployed the app to nivpay.vercel.app. [CHECK]
+  and deployed the app to nivpay.vercel.app, all by hand.
 
 ## Third-party code and licenses
 
