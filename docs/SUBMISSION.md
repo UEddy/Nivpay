@@ -21,10 +21,10 @@ phone or a decision.
 | An open source license | Done | `LICENSE`, MIT, "Copyright (c) 2026 UEddy". Referenced in the README and in `app/package.json` (`"license": "MIT"`). Solidity files carry `SPDX-License-Identifier: MIT`. |
 | A README a third party can run from | Done | `README.md`: the problem and intended user, the pot rules, why Monad, every contract address with its verification, architecture, tech stack, setup and deployment with every environment variable, the gas grant limits. |
 | Commit history covering the build window | Done | Commits from 6 Sep 2026 onward, in small steps, none squashed. See `git log --reverse`. The published history was never rewritten: all 17 pushes recorded in this clone are fast-forwards. Two local redos happened before they were pushed, listed in the README, "Pre-existing work". |
-| Pre-existing work declared | Done | README, "Pre-existing work": nothing predates 1 Sep 2026; first commit `e627991` on 6 Sep 2026. One [CHECK] there for the author: that no code was pasted in. |
+| Pre-existing work declared | Done | README, "Pre-existing work": nothing predates 1 Sep 2026; first commit `e627991` on 6 Sep 2026. The author pasted in no code from anywhere else. |
 | Demo video, 3 minutes at most, public, showing Monad interactions | **Owner** | Record and upload it publicly, following `docs/DEMO.md` (who does what on which phone, the faucet timing, every amount and fee, and resetting between takes; a separate 2 minute path covers the Agora bounty). Suggested: make an account with a passkey, Add test dollars, make a pot, put money in from a second phone, an approval that pays the caterer, the Caterer's phone receiving it, then Account details, View receipt, to show the finalized transaction on MonadVision. |
 | Contract addresses | Done | README, "Contract addresses": the three NivPay contracts and Agora's five, on Monad testnet (10143), with explorer links; the three NivPay contracts are exact Sourcify matches. Real transactions from the app (a faucet claim, pot 0's CreatePot and its first FundWithPermit) are under "Monad integration", each checked as successful and finalized on 10 Oct 2026. |
-| Disclosure of AI tools | Done, with one [CHECK] | README, "AI disclosure": Claude Code wrote about 80 percent, used across contracts, app, tests and docs; the author made the design comps, reviewed each change and tested it on two Android phones, and deployed. One [CHECK] left: the author confirms the product concept line. |
+| Disclosure of AI tools | Done | README, "AI disclosure": Claude Code wrote about 80 percent, used across contracts, app, tests and docs; the author made the design comps, reviewed each change and tested it on two Android phones, and deployed; the product concept and rules are the author's. |
 | Originality | Done | No file is identical to any file in the author's other repositories (hash comparison, 9 Oct 2026). Third-party code is listed with licenses in the README. |
 | Documentation | Done | README, plus `docs/APP-CONTRACT-MAP.md`, `docs/BUILD-APP.md`, `docs/MOTION.md`, `docs/ERROR-CODES.md`, `docs/BOUNTIES.md`, `docs/DEMO.md`, `docs/PERF-S10.md`, `BENCHMARK.md`. |
 | One project, one track | **Owner** | Enter NivPay in one track only on the form. The README names Consumer Products & Payments, as monad.xyz/metropolis spells it. |
@@ -74,7 +74,7 @@ the author's notes are in `docs/BOUNTIES.md`.
 
 ## Only the author can do
 
-1. Settle every [CHECK] in `README.md` and in this file.
+1. Settle every [CHECK] in `README.md` and in this file. Done on 13 Oct 2026.
 2. Push the local commits. The repository is already public.
 3. After the phone test, put the hashes of one Send and one payment in
    another currency in the two placeholder rows under "Monad integration"

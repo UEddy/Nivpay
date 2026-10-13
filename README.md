@@ -33,11 +33,15 @@ A pot removes the need to.
 
 The intended user is a family or group of friends spread across countries,
 paying for one shared thing together: a parent's birthday, a wedding, a
-funeral, school fees. Today one relative collects everyone's transfers into
+funeral, school fees. The same pot fits any shared cost with known payees: a
+relative's hospital bill paid straight to the hospital, a group trip's hotel
+and flights, a class reunion, an office leaving gift, a club's or association's
+dues, a church, mosque or community building fund paid to its contractor, or
+a hometown project such as a borehole. Today one relative collects everyone's transfers into
 their own account and pays the vendors, and everyone else has to trust them.
 The story the app is built and tested around is "Mama's 60th": three siblings
 in London, Houston and Uyo pay for their mother's party, and the money can only
-ever reach the caterer and the event hall. [CHECK: the list of example uses.]
+ever reach the caterer and the event hall.
 
 A pot is created with a purpose, a list of approvers, a threshold, a list of
 destinations each with its own spending cap, and an end time. **None of those
@@ -1464,8 +1468,9 @@ both before they were ever pushed:
   It is an earlier design that was retired, not code from another project.
 * No file here was copied from an earlier project. Checked on 9 Oct 2026 by
   comparing every tracked file's content hash against the files in the
-  author's seven other local repositories: no file is identical. [CHECK: no
-  code was pasted in from anywhere else, edited or not.]
+  author's seven other local repositories: no file is identical. The author
+  pasted in no code from anywhere else: the code here was written in this
+  repository by Claude Code or by the author.
 * The design comps in `docs/design/` were taken from a "NivPay UI Concepts"
   design canvas and committed on 27 Sep 2026.
 * Third-party libraries are listed under
@@ -1492,7 +1497,7 @@ What the human author, UEddy, did:
   destinations with caps, threshold approvals, any single approver can freeze
   but only a threshold can unfreeze, exits never blocked, the remainder
   returned pro rata. The "Mama's 60th" story. The decision to retire the
-  streaming design in favour of pots. [CHECK]
+  streaming design in favour of pots. All of these were the author's ideas.
 * **Design decisions.** The chosen visual direction (the "Clay Pot" look with
   the Three Cities map in `docs/design/`), the motion rules in
   `docs/MOTION.md`, and the product language rule that no crypto word appears
