@@ -237,8 +237,9 @@ block, then the first `Funded` log for pot 0 after it.
 | FundWithPermit, the first deposit in pot 0 | [`0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe`](https://testnet.monadvision.com/tx/0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe) | 69,611,378 | 9 Oct 2026, 18:31:36 | `fundWithPermit` from a second app account, `0x97936c44214231002051A601e2065732382Df8b4`: the permit's `Approval`, the AUSD `Transfer` and `Funded` for $200, in one request |
 | Send dollars, a plain AUSD payment to another person | [`0xd23cf8e21f928468d7f1d826f6d2cd8d351faf1b3e698d823b37808007641ade`](https://testnet.monadvision.com/tx/0xd23cf8e21f928468d7f1d826f6d2cd8d351faf1b3e698d823b37808007641ade) | 70,176,817 | 11 Oct 2026, 17:57:44 | `transfer` on AUSD from the app account `0x725C9cd75b2C8C29AEbf6a14eE84a3b54C787bC1` to a third app account, `0xa5057F32DB2a6f68F69ad1587014AbF101A20B61`: one AUSD `Transfer` of $50. Settled in 2.5 s on the sending phone, one measurement |
 | Send in another currency, the exchange through Agora's pair | [`0x9d95911b7e9b2811bf4063054cb13e573e229260398705d7464844456a1f93b1`](https://testnet.monadvision.com/tx/0x9d95911b7e9b2811bf4063054cb13e573e229260398705d7464844456a1f93b1) | 70,177,155 | 11 Oct 2026, 17:59:26 | `swapExactTokensForTokens` on Agora's pair from the same account to the same recipient: 50 AUSD in from the sender, 50 CTK out to the recipient, `SwapFees` 0 and 0, so $1 = 1.00 CTK. Settled in 1.2 s on the sending phone, one measurement, timing this exchange alone |
-| CreatePot, Mama's 60th in the demo video | [PLACEHOLDER: fill in after the recording] | | | |
-| FundWithPermit, Eddy's $500 into Mama's 60th in the demo video | [PLACEHOLDER: fill in after the recording] | | | |
+| CreatePot, the Birthday pot in the technical video | [`0xe62866fbda9cf329b002ee0bf6d9cae767a7722ae689a4bc1d790fbf72592f5d`](https://testnet.monadvision.com/tx/0xe62866fbda9cf329b002ee0bf6d9cae767a7722ae689a4bc1d790fbf72592f5d) | 69,908,559 | 10 Oct 2026, 19:27:44 | `createPot` on the AUSD pots from the app account `0x725C9cd75b2C8C29AEbf6a14eE84a3b54C787bC1`. Its `PotCreated` event names pot 1, "Birthday" |
+| FundWithPermit, Eddy's $200 into the Birthday pot in the technical video | [`0xb2280f5941859658ab3df36768da3c15b9f53c180b3abd6439bb3b63b57a9cfe`](https://testnet.monadvision.com/tx/0xb2280f5941859658ab3df36768da3c15b9f53c180b3abd6439bb3b63b57a9cfe) | 69,908,640 | 10 Oct 2026, 19:28:09 | `fundWithPermit` from the same account: the permit's `Approval`, the AUSD `Transfer` and `Funded` for $200, in one request |
+| The second yes that pays, in the Birthday pot in the technical video | [`0x0c1f90cc259db9c53af480ba1486021a2f86dad32369676aa8efe839c179acba`](https://testnet.monadvision.com/tx/0x0c1f90cc259db9c53af480ba1486021a2f86dad32369676aa8efe839c179acba) | 69,909,376 | 10 Oct 2026, 19:31:51 | `approve` from the same account, the second of 2 yeses: `PayoutExecuted` pays the Event Center account `0x97936c44214231002051A601e2065732382Df8b4` $50 with a $0.25 fee, in that same request |
 
 Pot 0 has had two more since, on 10 Oct 2026: a second $200 put in by its
 maker
@@ -253,10 +254,12 @@ Their settle times are the app's own "Settled in" figure: the phone's clock
 starts as the signed request is handed to the network, just after the
 fingerprint, and stops when the app first sees the block holding it finalized.
 
-The two demo video rows are the Mama's 60th made on camera for the technical
-demo, whose explorer segment shows them. They are copied from the app's own
-Receipt links right after that take ([video/SHOTLIST.md](video/SHOTLIST.md),
-After recording), and `video/src/facts.test.ts` fails unless each matches
+The three Birthday rows are pot 1, made in the 10 Oct 2026 test run that the
+technical video shows: the pot made, Eddy's $200 poured in, and the second yes
+paying the Event Center. They were found on chain from the pot's events
+(`potCount()` bisected to the block that made pot 1, then its `Funded` and
+`PayoutExecuted` logs), each read back as successful and finalized on 13 Oct
+2026, and `video/src/facts.test.ts` fails unless the first two match
 `video/src/facts.ts`. Pot 0 stays the showcase reviewers can open.
 
 ## Contract addresses
@@ -1465,8 +1468,7 @@ both before they were ever pushed:
   author's seven other local repositories: no file is identical. [CHECK: no
   code was pasted in from anywhere else, edited or not.]
 * The design comps in `docs/design/` were taken from a "NivPay UI Concepts"
-  design canvas and committed on 27 Sep 2026. [CHECK: when that canvas was
-  made; if before 1 Sep 2026, list it here as pre-existing.]
+  design canvas and committed on 27 Sep 2026.
 * Third-party libraries are listed under
   [Third-party code and licenses](#third-party-code-and-licenses). They are
   used as published and are not this project's work.
@@ -1476,10 +1478,9 @@ both before they were ever pushed:
 **Claude Code, Anthropic's AI coding tool, was used across this whole
 project**: the Solidity contracts and deploy scripts, the app and its
 serverless functions, the Foundry and app tests, and the documentation,
-including this README. A large share of the code and prose in this repository
-was written by Claude Code from written instructions and then reviewed.
-[CHECK: replace "a large share" with a description you are comfortable
-stating, for example "most".] No other AI tool was used. [CHECK]
+including this README. About 80 percent of the code and prose in this
+repository was written by Claude Code from written instructions and then
+reviewed; the author wrote the rest. No other AI tool was used. [CHECK]
 
 The instructions it worked from are in the repository: `docs/BUILD-APP.md` is
 the app brief, and the "My notes on this bounty" section of `docs/BOUNTIES.md`
@@ -1510,8 +1511,8 @@ What the human author, UEddy, did:
 * **Review** of the changes before they were committed. [CHECK: describe how
   you reviewed, for example every diff.]
 * **Testing on real phones.** The passkey, pot and payment flows were tested
-  by hand on two phones. [CHECK: which phones, operating systems and
-  browsers.]
+  by hand, mainly on two Android phones, a Samsung Galaxy S10 and a Galaxy
+  S24, in Chrome with the passkeys saved to Google Password Manager.
 * **Deployment.** Ran the contract deployments and verification from their
   own keystore, created and funded the funder key and entered it in Vercel,
   and deployed the app to nivpay.vercel.app. [CHECK]

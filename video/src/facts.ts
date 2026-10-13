@@ -65,17 +65,19 @@ export const FACTS = {
   /** Read off the footage once it is recorded. Never narrated before it shows. */
   measured: {
     /** "Settled in 0.Xs." after Add test dollars, on phone A. */
-    claimSettle: null as string | null,
+    claimSettle: "2.2s" as string | null,
     /** "Sent $25 to Maya. Settled in 0.Xs." on phone A. */
-    sendSettle: null as string | null,
+    sendSettle: "2.2s" as string | null,
     /** "They received 10.00 CTK. Settled in 0.Xs." on phone A. */
-    otherCurrencySettle: null as string | null,
+    otherCurrencySettle: "1.3s" as string | null,
     /** The CTK amount and rate on the Check and send sheet: Agora sets them. */
-    otherCurrencyReceived: null as string | null,
+    otherCurrencyReceived: "50.00 CTK" as string | null,
+    /** What that take sent: $50 (recording 1000337374, 13 Oct 2026), not DEMO.md's $10. */
+    otherCurrencySent: "$50" as string | null,
     /** Proved by the swap 0x9d95...93b1 (block 70,177,155): 50 AUSD in, 50 CTK out, SwapFees 0 and 0. Agora can change it: check the take's sheet shows the same. */
     otherCurrencyRate: "$1 = 1.00 CTK" as string | null,
     /** The last four characters of the 2 minute Maya account, as phone A's Send screen shows them before the fingerprint: "Sending to account ending ####". */
-    recipientLastFour: null as string | null,
+    recipientLastFour: "562C" as string | null,
   },
 
   /** docs/APP-CONTRACT-MAP.md section 6, measured on testnet. */
@@ -108,22 +110,22 @@ export const FACTS = {
     },
     /** From the recorded takes: copied from the app's own Receipt links right after each take (SHOTLIST.md). */
     take: {
-      /** Mama's 60th being made (M03): the story's first row, Receipt. */
-      createPot: null as string | null,
-      /** Eddy's $500 into Mama's 60th (M04): its story row, Receipt. */
-      fundWithPermit: null as string | null,
+      /** Pot 1, "Birthday", being made: the 10 Oct 2026 test run the technical video shows (block 69,908,559). */
+      createPot: "0xe62866fbda9cf329b002ee0bf6d9cae767a7722ae689a4bc1d790fbf72592f5d" as string | null,
+      /** Eddy's $200 into the Birthday pot, one fundWithPermit (block 69,908,640). */
+      fundWithPermit: "0xb2280f5941859658ab3df36768da3c15b9f53c180b3abd6439bb3b63b57a9cfe" as string | null,
       /** The $25 send in the bounty take: View receipt on phone A (B06). Shown with "$25" in a caption, so only that take's hash. */
-      send: null as string | null,
+      send: "0x295647906ec087f124fbc3292a4660c12ccfda867e3aa8389683a3eb25ceb17d" as string | null,
       /** The exchange through Agora's pair in the bounty take (B08). */
-      swap: null as string | null,
+      swap: "0x112a8747b5e4f1b77321ce74334a5dc24753404d0475d1b93f819b0af84fab44" as string | null,
     },
   },
 } as const;
 
 /** README, Monad integration: the row that holds each take hash with a README row. */
 export const README_ROWS: Record<"createPot" | "fundWithPermit", string> = {
-  createPot: "CreatePot, Mama's 60th in the demo video",
-  fundWithPermit: "FundWithPermit, Eddy's $500 into Mama's 60th in the demo video",
+  createPot: "CreatePot, the Birthday pot in the technical video",
+  fundWithPermit: "FundWithPermit, Eddy's $200 into the Birthday pot in the technical video",
 };
 
 /** README, Monad integration: the rows that hold showcase hashes. */

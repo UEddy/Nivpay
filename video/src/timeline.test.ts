@@ -4,13 +4,26 @@ import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import type { ClipEntry, Redactions } from "./redactions.ts";
 import { FINGERPRINT_CAPTION } from "./redactions.ts";
-import { NOT_MEASURED, problems, resolve, segmentFrames, textProblems, totalFrames, type Segment, type Timeline } from "./timeline.ts";
+import { heldTag, NOT_MEASURED, onPhone, phoneStill, problems, resolve, segmentFrames, textProblems, totalFrames, type Segment, type Timeline } from "./timeline.ts";
+import { FACTS } from "./facts.ts";
 
 const card = (id: string, seconds: number, over: Partial<Segment> = {}): Segment => ({ id, shot: "card", kind: "card", plan: "a card", seconds, title: "NivPay", ...over });
 const phone = (id: string, seconds: number, over: Partial<Segment> = {}): Segment => ({ id, shot: id, kind: "phone", plan: "a phone", take: { clip: null, in: 0, out: seconds }, ...over });
 const tl = (segments: Segment[], over: Partial<Timeline> = {}): Timeline => ({
   id: "t", width: 1920, height: 1080, fps: 30, minSeconds: 0, capSeconds: 120, target: [0, 120], words: "technical", segments, ...over,
 });
+
+/** Every fact is measured now, so a test of the unmeasured case blanks one for its own run, then puts it back. */
+function unmeasuredFor<T>(run: () => T): T {
+  const take = FACTS.hashes.take as { createPot: string | null };
+  const kept = take.createPot;
+  take.createPot = null;
+  try {
+    return run();
+  } finally {
+    take.createPot = kept;
+  }
+}
 
 test("a caption may not hold an en or em dash, a typed digit or an unknown fact", () => {
   assert.deepEqual(textProblems("Pour in {pot.pours.eddy}", "technical", false), []);
@@ -19,7 +32,7 @@ test("a caption may not hold an en or em dash, a typed digit or an unknown fact"
   assert.match(textProblems("Settled in 0.4s", "technical", false).join(), /digit typed in/);
   assert.match(textProblems("Pays {pot.nope}", "technical", false).join(), /not in facts\.ts/);
   assert.equal(resolve("Fee {pot.caterer.fee}"), "Fee $3.00");
-  assert.equal(resolve("Settled in {measured.sendSettle}"), `Settled in ${NOT_MEASURED}`);
+  unmeasuredFor(() => assert.equal(resolve("Made in {hashes.take.createPot}"), `Made in ${NOT_MEASURED}`));
   assert.equal(resolve("{hashes.showcase.createPot|short}"), "0x6d1d...199c");
 });
 
@@ -38,11 +51,11 @@ test("crypto words never; Monad, AUSD and transaction hash in technical captions
 });
 
 test("placeholders and facts not measured yet refuse a final render but allow a draft", () => {
-  const p = problems(tl([phone("B01", 5, { caption: "Settled in {measured.sendSettle}" })]), null);
+  const p = unmeasuredFor(() => problems(tl([phone("B01", 5, { caption: "Made in {hashes.take.createPot}" })]), null));
   assert.deepEqual(p.hard, []);
   assert.equal(p.final.length, 2);
   assert.match(p.final.join(), /placeholder for shot B01/);
-  assert.match(p.final.join(), /\{measured\.sendSettle\} is not measured yet/);
+  assert.match(p.final.join(), /\{hashes\.take\.createPot\} is not measured yet/);
 });
 
 test("the Settled in moment is never sped up, and anything sped up is shortened by its speed", () => {
@@ -122,4 +135,50 @@ test("every video ends on the facts' end line, and the old pool-money phrase is 
     .split("\n")
     .filter((f) => /\.(ts|tsx|json|md)$/.test(f) && !f.endsWith("package-lock.json") && !f.endsWith("timeline.test.ts"));
   for (const f of files) assert.doesNotMatch(readFileSync(new URL(f, root), "utf8"), /pool money|people you trust/i, f);
+});
+
+test("the 3D phone holds still for the settle moment, every proof and any amount in the plan, at any speed", () => {
+  assert.equal(phoneStill(phone("a", 5, { plan: "Phone A, Add test dollars: Getting your account ready, fingerprint" })), false);
+  assert.equal(phoneStill(phone("a", 5, { plan: "Phone B, Daniel: Pour in $100, the pot holds $1,000", speed: 2 })), true);
+  assert.equal(phoneStill(phone("a", 5, { plan: "Phone A: Sent $25 to Maya. Settled in 0.Xs." })), true);
+  assert.equal(phoneStill(phone("a", 5, { plan: "A: They received 10.00 CTK" })), true);
+  assert.equal(phoneStill(phone("a", 5, { plan: "Phone B, Receive: Amount to ask for 25" })), true);
+  assert.equal(phoneStill(phone("a", 5, { plan: "Phone A: the same request link, How much 10" })), true);
+  assert.equal(phoneStill(phone("a", 5, { plan: "Phone A, Home: Your balance" })), true);
+  assert.equal(phoneStill(phone("a", 5, { plan: "the fingerprint", settle: true })), true);
+  assert.equal(phoneStill(phone("a", 5, { plan: "the fingerprint", proves: ["passkey"] })), true);
+  assert.equal(phoneStill(phone("a", 5, { plan: "the fingerprint", still: true })), true);
+});
+
+test("in the three videos, every shot with an amount or Settled in on screen is still, and the PC stays out of the phone", () => {
+  for (const f of readdirSync(new URL("../timelines/", import.meta.url))) {
+    const t = JSON.parse(readFileSync(new URL(`../timelines/${f}`, import.meta.url), "utf8")) as Timeline;
+    for (const s of t.segments) {
+      if (/\$\d|Settled in/.test(s.plan) || s.settle) assert.ok(phoneStill(s), `${t.id} ${s.id}`);
+      if (s.kind === "explorer" && s.device !== "phone") assert.equal(onPhone(s), false, `${t.id} ${s.id}`);
+      if (s.kind === "card") assert.equal(onPhone(s), false);
+    }
+  }
+});
+
+test("a held frame runs its hold, carries a Frame held tag, and is never sped up or the settle itself", () => {
+  const held = phone("h", 1, { take: { clip: null, in: 31.5, out: 31.6, hold: 3 } });
+  assert.equal(segmentFrames(held, null), 90);
+  assert.equal(heldTag(held), "Frame held");
+  assert.equal(heldTag(phone("p", 3)), null);
+  assert.match(problems(tl([{ ...held, speed: 2 }]), null).hard.join(), /never sped up/);
+  assert.match(problems(tl([{ ...held, settle: true }]), null).hard.join(), /hold its frame in a segment of its own/);
+  const pair: Segment = { id: "p", shot: "B05", kind: "pair", plan: "two phones", take: { clip: null, in: 0, out: 3.5 }, takeB: { clip: null, in: 5, out: 5.1, hold: 3.5 }, settle: true };
+  assert.deepEqual(problems(tl([pair]), null).hard, []);
+  assert.equal(heldTag(pair), "Frame held on the right");
+  assert.match(problems(tl([{ ...pair, takeB: { clip: null, in: 5, out: 5.1, hold: 2 } }]), null).hard.join(), /same length/);
+});
+
+test("a receipt card names a known hash, is for the technical videos only, and allows chain words", () => {
+  const r: Segment = { id: "r", shot: "receipt", kind: "receipt", plan: "receipt", receipt: "hashes.take.send", seconds: 6, caption: "One Transfer, in a finalized block" };
+  assert.deepEqual(problems(tl([r]), null).hard, []);
+  assert.equal(segmentFrames(r, null), 180);
+  assert.match(problems(tl([r], { words: "consumer" }), null).hard.join(), /technical videos only/);
+  assert.match(problems(tl([{ ...r, receipt: "hashes.nope" }]), null).hard.join(), /known hash/);
+  assert.match(problems(tl([card("c", 5, { lines: ["Pay \u2014 now"] })]), null).hard.join(), /dash/);
 });

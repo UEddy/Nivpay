@@ -145,9 +145,9 @@ test("every transaction under Monad integration links to its own hash on MonadVi
   assert.ok(links.length >= 5);
   for (const [, shown, linked] of links) assert.equal(shown, linked);
   assert.equal(new Set(links.map((l) => l[1])).size, links.length, "a hash is listed twice");
-  // Only the demo video's two rows still wait, for the recording; video/src/facts.test.ts checks them against video/src/facts.ts.
+  // Nothing waits any more: the video's rows are filled, and video/src/facts.test.ts checks them against video/src/facts.ts.
   assert.equal([...section.matchAll(/\[PLACEHOLDER: fill in after the phone test\]/g)].length, 0);
-  assert.equal([...section.matchAll(/\[PLACEHOLDER: fill in after the recording\]/g)].length, 2);
+  assert.equal([...section.matchAll(/\[PLACEHOLDER: fill in after the recording\]/g)].length, 0);
   // Accounts named there are written with their checksum, as the app shows them.
   for (const [, a] of section.matchAll(/`(0x[0-9a-fA-F]{40})`/g)) assert.equal(a, getAddress(a!));
 });
