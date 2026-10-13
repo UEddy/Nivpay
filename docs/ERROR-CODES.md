@@ -106,6 +106,21 @@ first, so no gas grant or passkey prompt is spent on them.
 | 61 | Ceiling: the account already holds 100,000 AUSD or more (`maxAmountToOwn()`). Nothing was sent. | The account's AUSD balance |
 | 62 | The faucet refused for another reason before sending (out of stock, `0x356680b7`, or an unknown error), or the claim was included and reverted, usually because someone else claimed first. No AUSD moved. | The faucet's AUSD balance; the transaction receipt |
 
+## Add money and Cash out (the test desk, `/api/ramp`)
+
+A simulation in test mode: no bank is involved and no real currency moves.
+Add money asks the desk to send test AUSD; Cash out is the person's own
+transfer of AUSD to the desk, followed to Finalized like any send (a reverted
+or replaced one shows 52 or 53), and then the desk's statement.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 63 | The phone couldn't reach `/api/ramp` at all. Nothing moved. | Connection, Vercel status |
+| 64 | The desk is paused or busy: `RAMP_ENABLED` is off, `RAMP_DESK_ADDRESS` isn't set, wrong chain, 30 desk transactions in about the last hour, the desk under 0.2 MON for gas, or short of AUSD while Agora's faucet won't pay it yet (`the test desk is restocking`). Nothing moved. | `GET /api/ramp`; the desk's balances and recent transactions |
+| 65 | The desk refused the request: not a personal account, an account already holding $1,000 or more, under $1 or over $100, a buy from this account in the last 2 minutes on that server instance, another request for this account still in flight, a wrong origin, a request over 1 KB, or an unknown currency. Nothing moved. | Vercel function log, `"event":"refused"` |
+| 66 | The desk couldn't send the dollars (`SEND_FAILED`, `RPC_FAILED`, `DESK_KEY_MALFORMED`, `DESK_KEY_MISMATCH`), or it sent them and they reverted or weren't final within 60 seconds. | Vercel function log, `"event":"failed"`; the desk's transaction |
+| 67 | The cash out was final, but the desk's statement couldn't be read (its read of the finalized transfer failed or lagged). Asking again is safe: it moves nothing and gives the same reference. | Vercel function log; the cash out transaction |
+
 ## Making a pot and joining one
 
 Invite case B (`docs/APP-CONTRACT-MAP.md` section 9): the pot is a draft on

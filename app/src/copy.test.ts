@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { copy, ERROR_CODES, offlineMessage } from "./copy.ts";
+import { CURRENCIES } from "./lib/ramp.ts";
 
 /**
  * Product rule: NivPay reads like a fintech app, and people never need to know
@@ -236,6 +237,12 @@ function allCopy(): [string, string][] {
     payeeSubPaid: ["$600"],
     mapAsked: ["$1,000", "Aniekan", "$600", "Caterer"],
     mapPaid: ["$397", "$600", "Caterer"],
+    currencyName: ["NGN"],
+    rampRate: ["₦1,550.00"],
+    rampAdded: ["$49.50"],
+    bankLine: ["Test Bank", "6789"],
+    cashOutAction: ["$50"],
+    cashOutOnItsWay: ["₦76,725.00"],
   };
   return Object.entries(copy).map(([key, value]) => {
     if (typeof value === "string") return [key, value];
@@ -247,6 +254,25 @@ function allCopy(): [string, string][] {
 
 test("no banned word in any copy, including generated messages", () => {
   for (const [key, text] of allCopy()) assert.deepEqual(bannedIn(text), [], `copy.${key}: ${text}`);
+});
+
+test("every currency in the picker has a name, with no banned word", () => {
+  for (const { code } of CURRENCIES) {
+    const name = copy.currencyName(code);
+    assert.notEqual(name, code, `${code} has a name`);
+    assert.deepEqual(bannedIn(name), [], name);
+  }
+});
+
+test("Add money and Cash out say Ramp, never its full company name, and never claim real money moved", () => {
+  for (const [key, text] of allCopy()) {
+    if (!/^(ramp|cashOut|payByBank|bank|iveSentIt|errRamp|errCashOut|yourBank|addMoney)/.test(key)) continue;
+    assert.doesNotMatch(text, /Ramp Network/i, `copy.${key}`);
+    assert.doesNotMatch(text, /(?<!no )real money (moved|was sent|arrived)/i, `copy.${key}`);
+  }
+  assert.match(copy.rampTestMode, /no real money moves/);
+  assert.match(copy.payByBankSimulation, /simulation\. Don't send real money/);
+  assert.match(copy.rampRate("₦1,550.00"), /test rate, not live/);
 });
 
 test("a pot found from the chain says what the person does in it, as one sentence", () => {
