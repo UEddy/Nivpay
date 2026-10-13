@@ -227,8 +227,9 @@ chain:
   Agora's Instant Settlement pair.
 
 Real transactions from the app, each read back with `eth_getTransactionReceipt`
-(the first three on 10 Oct 2026, the two sends on 11 Oct 2026): status
-success, and in a block below the finalized head.
+(the first three on 10 Oct 2026, the two sends on 11 Oct 2026, the two
+recorded sends and the Birthday pot's three on 13 Oct 2026): status success,
+and in a block below the finalized head.
 Pot 0's two were found from its events: `potCount()` bisected over past
 blocks to find the block where pot 0 appears, its `PotCreated` log in that
 block, then the first `Funded` log for pot 0 after it.
@@ -240,6 +241,8 @@ block, then the first `Funded` log for pot 0 after it.
 | FundWithPermit, the first deposit in pot 0 | [`0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe`](https://testnet.monadvision.com/tx/0x9276983cefc2ff505352412a2044841d81f6f032b3ba1ece5ff9f21d040c5cbe) | 69,611,378 | 9 Oct 2026, 18:31:36 | `fundWithPermit` from a second app account, `0x97936c44214231002051A601e2065732382Df8b4`: the permit's `Approval`, the AUSD `Transfer` and `Funded` for $200, in one request |
 | Send dollars, a plain AUSD payment to another person | [`0xd23cf8e21f928468d7f1d826f6d2cd8d351faf1b3e698d823b37808007641ade`](https://testnet.monadvision.com/tx/0xd23cf8e21f928468d7f1d826f6d2cd8d351faf1b3e698d823b37808007641ade) | 70,176,817 | 11 Oct 2026, 17:57:44 | `transfer` on AUSD from the app account `0x725C9cd75b2C8C29AEbf6a14eE84a3b54C787bC1` to a third app account, `0xa5057F32DB2a6f68F69ad1587014AbF101A20B61`: one AUSD `Transfer` of $50. Settled in 2.5 s on the sending phone, one measurement |
 | Send in another currency, the exchange through Agora's pair | [`0x9d95911b7e9b2811bf4063054cb13e573e229260398705d7464844456a1f93b1`](https://testnet.monadvision.com/tx/0x9d95911b7e9b2811bf4063054cb13e573e229260398705d7464844456a1f93b1) | 70,177,155 | 11 Oct 2026, 17:59:26 | `swapExactTokensForTokens` on Agora's pair from the same account to the same recipient: 50 AUSD in from the sender, 50 CTK out to the recipient, `SwapFees` 0 and 0, so $1 = 1.00 CTK. Settled in 1.2 s on the sending phone, one measurement, timing this exchange alone |
+| Send dollars, the $25 from London to Houston in the bounty video | [`0x295647906ec087f124fbc3292a4660c12ccfda867e3aa8389683a3eb25ceb17d`](https://testnet.monadvision.com/tx/0x295647906ec087f124fbc3292a4660c12ccfda867e3aa8389683a3eb25ceb17d) | 70,391,921 | 12 Oct 2026, 12:00:18 | `transfer` on AUSD from a fresh passkey account, `0xd6a619f8F0F5ed3050635E0274971985794154c8`, to the account `0x607b6F5dc7f721C6Cf0902d50bA1Bed724f8562C` (ending 562C): one AUSD `Transfer` of $25. Settled in 2.2 s on the sending phone, and the recipient's phone shows $25.00 at the same moment |
+| Send in another currency, $50 as CTK in both videos | [`0x112a8747b5e4f1b77321ce74334a5dc24753404d0475d1b93f819b0af84fab44`](https://testnet.monadvision.com/tx/0x112a8747b5e4f1b77321ce74334a5dc24753404d0475d1b93f819b0af84fab44) | 70,608,773 | 13 Oct 2026, 06:16:55 | `swapExactTokensForTokens` on Agora's pair from the same sender to the same recipient: 50.00 AUSD in, 50.00 CTK out to the account ending 562C, after the one-time setup and the allowance, one fingerprint for all three. Settled in 1.3 s on the sending phone |
 | CreatePot, the Birthday pot in the technical video | [`0xe62866fbda9cf329b002ee0bf6d9cae767a7722ae689a4bc1d790fbf72592f5d`](https://testnet.monadvision.com/tx/0xe62866fbda9cf329b002ee0bf6d9cae767a7722ae689a4bc1d790fbf72592f5d) | 69,908,559 | 10 Oct 2026, 19:27:44 | `createPot` on the AUSD pots from the app account `0x725C9cd75b2C8C29AEbf6a14eE84a3b54C787bC1`. Its `PotCreated` event names pot 1, "Birthday" |
 | FundWithPermit, Eddy's $200 into the Birthday pot in the technical video | [`0xb2280f5941859658ab3df36768da3c15b9f53c180b3abd6439bb3b63b57a9cfe`](https://testnet.monadvision.com/tx/0xb2280f5941859658ab3df36768da3c15b9f53c180b3abd6439bb3b63b57a9cfe) | 69,908,640 | 10 Oct 2026, 19:28:09 | `fundWithPermit` from the same account: the permit's `Approval`, the AUSD `Transfer` and `Funded` for $200, in one request |
 | The second yes that pays, in the Birthday pot in the technical video | [`0x0c1f90cc259db9c53af480ba1486021a2f86dad32369676aa8efe839c179acba`](https://testnet.monadvision.com/tx/0x0c1f90cc259db9c53af480ba1486021a2f86dad32369676aa8efe839c179acba) | 69,909,376 | 10 Oct 2026, 19:31:51 | `approve` from the same account, the second of 2 yeses: `PayoutExecuted` pays the Event Center account `0x97936c44214231002051A601e2065732382Df8b4` $50 with a $0.25 fee, in that same request |
@@ -1398,19 +1401,50 @@ publish it as their first local test account.
 
 ## Demo videos
 
-The demo videos are built in `video/` with Remotion, from real screen
-recordings of the live app on two phones and of MonadVision on a PC. Nothing
-on screen is mocked up. Every amount, name, hash and settle time in a caption
-comes from `video/src/facts.ts`, which a test checks against the app's own
-fee and share arithmetic and against this README. Settle times and the
-hashes of the recorded send are filled in from the footage, never typed in
-ahead of it. Each video is one timeline file in `video/timelines/`, so
-swapping footage never touches code. A final render refuses while a
-placeholder or an unmeasured figure is left, and every render goes through a
-redaction map and an OCR privacy check that run on the recording PC only;
-raw footage is never committed. Render steps are in
-[video/README.md](video/README.md), the recording plan in
-[video/SHOTLIST.md](video/SHOTLIST.md).
+Three videos, built in `video/` with Remotion, all rendered on the author's
+PC. The finished files are not in the repository.
+
+| Video | Length | What it shows |
+| --- | --- | --- |
+| Technical demo | 2 min 34 s | The live app, recorded on phones: a passkey account and test dollars, the Birthday pot made and locked, $200 poured in, a payment of $50 asked for, and the second yes paying the Event Center, on two phones at once (the three Birthday rows under [Monad integration](#monad-integration)); then a send from London to Houston, its receipt on MonadVision, and $50 paid as CTK through Agora |
+| Agora bounty | 1 min 46 s | Passkey sign-up from 8 s, an AUSD balance from 25 s, the $25 send landing on the recipient's phone in 2.2 s, its receipt read from the chain, then $50 paid as CTK through Agora's Instant Settlement in 1.3 s and that exchange's receipt |
+| X launch | 36 s | Animated: the family group chat, then the pot that answers it. No crypto words |
+
+How they are made (`video/src/films/`):
+
+* **The two footage videos play real screen recordings** of nivpay.vercel.app
+  inside a drawn phone frame. `video/src/films/clips.ts` lists every stretch
+  used, with the recording, its in and out points and its speed; anything
+  played faster than life carries a "Sped up" tag, the phone's own
+  fingerprint blackouts are labelled, and key moments are magnified, never
+  redrawn. The pot scenes come from the 10 Oct 2026 test run, as the video
+  says; the CTK send from a recording on 13 Oct 2026.
+* **The X video, the title cards and the end cards are animation** drawn in
+  code. The pot, the map and the app screens there are illustrations of the
+  app, in its own words.
+* **Every figure comes from `video/src/facts.ts`** (amounts, settle times as
+  measured on the phone, hashes), and receipt cards are read from Monad
+  testnet by `video/scripts/read-receipts.ts`.
+* **The music and sound effects are synthesized** by
+  `video/scripts/make-sound.ts`; no music by anyone else is used.
+* **Privacy:** the author chose to show the footage videos' recordings as
+  recorded, unredacted; their OCR privacy check reports its findings and
+  does not block. The animated video must pass it. Raw footage is never
+  committed, and renders bundle only the cut clips, never the footage folder.
+
+Render steps are in [video/README.md](video/README.md), the credits and
+licenses in [video/CREDITS.md](video/CREDITS.md). The older timeline-based
+cuts in `video/timelines/` remain, with their redaction map and checks.
+
+## Logo
+
+The logo in `brand/` is the family's clay pot from the app: three bands of
+colour, one per person who put money in, under a wave, and a lid whose
+handle is a padlock shackle, with a keyhole in front. A pot nobody can
+pocket. The wordmark is Nunito Black, converted to outlines. The app's
+favicon, home-screen and maskable icons and its header mark use it.
+`brand/README.md` lists every file (lockups, one-colour versions, app tiles,
+a 1000 px square) and the palette; `brand/make-logo.mjs` rebuilds the SVGs.
 
 ## Future work
 
@@ -1576,6 +1610,19 @@ their parent packages.
 * **Vercel** for hosting the app and its functions.
 * **Slither** was run for static analysis; it is not a dependency.
 
+### Videos and logo
+
+* **Remotion** 4.0.534 renders the videos, under the Remotion License (free
+  for an individual). Its other parts, three.js and tesseract.js (used on
+  the author's PC for the privacy check) are listed with versions and
+  licenses in [video/CREDITS.md](video/CREDITS.md).
+* **Fonts:** Besley and Work Sans, as in the app, and **Nunito** for the
+  videos' headlines and the logo's wordmark, all under the SIL Open Font
+  License 1.1.
+* **opentype.js** 1.3.4 (MIT) was used once, outside the repository, to turn
+  the wordmark into outlines; it is not a dependency.
+* **FFmpeg** cuts the clips on the author's PC; it is a tool, not shipped.
+
 ## Layout
 
     src/NivPayPots.sol            the pot contract, the whole product
@@ -1606,7 +1653,9 @@ their parent packages.
     app/src/lib/                  accounts, writes, feeds, links, money, config
     app/api/fund/                 the gas grant function and its status endpoint
     docs/                         design, measurements, error codes, bounty and submission notes
+    brand/                        the logo: SVG lockups, app tiles, PNG exports, make-logo.mjs
     video/                        the demo videos: Remotion compositions, timelines, facts, shot list
+    video/src/films/              the three videos as built: clips, scenes, sound plan
 
 ## License
 
