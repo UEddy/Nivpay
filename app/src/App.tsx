@@ -120,17 +120,29 @@ function useConnection() {
   return { down, offline: !online, track };
 }
 
+const POT_OUTLINE = "M72 38 C72 50 60 54 50 63 C28 82 23 118 35 146 C47 173 76 186 100 186 C124 186 153 173 165 146 C177 118 172 82 150 63 C140 54 128 50 128 38 Z";
+
+/** The NivPay mark (brand/nivpay-mark.svg): the pot, one band per person, and a lid that is a padlock. */
 function PotMark() {
   return (
     <svg className="pot-mark" viewBox="0 0 200 200" aria-hidden="true">
-      <path
-        d="M72 38 C72 50 60 54 50 63 C28 82 23 118 35 146 C47 173 76 186 100 186 C124 186 153 173 165 146 C177 118 172 82 150 63 C140 54 128 50 128 38 Z"
-        fill="var(--pot-clay)"
-        stroke="var(--ink)"
-        strokeWidth="5.5"
-        strokeLinejoin="round"
-      />
-      <rect x="62" y="26" width="76" height="14" rx="7" fill="var(--pot-lid)" stroke="var(--ink)" strokeWidth="5.5" />
+      <defs>
+        <clipPath id="pot-mark-clip">
+          <path d={POT_OUTLINE} />
+        </clipPath>
+      </defs>
+      <path d="M82 33 V21 a18 18 0 0 1 36 0 V33" fill="none" stroke="var(--ink)" strokeWidth="9" strokeLinecap="round" />
+      <path d={POT_OUTLINE} fill="var(--pot-clay)" />
+      <g clipPath="url(#pot-mark-clip)">
+        <rect x="0" y="150" width="200" height="40" fill="var(--primary)" />
+        <rect x="0" y="122" width="200" height="29" fill="var(--person-2)" />
+        <path d="M0 103 Q12.5 96 25 103 T50 103 T75 103 T100 103 T125 103 T150 103 T175 103 T200 103 V123 H0 Z" fill="var(--person-3)" />
+        <ellipse cx="60" cy="96" rx="8" ry="22" fill="#fff" opacity="0.28" />
+      </g>
+      <path d={POT_OUTLINE} fill="none" stroke="var(--ink)" strokeWidth="7" strokeLinejoin="round" />
+      <rect x="58" y="28" width="84" height="16" rx="8" fill="var(--pot-lid)" stroke="var(--ink)" strokeWidth="7" />
+      <circle cx="100" cy="135" r="8.5" fill="var(--bg)" />
+      <path d="M95 139 L105 139 L108.5 160 L91.5 160 Z" fill="var(--bg)" />
     </svg>
   );
 }
