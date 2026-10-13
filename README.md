@@ -599,6 +599,9 @@ None is needed to run the app locally or the tests.
 | `FUNDING_ENABLED` | Vercel, server | no | The kill switch. Grants are sent only when it is exactly `true`. Anything else, or unset, pauses funding without reading the key. |
 | `FUNDER_PRIVATE_KEY` | Vercel, server, Sensitive | only if funding is enabled | The dedicated testnet key that sends gas grants. Read only after every check has passed, never logged. Never the deployer key, never in the repo. |
 | `FUNDER_ADDRESS` | Vercel, server | only if funding is enabled | The address of that key. The function refuses to sign unless the key derives exactly this address. |
+| `RAMP_ENABLED` | Vercel, server | no | The test desk's kill switch (`/api/ramp`). Add money and Cash out work only when it is exactly `true`. Anything else, or unset, pauses the desk without reading its key. |
+| `RAMP_DESK_PRIVATE_KEY` | Vercel, server, Sensitive | only if the desk is enabled | A dedicated testnet key for the test desk, which sends test AUSD for Add money and receives it on Cash out. Read only after every check has passed, never on a cash out, never logged. Not the funder key, never in the repo. |
+| `RAMP_DESK_ADDRESS` | Vercel, server | only if the desk is enabled | The address of that key; the desk refuses to sign unless the key derives exactly this address. It needs testnet MON for its own gas (it stops under 0.2 MON) and claims test AUSD from Agora's faucet for itself when low. |
 | `ALLOWED_ORIGINS` | Vercel, server | no | Comma separated extra origins allowed to call `/api/fund`, for example `http://localhost:5173`. The deployment's own origin is always allowed. |
 | `VITE_PRODUCTION_HOSTNAME` | Vercel, build time | yes in production | The only hostname besides `localhost` where passkeys can be made or used. For this deployment, `nivpay.vercel.app`, and it must never change. |
 | `VITE_NIVPAY_POTS` | build time | no | `testusd` builds the app on the TESTUSD instance. Anything else, or unset, is AUSD. |
@@ -1446,6 +1449,43 @@ favicon, home-screen and maskable icons and its header mark use it.
 `brand/README.md` lists every file (lockups, one-colour versions, app tiles,
 a 1000 px square) and the palette; `brand/make-logo.mjs` rebuilds the SVGs.
 
+## Add money and Cash out in test mode
+
+The Home card "Your bank" opens Add money and Cash out
+(`app/src/screens/Money.tsx`), in 18 currencies. On testnet it is a
+simulation, and every step says so ("Test mode: no real money moves"): no
+bank is involved, no real currency moves, and only test AUSD moves, to or
+from a test desk account run by `/api/ramp`.
+
+* **Rates are fixed test rates, labelled as not live** (`app/src/lib/ramp.ts`),
+  with a 1 percent fee. Every division rounds down and the fee rounds up, so
+  a round trip always returns less than went in. $1 to $100 a request.
+* **Add money:** pick a currency (the phone's time zone picks the first one:
+  Africa/Lagos gives naira) and an amount; the screen shows the quote and
+  which partner would serve that currency at launch. A mock "Pay by bank
+  transfer" card shows a test account and a reference, and says "This is a
+  simulation. Don't send real money". "I've sent it" asks the desk, which
+  recomputes the quote itself and sends exactly that much test AUSD; the
+  phone shows "$X added" only once that is final, with the time measured from
+  the tap. No fingerprint, because nothing leaves the account.
+* **Cash out:** an amount in dollars and bank details, which stay on the
+  phone and are never sent. One fingerprint signs a transfer of AUSD to the
+  desk, followed to Finalized like any send (a reload resumes it), then the
+  desk reads that transfer at the finalized block and returns what a bank
+  would get, with a reference derived from the transaction, so asking twice
+  gives the same answer. The screen shows "₦X on its way to your bank",
+  marked Simulated: no bank is paid, and the desk keeps the test dollars.
+* **Limits on the desk**, in the style of `/api/fund`: the `RAMP_ENABLED` kill
+  switch, same origin only, a 1 KB body cap, one request per account at a
+  time and a two minute wait after a buy on each server instance, no buys for
+  contracts or accounts holding $1,000 or more, and at most 30 desk
+  transactions an hour, counted from the desk's own nonce. The desk key is
+  read only after every check, never logged. Error codes 63 to 67 are in
+  `docs/ERROR-CODES.md`.
+
+On mainnet the same screens would quote from a licensed partner instead; see
+the next section.
+
 ## Mainnet plan: money in and out in any currency
 
 On testnet, Add money and Cash out in the app are a clearly labelled
@@ -1699,6 +1739,7 @@ their parent packages.
     app/                          the app: React screens in app/src, functions in app/api
     app/src/lib/                  accounts, writes, feeds, links, money, config
     app/api/fund/                 the gas grant function and its status endpoint
+    app/api/ramp/                 the test desk behind Add money and Cash out, a simulation
     docs/                         design, measurements, error codes, bounty and submission notes
     brand/                        the logo: SVG lockups, app tiles, PNG exports, make-logo.mjs
     video/                        the demo videos: Remotion compositions, timelines, facts, shot list
