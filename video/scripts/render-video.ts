@@ -16,6 +16,7 @@ import { mkdirSync, renameSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
+import { PHONE_FRAME } from "../src/phone/frame.ts";
 import { totalFrames } from "../src/timeline.ts";
 import { loadMap, loadTimeline, refusals } from "./guard.ts";
 import { checkVideo, readDenylist } from "./privacy-check.ts";
@@ -46,12 +47,15 @@ if (refuse.length) {
 const seconds = totalFrames(timeline, map) / timeline.fps;
 const serveUrl = await bundle({ entryPoint: join(root, "src", "index.ts"), publicDir: join(root, "footage") });
 const inputProps = { timeline, map };
-const composition = await selectComposition({ serveUrl, id, inputProps });
+// The 3D phone frame is WebGL, as in scripts/measure-phone.ts.
+const chromiumOptions = { gl: "angle" as const };
+const composition = await selectComposition({ serveUrl, id, inputProps, chromiumOptions });
 mkdirSync(join(root, ".render"), { recursive: true });
 const name = draft ? `${id}.draft` : id;
 const staged = join(root, ".render", `${name}.mp4`);
-await renderMedia({ composition, serveUrl, codec: "h264", outputLocation: staged, inputProps, muted: true, crf: 18 });
-console.log(`rendered ${name}.mp4, ${seconds.toFixed(1)} s`);
+const started = performance.now();
+await renderMedia({ composition, serveUrl, codec: "h264", outputLocation: staged, inputProps, muted: true, crf: 18, chromiumOptions });
+console.log(`rendered ${name}.mp4, ${seconds.toFixed(1)} s planned, ${PHONE_FRAME} phone frame, ${((performance.now() - started) / 1000).toFixed(0)} s to render`);
 
 const hits = await checkVideo(staged, readDenylist());
 if (hits.length > 0) {

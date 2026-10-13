@@ -36,3 +36,16 @@ export function poseAt(frame: number, frames: number, fps: number, still: boolea
     lift: amp * MOTION.lift * Math.sin((2 * Math.PI * t) / 5 + phase),
   };
 }
+
+/**
+ * A push-in on the screen as a texture window: the part of the recording
+ * shown at `scale` (1 to 3) around the origin x, y (fractions from the top
+ * left). The same crop the flat frame makes with a CSS scale, so the
+ * recording is scaled, never redrawn.
+ */
+export function zoomWindow(scale: number, x: number, y: number): { repeat: number; offsetX: number; offsetY: number } {
+  const s = Math.max(1, scale);
+  const repeat = 1 / s;
+  // Texture rows run bottom to top, so a window near the top has a high offset.
+  return { repeat, offsetX: x * (1 - repeat), offsetY: (1 - y) * (1 - repeat) };
+}

@@ -2,7 +2,14 @@
 
 ## Music and sound
 
-None. The videos render silent (`muted: true`). Music may be added only if it
+**The films** (`src/films/`, rendered by `scripts/render-film.ts`): every
+sound is synthesized from nothing by `scripts/make-sound.ts`, an original
+Afrobeats style groove at 120 bpm and the effects (coins, the lid, the lock,
+pops, whooshes). No sample, loop or recording by anyone else, so there is
+nothing to clear. The files land in `films-public/sound/` (git-ignored) and are
+rebuilt the same every run.
+
+**The footage cuts** (`timelines/`) render silent (`muted: true`). Music may be added only if it
 is CC0 or royalty free, with its title, author, source link and license
 recorded here before the render that uses it.
 
@@ -18,6 +25,15 @@ recorded from MonadVision's public pages. Nothing on screen is mocked up:
 no app screen, transaction, amount or settle time is drawn or made up.
 Until real footage is in, a watermarked placeholder stands in, and a final
 render refuses while one is left.
+
+## The films are animation, not footage
+
+The three films in `src/films/` are drawn in code from start to finish: the
+pot, the map, the drawn phone and its screens are illustrations of the app,
+in the app's own words. Their amounts come from `src/facts.ts` (the story of
+docs/DEMO.md), their settle times are the ones measured on the phone, and
+every block number and transaction shown is real, from `src/receipts.json`
+or the README. The footage rule above is for the footage cuts.
 
 ## Style references
 
@@ -38,8 +54,9 @@ shows only redacted renders of the author's footage.
 | --- | --- | --- |
 | Besley | `@fontsource/besley` 5.3.0 | SIL Open Font License 1.1 |
 | Work Sans | `@fontsource/work-sans` 5.3.0 | SIL Open Font License 1.1 |
+| Nunito | `@fontsource/nunito` 5.3.0 | SIL Open Font License 1.1, the films' headline type |
 
-The same fonts and versions as the app.
+Besley and Work Sans are the same fonts and versions as the app.
 
 ## Software
 

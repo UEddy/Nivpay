@@ -4,3 +4,5 @@ import { Config } from "@remotion/cli/config";
 Config.setEntryPoint("src/index.ts");
 Config.setPublicDir("footage");
 Config.setVideoImageFormat("jpeg");
+// The 3D phone frame is WebGL; ANGLE gives Chrome a GPU-backed context on this PC.
+Config.setChromiumOpenGlRenderer("angle");

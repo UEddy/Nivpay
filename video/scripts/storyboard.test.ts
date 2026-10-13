@@ -13,7 +13,8 @@ test("every shot a timeline uses is in SHOTLIST.md", () => {
   const shotlist = readFileSync(new URL("../SHOTLIST.md", import.meta.url), "utf8");
   for (const id of TIMELINE_IDS) {
     for (const s of loadTimeline(id).segments) {
-      if (s.shot === "card") continue;
+      // Cards and receipt cards are drawn, not recorded.
+      if (s.kind === "card" || s.kind === "receipt") continue;
       assert.match(shotlist, new RegExp(`^### ${s.shot}\\. `, "m"), `${id} ${s.id} uses ${s.shot}`);
     }
   }

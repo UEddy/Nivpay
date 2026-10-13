@@ -1,0 +1,68 @@
+{
+ "passkey": [
+  [
+   9.166667,
+   11.033333
+  ]
+ ],
+ "passkeyFast": [
+  [
+   4.6,
+   5.533333
+  ]
+ ],
+ "claim": [
+  [
+   7.233333,
+   8
+  ]
+ ],
+ "claimShort": [
+  [
+   0.733333,
+   1.5
+  ]
+ ],
+ "sendTyping": [],
+ "sendFinal": [
+  [
+   1.4,
+   2.066667
+  ]
+ ],
+ "explorer48": [],
+ "mayaReceive": [],
+ "potDraft": [],
+ "potCheck": [],
+ "potMade": [
+  [
+   3.4,
+   3.866667
+  ]
+ ],
+ "pour": [
+  [
+   5.933333,
+   6.5
+  ]
+ ],
+ "yesEddy": [
+  [
+   7.6,
+   8.4
+  ]
+ ],
+ "askLeader": [],
+ "askWaiting": [],
+ "yesLeader": [],
+ "explorer013": [],
+ "ctkReview": [],
+ "ctkSheet": [],
+ "ctkSteps": [
+  [
+   2.866667,
+   4.566667
+  ]
+ ],
+ "ctkExplorer": []
+}

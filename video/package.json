@@ -15,12 +15,19 @@
     "video:render:agora": "node scripts/render-video.ts agora-bounty",
     "video:render:demo": "node scripts/render-video.ts technical-demo",
     "video:render:x": "node scripts/render-video.ts x-launch",
+    "video:screens": "node scripts/render-screens.ts",
     "video:privacy-check": "node scripts/privacy-check.ts",
     "video:denylist-lint": "node scripts/denylist-lint.ts",
-    "video:check": "npm run typecheck && npm test && node scripts/check.ts"
+    "video:check": "npm run typecheck && npm test && node scripts/check.ts",
+    "film:sound": "node scripts/make-sound.ts",
+    "film:sheet": "node scripts/film-sheet.ts",
+    "film:render:x": "node scripts/render-film.ts x",
+    "film:render:agora": "node scripts/render-film.ts agora",
+    "film:render:demo": "node scripts/render-film.ts demo"
   },
   "dependencies": {
     "@fontsource/besley": "5.3.0",
+    "@fontsource/nunito": "5.3.0",
     "@fontsource/work-sans": "5.3.0",
     "@react-three/fiber": "9.8.1",
     "@remotion/bundler": "4.0.534",

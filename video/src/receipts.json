@@ -1,0 +1,65 @@
+{
+  "source": "Monad testnet, eth_getTransactionReceipt",
+  "readAt": "2026-10-13T06:25:41.154Z",
+  "finalizedHead": 70610478,
+  "receipts": {
+    "0x295647906ec087f124fbc3292a4660c12ccfda867e3aa8389683a3eb25ceb17d": {
+      "status": "success",
+      "block": 70391921,
+      "finalized": true,
+      "transfers": [
+        {
+          "token": "AUSD",
+          "amount": "25.00",
+          "toLastFour": "562C"
+        }
+      ]
+    },
+    "0xd23cf8e21f928468d7f1d826f6d2cd8d351faf1b3e698d823b37808007641ade": {
+      "status": "success",
+      "block": 70176817,
+      "finalized": true,
+      "transfers": [
+        {
+          "token": "AUSD",
+          "amount": "50.00",
+          "toLastFour": "0B61"
+        }
+      ]
+    },
+    "0x9d95911b7e9b2811bf4063054cb13e573e229260398705d7464844456a1f93b1": {
+      "status": "success",
+      "block": 70177155,
+      "finalized": true,
+      "transfers": [
+        {
+          "token": "AUSD",
+          "amount": "50.00",
+          "toLastFour": "B0AE"
+        },
+        {
+          "token": "CTK",
+          "amount": "50.00",
+          "toLastFour": "0B61"
+        }
+      ]
+    },
+    "0x112a8747b5e4f1b77321ce74334a5dc24753404d0475d1b93f819b0af84fab44": {
+      "status": "success",
+      "block": 70608773,
+      "finalized": true,
+      "transfers": [
+        {
+          "token": "AUSD",
+          "amount": "50.00",
+          "toLastFour": "B0AE"
+        },
+        {
+          "token": "CTK",
+          "amount": "50.00",
+          "toLastFour": "562C"
+        }
+      ]
+    }
+  }
+}

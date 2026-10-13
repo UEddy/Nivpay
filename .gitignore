@@ -55,6 +55,7 @@ app/scripts/preflight.config.json
 # recording PC and are never committed. Only video/out/ is ever uploaded, and
 # only after video:check passes.
 video/footage/
+video/films-public/
 video/reference/
 video/out/
 video/node_modules/

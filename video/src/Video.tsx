@@ -3,12 +3,18 @@ import "@fontsource/work-sans/400.css";
 import "@fontsource/work-sans/600.css";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { AbsoluteFill, continueRender, delayRender, interpolate, Sequence, useCurrentFrame, useVideoConfig } from "remotion";
-import { FACTS } from "./facts.ts";
+import { fact, FACTS, shortHex } from "./facts.ts";
 import { RedactedClip } from "./Redact.tsx";
-import type { ClipEntry, Redactions } from "./redactions.ts";
-import { isPlaceholder, NOT_MEASURED, resolve, segmentFrames, SPED_UP_TAG, starts, type Segment, type Take, type Timeline } from "./timeline.ts";
+import { visibleArea, visiblePixels, type ClipEntry, type Redactions } from "./redactions.ts";
+import receiptsFile from "./receipts.json" with { type: "json" };
+import type { Receipts } from "./receipts.ts";
+import { heldTag, isPlaceholder, NOT_MEASURED, onPhone, phoneStill, resolve, segmentFrames, SPED_UP_TAG, starts, type Segment, type Take, type Timeline } from "./timeline.ts";
+import { PHONE_FRAME, type PhoneFrame } from "./phone/frame.ts";
+import { PhoneStage3D, type ScreenSource } from "./phone/Phone3D.tsx";
+import { screenFileFor } from "./phone/screens.ts";
 
-export type VideoProps = { timeline: Timeline; map: Redactions | null };
+/** `frame` overrides the one setting in phone/frame.ts, for the prototype and tests only. */
+export type VideoProps = { timeline: Timeline; map: Redactions | null; frame?: PhoneFrame };
 
 /** The app's clay palette (app/src/styles.css), on a dark ground so the phone screen carries the light. */
 const C = {
@@ -26,7 +32,10 @@ const SANS = "Work Sans, sans-serif";
 const PHONE_ASPECT = 1080 / (2340 * (1 - 0.04 - 0.07));
 const PC_ASPECT = 16 / 9;
 
-const visibleAspect = (e: ClipEntry) => e.width / (e.height * (1 - e.statusBar - (e.bottomBar ?? 0)));
+const visibleAspect = (e: ClipEntry) => {
+  const v = visibleArea(e);
+  return (e.width * v.w) / (e.height * v.h);
+};
 
 function useFonts() {
   const [handle] = useState(() => delayRender("fonts"));
@@ -43,11 +52,12 @@ function Text(props: { text: string; style?: CSSProperties; build?: boolean }) {
   return (
     <span style={props.style}>
       {parts.map((w, i) => {
-        // Word by word, two frames apart, as Sample Vid 2 builds its captions.
-        const o = props.build === false ? 1 : interpolate(frame - i * 2, [0, 6], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+        // Word by word, three frames apart: each rises, overshoots a little and settles.
+        const o = props.build === false ? 1 : interpolate(frame - i * 3, [0, 6], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+        const s = props.build === false ? 1 : interpolate(frame - i * 3, [0, 6, 11], [0.6, 1.08, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
         const unmeasured = w.includes(marker);
         return (
-          <span key={i} style={{ opacity: o, display: "inline-block", transform: `translateY(${(1 - o) * 12}px)`, ...(unmeasured ? { background: "repeating-linear-gradient(45deg,#7a1d1d 0 8px,#3a0d0d 8px 16px)", padding: "0 6px" } : {}) }}>
+          <span key={i} style={{ opacity: o, display: "inline-block", transform: `translateY(${(1 - o) * 28}px) scale(${s})`, transformOrigin: "50% 80%", ...(unmeasured ? { background: "repeating-linear-gradient(45deg,#7a1d1d 0 8px,#3a0d0d 8px 16px)", padding: "0 6px" } : {}) }}>
             {w}
             {i < parts.length - 1 ? "\u00a0" : ""}
           </span>
@@ -58,6 +68,10 @@ function Text(props: { text: string; style?: CSSProperties; build?: boolean }) {
 }
 
 function SpedUp(props: { speed: number; size: number }) {
+  return <Tag text={`${SPED_UP_TAG} \u00d7${props.speed}`} size={props.size} />;
+}
+
+function Tag(props: { text: string; size: number }) {
   return (
     <div
       style={{
@@ -73,7 +87,7 @@ function SpedUp(props: { speed: number; size: number }) {
         fontSize: props.size,
       }}
     >
-      {`${SPED_UP_TAG} \u00d7${props.speed}`}
+      {props.text}
     </div>
   );
 }
@@ -120,7 +134,7 @@ function Footage(props: { segment: Segment; take: Take; map: Redactions | null; 
           {take.clip === null ? (
             <Placeholder segment={s} take={take} seconds={props.frames / 30} width={props.width} />
           ) : (
-            <RedactedClip clip={take.clip} from={take.in} to={take.out} map={props.map} speed={s.speed ?? 1} holdFontSize={props.width * 0.07} />
+            <RedactedClip clip={take.clip} from={take.in} to={take.out} map={props.map} speed={s.speed ?? 1} holdFontSize={props.width * 0.07} hold={take.hold} />
           )}
         </div>
       </div>
@@ -135,6 +149,50 @@ function aspectOf(s: Segment, take: Take, map: Redactions | null): number {
   return device === "pc" ? PC_ASPECT : PHONE_ASPECT;
 }
 
+/**
+ * What one take shows on the 3D phone's screen: the file video:screens
+ * rendered for it, already redacted and at the segment's speed, or a
+ * placeholder card with the shot it waits for. Never the raw recording.
+ */
+function screenSource(s: Segment, take: Take, map: Redactions | null, frames: number): ScreenSource {
+  if (take.clip === null) {
+    return { kind: "placeholder", aspect: aspectOf(s, take, map), lines: [`Shot ${s.shot}`, s.plan, `${take.in} to ${take.out} s of the recording, ${(frames / 30).toFixed(1)} s on screen`] };
+  }
+  const entry = map?.clips[take.clip];
+  if (!entry?.reviewed) throw new Error(`clip ${take.clip} has no reviewed entry in redactions.json, so it can't be rendered`);
+  return { kind: "redacted", file: screenFileFor({ ...take, clip: take.clip }, s.speed ?? 1), ...visiblePixels(entry) };
+}
+
+/** Phone shots in the 3D phone: one phone, or two side by side with their labels above. */
+function Phones3D(props: { segment: Segment; takes: Take[]; labels: (string | undefined)[]; map: Redactions | null; area: { x: number; y: number; w: number; h: number }; labelH: number; frames: number }) {
+  const { segment: s, area, labelH } = props;
+  const two = props.takes.length === 2;
+  return (
+    <>
+      {two
+        ? props.labels.map((l, i) =>
+            l ? (
+              <div key={i} style={{ position: "absolute", top: area.y, height: labelH, left: area.x + (area.w / 2) * i, width: area.w / 2, display: "flex", justifyContent: "center", alignItems: "flex-end" }}>
+                <Text text={l} build={false} style={{ fontFamily: SANS, fontWeight: 600, color: C.text, fontSize: 40 }} />
+              </div>
+            ) : null,
+          )
+        : null}
+      <div style={{ position: "absolute", left: area.x, top: area.y + labelH, width: area.w, height: area.h - labelH }}>
+        <PhoneStage3D
+          sources={props.takes.map((t) => screenSource(s, t, props.map, props.frames))}
+          width={area.w}
+          height={area.h - labelH}
+          frames={props.frames}
+          still={phoneStill(s)}
+          // A placeholder is never zoomed, so its text stays readable.
+          zoom={s.take?.clip != null ? s.zoom : undefined}
+        />
+      </div>
+    </>
+  );
+}
+
 /** Fits a box of the given aspect inside maxW by maxH. */
 const fit = (aspect: number, maxW: number, maxH: number) => (maxW / maxH > aspect ? { width: maxH * aspect, height: maxH } : { width: maxW, height: maxW / aspect });
 
@@ -146,6 +204,7 @@ function Card(props: { segment: Segment; square: boolean }) {
     <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: square ? 80 : 200, textAlign: "center", gap: 28 }}>
       {s.title ? <Text text={s.title} style={{ fontFamily: SERIF, fontWeight: 600, color: C.text, fontSize: square ? 76 : 92, lineHeight: 1.15 }} /> : null}
       {s.subtitle ? <Text text={s.subtitle} style={{ fontFamily: SANS, color: C.muted, fontSize: square ? 40 : 46, lineHeight: 1.3 }} /> : null}
+      {s.lines ? <Lines lines={s.lines} square={square} /> : null}
       {s.url ? (
         <div style={{ opacity: pill, marginTop: 20, background: C.primary, color: "white", fontFamily: SANS, fontWeight: 600, fontSize: square ? 46 : 52, padding: "18px 44px", borderRadius: 999 }}>
           {FACTS.app.url}
@@ -159,21 +218,33 @@ function Card(props: { segment: Segment; square: boolean }) {
  * Captions sit beside the footage (16:9) or above it (1:1), never on it, so
  * they can't cover an amount on the phone's screen.
  */
-function SegmentView(props: { segment: Segment; map: Redactions | null; frames: number; legend?: string[] }) {
+function SegmentView(props: { segment: Segment; map: Redactions | null; frames: number; legend?: string[]; frame: PhoneFrame }) {
   const { segment: s, map, frames } = props;
   const { width, height } = useVideoConfig();
   const square = width === height;
   if (s.kind === "card") return <Card segment={s} square={square} />;
   const speed = s.speed ?? 1;
-  const captionSize = square ? 58 : 72;
+  const captionSize = square ? 64 : 84;
   const calloutSize = square ? 38 : 44;
+  const held = heldTag(s);
   const words = (
     <>
       {s.caption ? <Text text={s.caption} style={{ display: "block", fontFamily: SERIF, fontWeight: 600, color: C.text, fontSize: captionSize, lineHeight: 1.18 }} /> : null}
       {s.callout ? <Text text={s.callout} style={{ display: "block", marginTop: captionSize * 0.45, fontFamily: SANS, color: C.muted, fontSize: calloutSize, lineHeight: 1.3 }} /> : null}
       {speed > 1 ? <SpedUp speed={speed} size={calloutSize * 0.9} /> : null}
+      {held ? <Tag text={held} size={calloutSize * 0.9} /> : null}
     </>
   );
+  if (s.kind === "receipt") {
+    return (
+      <AbsoluteFill>
+        <div style={square ? { position: "absolute", left: 60, right: 60, top: 50, height: 230, textAlign: "center" } : { position: "absolute", left: 110, width: 640, top: 0, bottom: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          {words}
+        </div>
+        <ReceiptCard segment={s} area={square ? { x: 60, y: 300, w: width - 120, h: height - 340 } : { x: 800, y: 50, w: width - 860, h: height - 100 }} />
+      </AbsoluteFill>
+    );
+  }
   const takes = s.kind === "pair" ? [s.take!, s.takeB!] : [s.take!];
   const labels = s.kind === "pair" ? [s.labelA, s.labelB] : [];
   // Where the footage may go.
@@ -188,6 +259,9 @@ function SegmentView(props: { segment: Segment; map: Redactions | null; frames: 
         {words}
       </div>
       {props.legend && !square && (s.kind === "phone" || s.kind === "pair") ? <Legend lines={props.legend} /> : null}
+      {props.frame === "3d" && onPhone(s) ? (
+        <Phones3D segment={s} takes={takes} labels={labels} map={map} area={area} labelH={labelH} frames={frames} />
+      ) : (
       <div style={{ position: "absolute", left: area.x, top: area.y, width: area.w, height: area.h, display: "flex", justifyContent: "center", alignItems: "center", gap }}>
         {takes.map((t, i) => (
           <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
@@ -196,6 +270,7 @@ function SegmentView(props: { segment: Segment; map: Redactions | null; frames: 
           </div>
         ))}
       </div>
+      )}
     </AbsoluteFill>
   );
 }
@@ -213,7 +288,7 @@ export function TimelineVideo(props: VideoProps) {
         const frames = segmentFrames(s, map);
         return (
           <Sequence key={s.id} from={at[i]!} durationInFrames={frames} name={s.id}>
-            <SegmentView segment={s} map={map} frames={frames} legend={t.legend} />
+            <SegmentView segment={s} map={map} frames={frames} legend={t.legend} frame={props.frame ?? PHONE_FRAME} />
           </Sequence>
         );
       })}
@@ -240,6 +315,67 @@ function DraftBadge(): ReactNode {
   return (
     <div style={{ position: "absolute", right: 24, bottom: 20, background: "#b3261e", color: "white", fontFamily: SANS, fontWeight: 600, fontSize: 26, padding: "6px 16px", borderRadius: 6 }}>
       DRAFT, NOT FOR UPLOAD
+    </div>
+  );
+}
+
+/** Feature lines under a card's title, one after another. */
+function Lines(props: { lines: string[]; square: boolean }) {
+  const frame = useCurrentFrame();
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: props.square ? 18 : 22, marginTop: 16, textAlign: "left", maxWidth: props.square ? 900 : 1400 }}>
+      {props.lines.map((l, i) => {
+        const o = interpolate(frame - 18 - i * 14, [0, 10], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+        return (
+          <div key={i} style={{ opacity: o, transform: `translateX(${(1 - o) * -30}px)`, display: "flex", gap: 18, alignItems: "baseline", fontFamily: SANS, color: C.text, fontSize: props.square ? 34 : 40, lineHeight: 1.3 }}>
+            <span style={{ color: C.primary, fontWeight: 600 }}>{"\u2022"}</span>
+            <span>{resolve(l)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const RECEIPTS = receiptsFile as Receipts;
+
+/**
+ * A transaction's receipt as read from the chain (scripts/read-receipts.ts):
+ * status, block, finalized, each Transfer with its amount and the recipient's
+ * last four. Every number on it is from receipts.json, never typed in.
+ */
+function ReceiptCard(props: { segment: Segment; area: { x: number; y: number; w: number; h: number } }) {
+  const frame = useCurrentFrame();
+  const hash = fact(props.segment.receipt ?? "");
+  const r = hash ? RECEIPTS.receipts[hash] : undefined;
+  if (!hash || !r) throw new Error(`${props.segment.id}: no receipt read for ${props.segment.receipt}; run node scripts/read-receipts.ts`);
+  const rows: [string, string][] = [
+    ["Status", r.status === "success" ? "Success" : "Reverted"],
+    ["Block", r.block.toLocaleString("en-US")],
+    ["Finalized", r.finalized ? "Yes" : "Not yet"],
+    ["Transfer logs", String(r.transfers.length)],
+    ...r.transfers.map((x): [string, string] => [r.transfers.length > 1 ? `Transfer, ${x.token}` : "Amount", `${x.amount} ${x.token} to address ending ${x.toLastFour}`]),
+  ];
+  const w = Math.min(props.area.w * 0.94, 980);
+  const rise = interpolate(frame, [0, 14], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  return (
+    <div style={{ position: "absolute", left: props.area.x + (props.area.w - w) / 2, top: props.area.y, width: w, height: props.area.h, display: "flex", alignItems: "center" }}>
+      <div style={{ width: "100%", opacity: rise, transform: `translateY(${(1 - rise) * 40}px)`, background: "#fbf3e8", borderRadius: 28, padding: "40px 48px", boxShadow: "0 30px 80px rgba(0,0,0,0.55)", fontFamily: SANS, color: "#2b1d14" }}>
+        <div style={{ display: "inline-block", background: C.primary, color: "white", fontWeight: 600, fontSize: 26, padding: "6px 18px", borderRadius: 999 }}>Read from Monad testnet</div>
+        <div style={{ fontFamily: SERIF, fontWeight: 600, fontSize: 52, marginTop: 20 }}>Receipt</div>
+        <div style={{ fontSize: 30, color: "#7a5a44", marginTop: 4, fontFamily: "monospace" }}>{shortHex(hash)}</div>
+        <div style={{ marginTop: 26, display: "flex", flexDirection: "column", gap: 14 }}>
+          {rows.map(([k, v], i) => {
+            const o = interpolate(frame - 16 - i * 9, [0, 8], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+            return (
+              <div key={i} style={{ opacity: o, transform: `translateX(${(1 - o) * 24}px)`, display: "flex", justifyContent: "space-between", gap: 24, borderTop: "2px solid #ead8c4", paddingTop: 12, fontSize: 34 }}>
+                <span style={{ color: "#7a5a44" }}>{k}</span>
+                <span style={{ fontWeight: 600, textAlign: "right" }}>{v}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

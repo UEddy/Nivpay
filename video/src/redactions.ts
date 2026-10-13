@@ -43,6 +43,8 @@ export type ClipEntry = {
   statusBar: number;
   /** Fraction cropped off the bottom: the browser's bottom toolbar or the phone's navigation bar. */
   bottomBar?: number;
+  /** Fraction of the width cropped off each side: black bars a recorder added around the screen (pillarbox). */
+  sideBars?: number;
   /** Set once every frame of the clip was looked at. A clip not reviewed never renders. */
   reviewed: boolean;
   regions: Region[];
@@ -83,6 +85,7 @@ export function parseRedactions(text: string): Redactions {
     if (typeof c.file !== "string" || !isTime(c.durationSeconds) || !(c.width > 0) || !(c.height > 0)) throw new RedactionError(`${where}: file, size and duration are required`);
     if (!inUnit(c.statusBar) || c.statusBar <= 0) throw new RedactionError(`${where}: statusBar must crop a fraction of the top`);
     if (c.bottomBar !== undefined && (!inUnit(c.bottomBar) || c.statusBar + c.bottomBar >= 0.5)) throw new RedactionError(`${where}: bottomBar must be a small fraction of the frame`);
+    if (c.sideBars !== undefined && (!inUnit(c.sideBars) || c.sideBars >= 0.25)) throw new RedactionError(`${where}: sideBars must be a small fraction of the width`);
     if (typeof c.reviewed !== "boolean") throw new RedactionError(`${where}: reviewed must be true or false`);
     for (const key of ["regions", "cuts", "holds"]) if (!Array.isArray(c[key])) throw new RedactionError(`${where}: ${key} must be a list`);
     c.regions.forEach((r: any, i: number) => {
@@ -101,6 +104,19 @@ export function parseRedactions(text: string): Redactions {
     });
   }
   return data as Redactions;
+}
+
+/** The part of the frame that is shown, as fractions: the crops taken off. */
+export function visibleArea(entry: ClipEntry): Rect {
+  const side = entry.sideBars ?? 0;
+  return { x: side, y: entry.statusBar, w: 1 - side * 2, h: 1 - entry.statusBar - (entry.bottomBar ?? 0) };
+}
+
+/** Width and height in pixels of the shown part, each even, as an encoder needs. */
+export function visiblePixels(entry: ClipEntry): { width: number; height: number } {
+  const v = visibleArea(entry);
+  const even = (n: number) => Math.round(n / 2) * 2;
+  return { width: even(entry.width * v.w), height: even(entry.height * v.h) };
 }
 
 /** The padding the map is written with: half a second either side, a tenth of the box on every side. */
@@ -148,6 +164,17 @@ export function timeline(entry: ClipEntry, from: number, to: number): Piece[] {
   return pieces;
 }
 
+/** The longest one frame may be held on screen. */
+export const MAX_FRAME_HOLD_SECONDS = 4;
+
+/** Why the frame at `at` can't be held for `seconds`: inside a cut or a blackout, or held too long. Null when it can. */
+export function heldFrameProblem(entry: ClipEntry, at: number, seconds: number): string | null {
+  if (!(seconds > 0) || seconds > MAX_FRAME_HOLD_SECONDS) return `a held frame runs for more than 0 and at most ${MAX_FRAME_HOLD_SECONDS} s`;
+  if (at < 0 || at > entry.durationSeconds) return `a held frame at ${at} s is outside the clip`;
+  if ([...entry.cuts, ...entry.holds].some((g) => at >= g.start && at <= g.end)) return `the frame at ${at} s is inside a cut or a blackout, so it can't be held`;
+  return null;
+}
+
 /** The regions to cover at a source time. */
 export function regionsAt(entry: ClipEntry, t: number): Region[] {
   return entry.regions.filter((r) => t >= r.start && t <= r.end);
@@ -177,6 +204,7 @@ export function assertRenderable(id: string, map: Redactions, from: number, to: 
     if (NOT_PRIVATE.has(h.category)) continue;
     if (h.box.y + h.box.h <= entry.statusBar) continue;
     if (h.box.y >= 1 - (entry.bottomBar ?? 0)) continue;
+    if (h.box.x + h.box.w <= (entry.sideBars ?? 0) || h.box.x >= 1 - (entry.sideBars ?? 0)) continue;
     if (entry.cuts.some((c) => h.t >= c.start && h.t <= c.end)) continue;
     if (regionsAt(entry, h.t).some((r) => covers(r.rect, h.box))) continue;
     throw new RedactionError(`clip ${id}: ${h.category} at ${h.t.toFixed(1)} s is not covered by any region or cut`);

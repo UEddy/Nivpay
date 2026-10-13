@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   assertRenderable,
   FINGERPRINT_CAPTION,
+  heldFrameProblem,
   padRegion,
   parseRedactions,
   RedactionError,
@@ -10,6 +11,8 @@ import {
   SCREEN_LOCK_CAPTION,
   timeline,
   type ClipEntry,
+  visibleArea,
+  visiblePixels,
   type Redactions,
 } from "./redactions.ts";
 
@@ -110,4 +113,26 @@ test("a malformed map refuses to load rather than render unredacted", () => {
   assert.throws(() => parseRedactions(JSON.stringify(map(noCrop))), /statusBar/);
   const unknown = entry({ regions: [{ start: 1, end: 2, rect: { x: 0, y: 0, w: 1, h: 1 }, category: "something else" as never }] });
   assert.throws(() => parseRedactions(JSON.stringify(map(unknown))), /unknown category/);
+});
+
+test("side bars crop the width: the shown area and pixels shrink, and a hit inside a bar needs no region", () => {
+  const e = entry({ width: 1080, height: 1920, statusBar: 0.05, bottomBar: 0.02, sideBars: 0.09 });
+  const v = visibleArea(e);
+  assert.deepEqual([v.x, v.y].map((n) => Math.round(n * 1000)), [90, 50]);
+  assert.ok(Math.abs(v.w - 0.82) < 1e-9 && Math.abs(v.h - 0.93) < 1e-9);
+  assert.deepEqual(visiblePixels(e), { width: 886, height: 1786 });
+  assert.deepEqual(visiblePixels(entry()), { width: 1080, height: 2234 });
+  const inBar = { t: 4, category: "email address", box: { x: 0.01, y: 0.5, w: 0.05, h: 0.02 } };
+  assert.doesNotThrow(() => assertRenderable("sample", map(e), 0, 60, [inBar]));
+  assert.throws(() => assertRenderable("sample", map(entry()), 0, 60, [inBar]), /not covered/);
+  assert.throws(() => parseRedactions(JSON.stringify(map(entry({ sideBars: 0.3 })))), /sideBars/);
+});
+
+test("a frame can be held up to 4 s, never from inside a cut or a blackout", () => {
+  const e = entry({ holds: [{ start: 9, end: 11, caption: FINGERPRINT_CAPTION }], cuts: [{ start: 20, end: 22, category: "PIN or password entry", caption: SCREEN_LOCK_CAPTION }] });
+  assert.equal(heldFrameProblem(e, 31.5, 3), null);
+  assert.match(heldFrameProblem(e, 10, 3)!, /cut or a blackout/);
+  assert.match(heldFrameProblem(e, 21, 3)!, /cut or a blackout/);
+  assert.match(heldFrameProblem(e, 31.5, 5)!, /at most 4 s/);
+  assert.match(heldFrameProblem(e, 70, 3)!, /outside the clip/);
 });

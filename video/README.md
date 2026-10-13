@@ -8,8 +8,33 @@ recording PC: `footage/`, `reference/`, `out/`, `.render/`, `.cache/` and
 | Composition | Format | Length | For |
 | --- | --- | --- | --- |
 | `agora-bounty` | 1920x1080, 30 fps | cap 120 s, aim 105 to 115 | the Agora bounty: passkey onboarding, an AUSD balance, a send and a receive settled at once, each shown before 90 s |
-| `technical-demo` | 1920x1080, 30 fps | cap 180 s, aim 165 to 175 | Mama's 60th in the app, then the explorer on the PC |
-| `x-launch` | 1080x1080, 30 fps | 30 to 45 s | X, consumer words only, ending on https://nivpay.vercel.app |
+| `technical-demo` | 1920x1080, 30 fps | cap 120 s, aim 90 to 120 | the app working, the settlement, receipts read from the chain, and how a pot works in the README's words |
+| `x-launch` | 1080x1080, 30 fps | 30 to 40 s | X, consumer words only, ending on https://nivpay.vercel.app |
+
+## The films
+
+Three animated films, drawn in code from start to finish with no footage,
+in `src/films/`. They take the same facts, receipts and fonts, on a groove
+and sound effects synthesized by `scripts/make-sound.ts`.
+
+| Composition | Format | Length | Story |
+| --- | --- | --- | --- |
+| `film-x` | 1080x1080 | 36 s | "Who's holding the family money?": the family group chat, then the pot that answers it. No crypto words |
+| `film-agora` | 1920x1080 | 92 s | Passkey, an AUSD balance, London to Houston settled in the measured time, the chain's own receipt, another currency through Agora, the business |
+| `film-demo` | 1920x1080 | 138 s | The life of Mama's 60th, with Monad's block strip: each coin lands only when its block is Finalized. Then a rogue sibling, the ledger, the live record on testnet |
+
+The films bundle with `films-public/` as their only public folder, never
+`footage/`, so no raw footage is copied into a render bundle; each run
+deletes its bundle when it ends.
+
+Scene lengths are in bars of the music (120 bpm) in `src/films/sound.ts`, so
+the cuts land on the beat and the music is arranged from the same plan.
+
+```
+npm run film:sound               # once: writes films-public/sound/
+npm run film:sheet -- film-x 1.5 # a contact sheet in .render/, for review
+npm run film:render:x            # also :agora, :demo; privacy-checked into out/
+```
 
 What is where:
 
@@ -46,6 +71,10 @@ npm run video:check
 3. **Put real footage in:** record from [SHOTLIST.md](SHOTLIST.md), copy the
    files to `footage/final/`, review each one into `footage/redactions.json`
    with its frame scan, then set `take.clip`, `in` and `out` in the timeline.
+   Then `npm run video:screens`: it renders each phone take redacted, at its
+   segment's speed, privacy-checks it, and only then puts it in
+   `footage/_screens/` for the 3D phone (see The phone frame below). Run it
+   again after any change to the map or a take; a render refuses until you do.
 4. **Fill the measured facts** in `src/facts.ts` from the footage (the table at
    the end of SHOTLIST.md), and the two hashes into the README too.
 5. **Final:** `npm run video:render:agora` (`:demo`, `:x`). It refuses while
@@ -55,6 +84,27 @@ npm run video:check
 6. `npm run video:check` passes, then upload from `out/` only.
 7. After any timeline change: `node scripts/storyboard.ts` to rewrite
    STORYBOARD.md (a test fails until you do).
+
+## The phone frame
+
+All three videos show phone footage in a 3D phone built in code
+(`src/phone/`), rendered with WebGL. One setting, `PHONE_FRAME` in
+`src/phone/frame.ts`, switches all three back to the flat frame: set it to
+`"flat"` and render again. PC recordings keep the flat PC frame either way.
+
+- **What the screen shows:** only files in `footage/_screens/`, which
+  `video:screens` puts there after redacting and privacy-checking them, or a
+  placeholder card. Blur and black holds are in the pixels before they reach
+  the phone. The phone refuses any other path, and a render refuses a take
+  whose screen file is missing or was made from an older redaction map.
+- **When it holds still:** face-on and motionless for the whole shot when it
+  is the settle moment, proves something for the judges, has an amount or
+  "Settled in" in its plan (at any speed), or is marked `"still": true`.
+  Otherwise it floats and tilts slowly, face-on at both ends of the shot.
+  There is no setting that makes a shot with an amount move.
+- **Push-ins** crop the screen exactly as the flat frame's zoom does.
+- **The final render** is privacy-checked as before, and `video:check` also
+  checks every file in `footage/_screens/`.
 
 ## What refuses a render
 
@@ -79,6 +129,19 @@ in facts.ts, on any en or em dash in a committed file here, and on a privacy
 check failure in `out/` or `.render/`.
 
 A sped-up segment always carries a "Sped up" tag; no setting turns it off.
+A take with `"hold": <seconds>` shows its one recorded frame at `in`,
+unchanged, for at most 4 s, and always carries a "Frame held" tag (on a
+pair, it says which phone). A held frame is never sped up, never taken from
+inside a cut or a blackout, and never stands in for the "Settled in" moment
+itself: that plays as recorded, and its frame may be held in a segment of
+its own.
+
+A `"kind": "receipt"` segment draws a receipt card from `src/receipts.json`:
+status, block, whether the block is finalized, and each Transfer with its
+amount and the recipient's last four, labelled "Read from Monad testnet".
+`node scripts/read-receipts.ts` reads those, read only, from the public RPC
+for every hash a receipt segment names (a fact path such as
+`hashes.take.send`). Receipt cards are for the technical videos only.
 Captions sit beside the footage (16:9) or above it (1:1), never on it, so
 they can't cover an amount.
 
@@ -87,6 +150,8 @@ they can't cover an amount.
 `footage/redactions.json` (git-ignored, next to the footage) lists, per clip,
 categories, times and rectangles only:
 
+* `sideBars`, optional: the fraction cropped off each side, for a recorder
+  that pillarboxed the screen (black bars left and right).
 * `statusBar` and `bottomBar`: fractions cropped off the top and bottom of
   every frame, always (status bar, notification area, browser toolbars).
 * `regions`: blurred (48 px) under an 85 percent tint for their whole time
@@ -111,9 +176,11 @@ npm run video:render:agora -- [--draft]
 npm run video:render:demo -- [--draft]
 npm run video:render:x -- [--draft]
 npm run video:render -- <clip> <from s> <to s> <name>
+npm run video:screens -- [timeline id ...]
 npm run video:privacy-check -- [file.mp4 ...]
 npm run video:denylist-lint
 npm run video:check
+node scripts/read-receipts.ts
 ```
 
 `video:render` renders one redacted stretch of one clip, for review.

@@ -1,8 +1,8 @@
 # Shot list for the fresh recording
 
 Every shot here is recorded fresh on cleaned phones, after the fixes land. The
-11 Oct rehearsal clips were for bug review only and are not used in any final
-video. Until a shot is recorded, the timelines show a watermarked placeholder
+11 Oct rehearsal clips were for bug review only; the one exception is R01
+below, reused with its redaction entry and labelled as a test run. Until a shot is recorded, the timelines show a watermarked placeholder
 for it, and a final render refuses.
 
 The order below is the recording order. It follows
@@ -453,6 +453,16 @@ passes. Record both phones from B01 to the end of B08 (mobile data on one).
   hash.
 - **Used in:** agora-bounty other-currency-steps (sped up) and
   other-currency-settled (never sped up).
+
+## Reused from the 11 Oct rehearsal
+
+### R01. A pot made in an earlier test run
+
+- **Clip:** `1000335865` (rehearsal). **Phone A.**
+- **Shows:** the draft of a test pot (who decides, where it can pour, when it
+  closes), "Check it before you make it", then the pot made and locked.
+- **Used in:** technical-demo pot-draft, pot-check and pot-made, captioned as
+  a test run. Its payee's person is named on the draft, under a region.
 
 ## What a retake costs
 

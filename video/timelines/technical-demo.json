@@ -3,202 +3,189 @@
   "width": 1920,
   "height": 1080,
   "fps": 30,
-  "minSeconds": 30,
-  "capSeconds": 180,
-  "target": [165, 175],
+  "minSeconds": 60,
+  "capSeconds": 120,
+  "target": [90, 120],
   "words": "technical",
-  "legend": ["Example: {pot.name}", "{cast.eddy.name}, {cast.eddy.city}", "{cast.maya.name}, {cast.maya.city}", "{cast.daniel.name}, {cast.daniel.city}"],
   "segments": [
     {
       "id": "hook",
       "shot": "card",
       "kind": "card",
-      "plan": "Opening question card",
-      "seconds": 4,
-      "title": "When a family pays for a party, who holds the money?",
-      "subtitle": "Example: {pot.name}, in NivPay"
+      "plan": "Opening card",
+      "seconds": 5,
+      "title": "NivPay, working on {chain.name} testnet",
+      "subtitle": "Passkey accounts, dollars held as AUSD, and pots no single person can pocket"
     },
     {
-      "id": "make-pot",
-      "shot": "M01",
+      "id": "create-account",
+      "shot": "B01",
       "kind": "phone",
-      "plan": "Phone A, Eddy: Make a pot, Mama's 60th, London, $500, invite Maya and Daniel, 2 of 3, Caterer up to $700, Event hall up to $300, Thu 31 Dec 2026",
-      "take": { "clip": null, "in": 0, "out": 64 },
-      "speed": 4,
-      "caption": "{cast.eddy.name} makes {pot.name}. Named people decide, {pot.rule}",
-      "callout": "It can only ever pay the {cast.caterer.name}, up to {cast.caterer.limit}, and the {cast.eventHall.name}, up to {cast.eventHall.limit}"
+      "plan": "Phone A, after the account chooser: the passkey sheet for nivpay.vercel.app, fingerprint, Home",
+      "take": { "clip": "1000336948", "in": 3.6, "out": 16.0 },
+      "zoom": { "from": 1.2, "to": 1.2, "x": 0.5, "y": 0.9 },
+      "caption": "A brand new account, made with a passkey",
+      "callout": "No password, nothing to write down. {cast.eddy.name}'s phone."
     },
     {
-      "id": "replies",
-      "shot": "M02",
+      "id": "balance-zero",
+      "shot": "B01",
       "kind": "phone",
-      "plan": "Phone B: Maya, Daniel and the Event hall each open their invite and reply with a link",
-      "take": { "clip": null, "in": 0, "out": 16 },
-      "speed": 4,
-      "caption": "Everyone named replies with a link"
+      "plan": "Phone A, Home: Your balance, Dollars $0.00, Held as AUSD, a digital dollar issued by Agora",
+      "take": { "clip": "1000336948", "in": 16.0, "out": 22.0 },
+      "zoom": { "from": 1, "to": 1.5, "x": 0.85, "y": 0.22 },
+      "caption": "Dollars, held as AUSD from Agora"
     },
     {
-      "id": "made",
-      "shot": "M03",
+      "id": "claim-wait",
+      "shot": "B02",
       "kind": "phone",
-      "plan": "Phone A: Everyone has replied, set shares $400 and $100, Make the pot, fingerprint, the lid drops and locks at Finalized",
-      "take": { "clip": null, "in": 0, "out": 10 },
-      "caption": "Made. It closes {pot.closesOn}",
-      "callout": "The rules are fixed the moment it is made"
-    },
-    {
-      "id": "pour-eddy",
-      "shot": "M04",
-      "kind": "phone",
-      "plan": "Phone A, Eddy: Pour in $500, the coin flies from London and lands at Finalized",
-      "take": { "clip": null, "in": 0, "out": 12 },
-      "speed": 1.5,
-      "caption": "{cast.eddy.name} pours in {pot.pours.eddy}"
-    },
-    {
-      "id": "pour-maya",
-      "shot": "M05",
-      "kind": "pair",
-      "plan": "B: Maya pours in $400. A: Maya's coin arrives on Eddy's map within seconds",
-      "take": { "clip": null, "in": 0, "out": 10 },
-      "takeB": { "clip": null, "in": 0, "out": 10 },
-      "labelA": "{cast.eddy.name} watches",
-      "labelB": "{cast.maya.name} pours in",
-      "caption": "{cast.maya.name} pours in {pot.pours.maya} from {cast.maya.city}"
-    },
-    {
-      "id": "pour-daniel",
-      "shot": "M06",
-      "kind": "phone",
-      "plan": "Phone B, Daniel: Pour in $100, the pot holds $1,000",
-      "take": { "clip": null, "in": 0, "out": 12 },
+      "plan": "Phone A, Add test dollars: Getting your account ready, fingerprint, Adding test dollars",
+      "take": { "clip": "1000336948", "in": 23.0, "out": 30.8 },
       "speed": 2,
-      "caption": "{cast.daniel.name} adds {pot.pours.daniel}. The pot holds {pot.total}"
+      "caption": "Test dollars from Agora's faucet"
     },
     {
-      "id": "ask-caterer",
-      "shot": "M07",
+      "id": "claim-settled",
+      "shot": "B02",
       "kind": "phone",
-      "plan": "Phone B, Daniel: Ask for a payment, Caterer, $600: fee $3.00, left $397.00, 1 more yes pays Caterer, fingerprint",
-      "take": { "clip": null, "in": 0, "out": 10 },
-      "caption": "{cast.daniel.name} asks to pay the {cast.caterer.name} {pot.caterer.amount}",
-      "callout": "NivPay fee {pot.caterer.fee}, {pot.feeRate} of the payment, shown before anyone says yes"
-    },
-    {
-      "id": "second-yes",
-      "shot": "M08",
-      "kind": "phone",
-      "plan": "Phone B, Maya: Waiting for your yes, Say yes and pay Caterer, That's 2 of 3, the stream runs to the Caterer, the pot has $397.00",
-      "take": { "clip": null, "in": 0, "out": 12 },
+      "plan": "Phone A: Added $10,000 test dollars. Settled in 2.2s, as recorded",
+      "take": { "clip": "1000336948", "in": 30.8, "out": 32.2 },
       "settle": true,
-      "caption": "The second yes pays it, in the same step",
-      "callout": "Only to the {cast.caterer.name}. The pot holds {pot.caterer.after}"
+      "caption": "{bounty.testDollars} in. Settled in {measured.claimSettle}"
     },
     {
-      "id": "caterer-paid",
-      "shot": "M09",
+      "id": "claim-held",
+      "shot": "B02",
       "kind": "phone",
-      "plan": "Phone A, Caterer: Receive, $600.00 under Payments in, From a NivPay pot",
-      "take": { "clip": null, "in": 0, "out": 6 },
-      "caption": "The {cast.caterer.name} gets exactly {pot.caterer.amount}"
+      "plan": "Phone A, the recorded frame held: Settled in 2.2s, pushed in",
+      "take": { "clip": "1000336948", "in": 31.5, "out": 31.6, "hold": 3 },
+      "zoom": { "from": 1.15, "to": 1.3, "x": 0.3, "y": 0.85 },
+      "caption": "Settled in {measured.claimSettle}, timed by the phone"
     },
     {
-      "id": "ask-hall",
-      "shot": "M10",
+      "id": "review",
+      "shot": "B04",
       "kind": "phone",
-      "plan": "Phone B, Daniel: Ask for a payment, Event hall, $280: fee $1.40, left $115.60",
-      "take": { "clip": null, "in": 0, "out": 12 },
-      "speed": 2,
-      "caption": "Then the {cast.eventHall.name}, {pot.eventHall.amount}",
-      "callout": "Fee {pot.eventHall.fee}"
+      "plan": "Phone A: Sending to account ending 562C, How much 25, Review, Check and send: Amount $25, Fee None",
+      "take": { "clip": "1000336948", "in": 46.4, "out": 54.0 },
+      "caption": "Send {bounty.send} to the account ending {measured.recipientLastFour}",
+      "callout": "No fee. NivPay covers it"
     },
     {
-      "id": "yes-hall",
-      "shot": "M11",
-      "kind": "phone",
-      "plan": "Phone A, Eddy: Waiting for your yes, Say yes and pay Event hall, the pot has $115.60",
-      "take": { "clip": null, "in": 0, "out": 8 },
-      "caption": "{cast.eddy.name} says yes. {pot.left} is left"
-    },
-    {
-      "id": "close-ask",
-      "shot": "M12",
-      "kind": "phone",
-      "plan": "Phone A, Eddy: Closing and your share, Eddy $57.80, Maya $46.24, Daniel $11.56, You put in $500, half of the pot, Ask to close early",
-      "take": { "clip": null, "in": 0, "out": 10 },
-      "caption": "Close early: what is left is shared by what each put in",
-      "callout": "{cast.eddy.name} put in {pot.pours.eddy}, {pot.eddyFraction} the pot, so {pot.eddyFraction} of {pot.left}"
-    },
-    {
-      "id": "close-split",
-      "shot": "M13",
-      "kind": "phone",
-      "plan": "Phone B, Maya: Say yes and close it, See the split: streams to each city, $1,000 went in, $880 paid out, $4.40 on fees",
-      "take": { "clip": null, "in": 0, "out": 10 },
-      "caption": "{pot.total} in. {pot.paidOut} paid out. {pot.fees} in fees",
-      "callout": "Closed on {cast.maya.name}'s yes"
-    },
-    {
-      "id": "take-shares",
-      "shot": "M14",
+      "id": "send-go",
+      "shot": "B05",
       "kind": "pair",
-      "plan": "B: Maya, Take my $46.24, coin to Houston. A: Eddy, Take my $57.80, coin to London",
-      "take": { "clip": null, "in": 0, "out": 10 },
-      "takeB": { "clip": null, "in": 0, "out": 10 },
-      "labelA": "{cast.eddy.name} takes {pot.shares.eddy}",
-      "labelB": "{cast.maya.name} takes {pot.shares.maya}",
-      "caption": "Anyone can leave with their share"
+      "plan": "A: Send $25, fingerprint, Confirming. B: a recorded frame of Maya's Home at $0.00, held",
+      "take": { "clip": "1000336948", "in": 54.9, "out": 58.4 },
+      "takeB": { "clip": "1000336942", "in": 5.0, "out": 5.1, "hold": 3.5 },
+      "labelA": "{cast.eddy.name} sends",
+      "labelB": "{cast.maya.name}'s balance",
+      "caption": "One fingerprint sends it"
     },
     {
-      "id": "take-daniel",
-      "shot": "M15",
+      "id": "send-arrive",
+      "shot": "B05",
+      "kind": "pair",
+      "plan": "A: Payment final, Sent $25, Settled in 2.2s, as recorded. B: a recorded frame of Maya's Home at $25.00, held",
+      "take": { "clip": "1000336948", "in": 58.43, "out": 62.0 },
+      "takeB": { "clip": "1000336942", "in": 9.0, "out": 9.1, "hold": 3.57 },
+      "labelA": "{cast.eddy.name} sends",
+      "labelB": "{cast.maya.name}'s balance",
+      "settle": true,
+      "caption": "Settled in {measured.sendSettle}",
+      "callout": "{cast.maya.name}'s balance: {bounty.received}"
+    },
+    {
+      "id": "send-held",
+      "shot": "B05",
       "kind": "phone",
-      "plan": "Phone B, Daniel: Take my $11.56, the pot holds $0.00",
-      "take": { "clip": null, "in": 0, "out": 6 },
-      "caption": "{cast.daniel.name} takes {pot.shares.daniel}. Nothing is left, to the cent",
-      "callout": "{cast.eddy.name} {pot.shares.eddy}, {cast.maya.name} {pot.shares.maya}, {cast.daniel.name} {pot.shares.daniel}: all of {pot.left}"
+      "plan": "Phone A, the recorded frame held: Payment final, Settled in 2.2s, pushed in",
+      "take": { "clip": "1000336948", "in": 60.0, "out": 60.1, "hold": 3 },
+      "zoom": { "from": 1.1, "to": 1.2, "x": 0.05, "y": 0.15 },
+      "caption": "Final, as the phone measured it"
     },
     {
-      "id": "replay",
-      "shot": "M16",
+      "id": "receipt",
+      "shot": "receipt",
+      "kind": "receipt",
+      "plan": "Receipt card for the take's send, read from Monad testnet",
+      "receipt": "hashes.take.send",
+      "seconds": 8,
+      "caption": "The chain's own receipt",
+      "callout": "One Transfer of {bounty.send} in AUSD, in a finalized block"
+    },
+    {
+      "id": "receipt-earlier",
+      "shot": "receipt",
+      "kind": "receipt",
+      "plan": "Receipt card for the README's verified send",
+      "receipt": "hashes.showcase.send",
+      "seconds": 6,
+      "caption": "The README's verified send, read the same way"
+    },
+    {
+      "id": "receipt-swap",
+      "shot": "receipt",
+      "kind": "receipt",
+      "plan": "Receipt card for the README's exchange through Agora's pair",
+      "receipt": "hashes.showcase.swap",
+      "seconds": 6,
+      "caption": "A payment in another currency, through Agora's pair",
+      "callout": "AUSD in from the sender, {bounty.otherCurrency} out to the recipient"
+    },
+    {
+      "id": "pot-draft",
+      "shot": "R01",
       "kind": "phone",
-      "plan": "Phone A, Eddy: See the pot's story, then the replay button: the whole story in about 7 s",
-      "take": { "clip": null, "in": 0, "out": 9 },
-      "caption": "Every step, replayed"
+      "plan": "A pot from an earlier test run, before it is made: who decides, where it can pour and the limit, when it closes",
+      "take": { "clip": "1000335865", "in": 8.0, "out": 12.0 },
+      "caption": "A pot: who decides, where it can pour, and when it closes",
+      "callout": "A pot made in an earlier test run of the app"
     },
     {
-      "id": "explorer-contract",
-      "shot": "E01",
-      "kind": "explorer",
-      "plan": "PC, MonadVision: the NivPayPots on AUSD contract page that holds the pot just made, verified source",
-      "take": { "clip": null, "in": 0, "out": 8 },
-      "caption": "The contract on Monad that holds the pot we just made",
-      "callout": "Money goes only to the payees fixed when the pot was made"
+      "id": "pot-check",
+      "shot": "R01",
+      "kind": "phone",
+      "plan": "The same test run: Check it before you make it, None of this can ever change",
+      "take": { "clip": "1000335865", "in": 28.0, "out": 33.0 },
+      "zoom": { "from": 1.25, "to": 1.25, "x": 0.5, "y": 0.95 },
+      "caption": "None of this can ever change, not even by you",
+      "callout": "Money can only come out to destinations fixed when the pot was created"
     },
     {
-      "id": "explorer-create",
-      "shot": "E02",
-      "kind": "explorer",
-      "plan": "PC, MonadVision: the CreatePot transaction of the Mama's 60th just made, from its Receipt link, and its PotCreated log",
-      "take": { "clip": null, "in": 0, "out": 8 },
-      "caption": "CreatePot: the pot we just made, {pot.name}",
-      "callout": "Transaction hash {hashes.take.createPot|short}"
+      "id": "pots",
+      "shot": "card",
+      "kind": "card",
+      "plan": "How a pot works, in the README's words",
+      "seconds": 10,
+      "title": "How a pot works",
+      "lines": [
+        "Money goes in from anyone",
+        "It can only come out to destinations fixed when the pot was created, and only when enough of the named approvers agree",
+        "Any funder can exit at any time with their share of what is unspent",
+        "Exits are never blocked by a freeze, a close, a pending proposal, or an approver who has stopped cooperating"
+      ]
     },
     {
-      "id": "explorer-fund",
-      "shot": "E03",
-      "kind": "explorer",
-      "plan": "PC, MonadVision: Eddy's FundWithPermit into the pot just made, from its Receipt link: the Approval, the AUSD Transfer and Funded for $500 in one",
-      "take": { "clip": null, "in": 0, "out": 8 },
-      "caption": "FundWithPermit: {cast.eddy.name}'s {pot.pours.eddy} into the pot we just made, with one signature",
-      "callout": "Transaction hash {hashes.take.fundWithPermit|short}. Blocks land {chain.blockTime} apart"
+      "id": "features",
+      "shot": "card",
+      "kind": "card",
+      "plan": "What else the app does, in the README's words",
+      "seconds": 8,
+      "title": "Also in the app",
+      "lines": [
+        "Send dollars to another person, and receive them",
+        "Deliver a payment in another currency through Agora's Instant Settlement",
+        "People see dollars and names, never keys or addresses"
+      ]
     },
     {
       "id": "end",
       "shot": "card",
       "kind": "card",
       "plan": "End card",
-      "seconds": 4,
+      "seconds": 5,
       "title": "NivPay",
       "subtitle": "{app.endLine}",
       "url": true

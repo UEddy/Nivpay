@@ -5,14 +5,18 @@
  * checks run in Remotion, in the render script and in video:check.
  */
 import { fact } from "./facts.ts";
-import { timeline as redactedPieces, type Redactions } from "./redactions.ts";
+import { heldFrameProblem, timeline as redactedPieces, type Redactions } from "./redactions.ts";
 import { FPS, pieceFrames } from "./timing.ts";
 
 /** Which words a video's captions may use. */
 export type WordRules = "technical" | "consumer";
 
-/** One phone or PC recording, by its id in footage/redactions.json. A null clip is a placeholder. */
-export type Take = { clip: string | null; in: number; out: number };
+/**
+ * One phone or PC recording, by its id in footage/redactions.json. A null clip
+ * is a placeholder. With `hold`, the one frame at `in` is shown unchanged for
+ * that many seconds, tagged "Frame held"; `out` only bounds the redaction check.
+ */
+export type Take = { clip: string | null; in: number; out: number; hold?: number };
 
 export type Zoom = { from: number; to: number; x: number; y: number };
 
@@ -20,7 +24,7 @@ export type Segment = {
   id: string;
   /** The SHOTLIST.md shot this footage comes from. */
   shot: string;
-  kind: "phone" | "pair" | "explorer" | "card";
+  kind: "phone" | "pair" | "explorer" | "card" | "receipt";
   /** What recorded it, for the frame and a placeholder's shape. Default: pc for explorer, else phone. */
   device?: "phone" | "pc";
   /** What the shot shows, in plain words. Drawn on a placeholder; never on real footage. */
@@ -30,8 +34,12 @@ export type Segment = {
   takeB?: Take;
   labelA?: string;
   labelB?: string;
-  /** Card only: its length and text. */
+  /** Card and receipt: its length and text. */
   seconds?: number;
+  /** Card only: lines listed under the title, built one after another. */
+  lines?: string[];
+  /** Receipt only: the fact path of the hash whose receipt, read from the chain into src/receipts.json, the card shows. */
+  receipt?: string;
   title?: string;
   subtitle?: string;
   url?: boolean;
@@ -45,6 +53,8 @@ export type Segment = {
   proves?: Proof[];
   /** A push-in on the real footage (x-launch). Scales the recording, never redraws it. */
   zoom?: Zoom;
+  /** Holds the 3D phone face-on and still even where the plan names no amount. There is no way to force motion. */
+  still?: boolean;
 };
 
 export type Proof = "passkey" | "balance" | "settled";
@@ -68,6 +78,7 @@ export type Timeline = {
 };
 
 export const SPED_UP_TAG = "Sped up";
+export const FRAME_HELD_TAG = "Frame held";
 export const NOT_MEASURED = "[not measured yet]";
 
 // Words no caption uses, in any video.
@@ -142,10 +153,11 @@ export function textProblems(text: string, rules: WordRules, explorer: boolean):
 
 /** Every piece of text a segment puts on screen. */
 export function segmentTexts(s: Segment): string[] {
-  return [s.caption, s.callout, s.labelA, s.labelB, s.title, s.subtitle].filter((t): t is string => typeof t === "string");
+  return [s.caption, s.callout, s.labelA, s.labelB, s.title, s.subtitle, ...(s.lines ?? [])].filter((t): t is string => typeof t === "string");
 }
 
 const takeSeconds = (t: Take, map: Redactions | null, speed: number): number => {
+  if (t.hold !== undefined) return t.hold;
   const entry = t.clip !== null ? map?.clips[t.clip] : undefined;
   // A placeholder, or a clip whose map is not on this PC, runs for its in to out.
   if (!entry) return (t.out - t.in) / speed;
@@ -154,14 +166,26 @@ const takeSeconds = (t: Take, map: Redactions | null, speed: number): number => 
 
 /** Frames a segment runs for: a card its seconds; footage its redacted length at its speed. */
 export function segmentFrames(s: Segment, map: Redactions | null): number {
-  if (s.kind === "card") return Math.max(1, Math.round((s.seconds ?? 0) * FPS));
+  if (s.kind === "card" || s.kind === "receipt") return Math.max(1, Math.round((s.seconds ?? 0) * FPS));
   if (!s.take) return 1;
   return Math.max(1, Math.round(takeSeconds(s.take, map, s.speed ?? 1) * FPS));
 }
 
 export const totalFrames = (t: Timeline, map: Redactions | null) => t.segments.reduce((n, s) => n + segmentFrames(s, map), 0);
 
-export const isPlaceholder = (s: Segment) => s.kind !== "card" && (s.take?.clip == null || (s.kind === "pair" && s.takeB?.clip == null));
+/** Whether a segment shows a held frame on either phone. */
+export const holdsFrame = (s: Segment) => s.take?.hold !== undefined || (s.kind === "pair" && s.takeB?.hold !== undefined);
+
+/** "Frame held", and on which phone when only one of two holds. Null when nothing is held. */
+export function heldTag(s: Segment): string | null {
+  if (!holdsFrame(s)) return null;
+  if (s.kind !== "pair") return FRAME_HELD_TAG;
+  const a = s.take?.hold !== undefined;
+  const b = s.takeB?.hold !== undefined;
+  return a && b ? FRAME_HELD_TAG : `${FRAME_HELD_TAG} on the ${a ? "left" : "right"}`;
+}
+
+export const isPlaceholder = (s: Segment) => s.kind !== "card" && s.kind !== "receipt" && (s.take?.clip == null || (s.kind === "pair" && s.takeB?.clip == null));
 
 export type Problems = { hard: string[]; final: string[]; warnings: string[] };
 
@@ -188,14 +212,18 @@ export function problems(t: Timeline, map: Redactions | null): Problems {
     ids.add(s.id);
     if (DASHES.test(s.plan)) hard.push(`${where}: plan has an en or em dash`);
     for (const text of segmentTexts(s)) {
-      for (const p of textProblems(text, t.words, s.kind === "explorer")) hard.push(`${where}: "${text}" ${p}`);
+      for (const p of textProblems(text, t.words, s.kind === "explorer" || s.kind === "receipt")) hard.push(`${where}: "${text}" ${p}`);
       for (const p of factsUsed(text).unmeasured) final.push(`${where}: {${p}} is not measured yet (null in facts.ts)`);
     }
     const speed = s.speed ?? 1;
     if (!(speed >= 1) || speed > 16) hard.push(`${where}: speed must be from 1 to 16`);
     if (s.settle && speed !== 1) hard.push(`${where}: the "Settled in" moment is never sped up`);
-    if (s.kind === "card") {
-      if (!(s.seconds! > 0)) hard.push(`${where}: a card needs seconds`);
+    if (s.kind === "card" || s.kind === "receipt") {
+      if (!(s.seconds! > 0)) hard.push(`${where}: a ${s.kind} needs seconds`);
+      if (s.kind === "receipt") {
+        if (t.words === "consumer") hard.push(`${where}: a chain receipt is for the technical videos only`);
+        if (!s.receipt || !fact(s.receipt)) hard.push(`${where}: a receipt names the fact path of a known hash`);
+      }
     } else {
       for (const take of [s.take, s.kind === "pair" ? s.takeB : undefined]) {
         if (s.kind === "pair" && !take) hard.push(`${where}: a pair needs take and takeB`);
@@ -204,9 +232,16 @@ export function problems(t: Timeline, map: Redactions | null): Problems {
         const entry = take.clip !== null ? map?.clips[take.clip] : undefined;
         if (take.clip !== null && map && !entry) hard.push(`${where}: clip ${take.clip} is not in redactions.json`);
         if (entry && take.out > entry.durationSeconds + 0.05) hard.push(`${where}: out ${take.out} is past the end of clip ${take.clip}`);
+        if (take.hold !== undefined) {
+          if (s.settle && s.kind !== "pair") hard.push(`${where}: the "Settled in" moment plays as recorded; hold its frame in a segment of its own`);
+          const why = entry ? heldFrameProblem(entry, take.in, take.hold) : take.hold > 0 ? null : "a held frame needs seconds";
+          if (why) hard.push(`${where}: ${why}`);
+          if (speed !== 1) hard.push(`${where}: a held frame is never sped up`);
+        }
       }
       if (!s.take) hard.push(`${where}: footage needs a take`);
-      if (s.kind === "pair" && s.take && s.takeB && Math.abs(s.take.out - s.take.in - (s.takeB.out - s.takeB.in)) > 1 / FPS) {
+      const runs = (k: Take) => k.hold ?? k.out - k.in;
+      if (s.kind === "pair" && s.take && s.takeB && Math.abs(runs(s.take) - runs(s.takeB)) > 1 / FPS) {
         hard.push(`${where}: both phones must run the same length so they stay in step`);
       }
       if (s.kind === "pair" && (s.takeB?.clip == null) !== (s.take?.clip == null)) hard.push(`${where}: both phones are real or both placeholders`);
@@ -229,6 +264,20 @@ export function problems(t: Timeline, map: Redactions | null): Problems {
   }
   return { hard, final, warnings };
 }
+
+/** Shown in a phone: phone and pair shots, and an explorer recorded on the phone. */
+export const onPhone = (s: Segment) => s.kind === "phone" || s.kind === "pair" || (s.kind === "explorer" && s.device === "phone");
+
+/** Plan words meaning an amount or a settle time is on the phone's screen. */
+const READ_IN_PLAN = /\$\s?\d|settled in|\d[\d,.]*\s*(ctk|ausd)\b|\bamount\b|\bhow much\b|\bbalance\b/i;
+
+/**
+ * Whether the 3D phone holds face-on and still for the whole segment, so an
+ * amount or "Settled in" reads flat: the settle moment, any proof for the
+ * judges, any shot whose plan shows an amount (at any speed), or one marked
+ * still. Everything else floats and tilts slowly, face-on at both ends.
+ */
+export const phoneStill = (s: Segment): boolean => s.still === true || s.settle === true || (s.proves?.length ?? 0) > 0 || READ_IN_PLAN.test(s.plan);
 
 /** Where each segment starts, in frames. */
 export function starts(t: Timeline, map: Redactions | null): number[] {

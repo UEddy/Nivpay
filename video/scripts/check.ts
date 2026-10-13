@@ -4,8 +4,8 @@
  * as a final (no rule broken, inside its duration cap, no placeholder, no
  * fact not measured yet), facts.ts has no null left, video:denylist-lint
  * passes, no committed file under video/ holds an en or em dash, and
- * video:privacy-check passes on everything in out/ and anything left in
- * .render/.
+ * video:privacy-check passes on everything in out/, anything left in
+ * .render/ and every screen file the 3D phone may show (footage/_screens/).
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -75,7 +75,7 @@ try {
   failed = true;
 }
 
-const videos = ["out", ".render"].flatMap((d) =>
+const videos = ["out", ".render", join("footage", "_screens")].flatMap((d) =>
   existsSync(join(root, d)) ? readdirSync(join(root, d)).filter((f) => f.endsWith(".mp4")).map((f) => join(root, d, f)) : [],
 );
 try {

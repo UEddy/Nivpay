@@ -12,10 +12,11 @@ import { useThree } from "@react-three/fiber";
 import { Video } from "@remotion/media";
 import { ThreeCanvas } from "@remotion/three";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { staticFile, useCurrentFrame, useRemotionEnvironment, useVideoConfig } from "remotion";
+import { continueRender, delayRender, interpolate, staticFile, useCurrentFrame, useRemotionEnvironment, useVideoConfig } from "remotion";
 import { CanvasTexture, ExtrudeGeometry, PMREMGenerator, Shape, ShapeGeometry, SRGBColorSpace, type BufferGeometry } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { poseAt } from "./pose.ts";
+import type { Zoom } from "../timeline.ts";
+import { poseAt, zoomWindow } from "./pose.ts";
 import { checkedScreenFile } from "./screens.ts";
 
 /** What a phone's screen shows: a redacted file in footage/, or a placeholder card. */
@@ -79,34 +80,72 @@ function Light() {
   );
 }
 
-function placeholderTexture(lines: string[], aspect: number): CanvasTexture<OffscreenCanvas> {
-  const H = 1024;
-  const W = Math.round(H * aspect);
-  const c = new OffscreenCanvas(W, H);
-  const x = c.getContext("2d")!;
-  for (let i = -H; i < W + H; i += 48) {
-    x.fillStyle = (i / 48) % 2 === 0 ? "#3b2a20" : "#2c1f17";
-    x.beginPath();
-    x.moveTo(i, 0);
-    x.lineTo(i + 24, 0);
-    x.lineTo(i + 24 - H, H);
-    x.lineTo(i - H, H);
-    x.fill();
+/** Breaks one line into lines that fit maxW at the context's font. */
+function wrap(x: OffscreenCanvasRenderingContext2D, line: string, maxW: number): string[] {
+  const out: string[] = [];
+  let cur = "";
+  for (const w of line.split(" ")) {
+    const next = cur ? `${cur} ${w}` : w;
+    if (cur && x.measureText(next).width > maxW) {
+      out.push(cur);
+      cur = w;
+    } else cur = next;
   }
+  if (cur) out.push(cur);
+  return out;
+}
+
+function drawPlaceholder(c: OffscreenCanvas, lines: string[]) {
+  const W = c.width;
+  const H = c.height;
+  const x = c.getContext("2d")!;
+  // Plain, not hatched: on a tilted phone, compressed, OCR reads diagonal stripes as
+  // runs of digits and video:privacy-check fails the frame. The red band and border
+  // still say plainly that this is not footage.
+  x.fillStyle = "#2c1f17";
+  x.fillRect(0, 0, W, H);
+  x.strokeStyle = "#b3261e";
+  x.lineWidth = 12;
+  x.strokeRect(6, 6, W - 12, H - 12);
   x.fillStyle = "#b3261e";
   x.fillRect(24, H * 0.36, W - 48, 64);
   x.fillStyle = "white";
   x.font = "600 44px Work Sans, sans-serif";
   x.fillText("PLACEHOLDER", 40, H * 0.36 + 48);
   x.font = "28px Work Sans, sans-serif";
-  lines.forEach((l, i) => x.fillText(l, 40, H * 0.36 + 120 + i * 40, W - 80));
-  const t = new CanvasTexture(c);
-  t.colorSpace = SRGBColorSpace;
+  lines.flatMap((l) => wrap(x, l, W - 80)).forEach((l, i) => x.fillText(l, 40, H * 0.36 + 120 + i * 40, W - 80));
+}
+
+/** A placeholder card as a texture, drawn again once the fonts have loaded so a render never shows a stand-in font. */
+function usePlaceholderTexture(lines: string[] | null, aspect: number): CanvasTexture<OffscreenCanvas> | null {
+  // Keyed on the text, not the array, which is a new one on every frame.
+  const key = lines ? lines.join("\n") : null;
+  const t = useMemo(() => {
+    if (key === null) return null;
+    const H = 1024;
+    const c = new OffscreenCanvas(Math.round(H * aspect), H);
+    drawPlaceholder(c, key.split("\n"));
+    const texture = new CanvasTexture(c);
+    texture.colorSpace = SRGBColorSpace;
+    return texture;
+  }, [key, aspect]);
+  useEffect(() => {
+    if (!t || key === null) return;
+    const handle = delayRender("placeholder fonts");
+    Promise.all([document.fonts.load("600 44px 'Work Sans'"), document.fonts.load("28px 'Work Sans'")])
+      .catch(() => undefined)
+      .then(() => {
+        drawPlaceholder(t.image, key.split("\n"));
+        t.needsUpdate = true;
+        continueRender(handle);
+      });
+    return () => t.dispose();
+  }, [t, key]);
   return t;
 }
 
 /** A redacted file drawn into a texture frame by frame, as Remotion recommends for video in three. */
-function VideoScreen(props: { source: Extract<ScreenSource, { kind: "redacted" }>; geometry: BufferGeometry }) {
+function VideoScreen(props: { source: Extract<ScreenSource, { kind: "redacted" }>; geometry: BufferGeometry; zoom?: Zoom; frames: number }) {
   const { source } = props;
   const [s] = useState(() => {
     const canvas = new OffscreenCanvas(source.width, source.height);
@@ -115,7 +154,13 @@ function VideoScreen(props: { source: Extract<ScreenSource, { kind: "redacted" }
     texture.colorSpace = SRGBColorSpace;
     return { context, texture };
   });
+  const frame = useCurrentFrame();
   const { invalidate, advance } = useThree();
+  // The push-in, if any, as a window on the texture: the flat frame's crop, never a redraw.
+  const z = props.zoom;
+  const w = zoomWindow(z ? interpolate(frame, [0, props.frames], [z.from, z.to], { extrapolateRight: "clamp" }) : 1, z?.x ?? 0.5, z?.y ?? 0.5);
+  s.texture.repeat.set(w.repeat, w.repeat);
+  s.texture.offset.set(w.offsetX, w.offsetY);
   const { isRendering } = useRemotionEnvironment();
   const onVideoFrame = useCallback(
     (frame: CanvasImageSource) => {
@@ -136,14 +181,14 @@ function VideoScreen(props: { source: Extract<ScreenSource, { kind: "redacted" }
   );
 }
 
-function Phone(props: { source: ScreenSource; x: number; scale: number; frames: number; still: boolean; phase: number }) {
+function Phone(props: { source: ScreenSource; x: number; scale: number; frames: number; still: boolean; phase: number; zoom?: Zoom }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const aspect = props.source.kind === "redacted" ? props.source.width / props.source.height : props.source.aspect;
   const sw = SCREEN_H * aspect;
   const body = useMemo(() => slab(sw + BEZEL * 2, SCREEN_H + BEZEL * 2, 0.085 + BEZEL), [sw]);
   const screen = useMemo(() => roundedRect(sw, SCREEN_H, 0.085), [sw]);
-  const placeholder = useMemo(() => (props.source.kind === "placeholder" ? placeholderTexture(props.source.lines, aspect) : null), [props.source, aspect]);
+  const placeholder = usePlaceholderTexture(props.source.kind === "placeholder" ? props.source.lines : null, aspect);
   const p = poseAt(frame, props.frames, fps, props.still, props.phase);
   return (
     <group position={[props.x, p.lift * SCREEN_H, 0]} rotation={[p.rotX, p.rotY, 0]} scale={props.scale}>
@@ -160,7 +205,7 @@ function Phone(props: { source: ScreenSource; x: number; scale: number; frames: 
         <meshPhysicalMaterial color="#2a221d" metalness={0.6} roughness={0.3} />
       </mesh>
       {props.source.kind === "redacted" ? (
-        <VideoScreen source={props.source} geometry={screen} />
+        <VideoScreen source={props.source} geometry={screen} zoom={props.zoom} frames={props.frames} />
       ) : (
         <mesh geometry={screen} position={[0, 0, DEPTH / 2 + 0.001]}>
           <meshBasicMaterial map={placeholder} toneMapped={false} />
@@ -175,7 +220,7 @@ function Phone(props: { source: ScreenSource; x: number; scale: number; frames: 
  * them face-on and motionless for the whole segment (an amount or "Settled in"
  * to read); otherwise they float and tilt slowly, face-on at both ends.
  */
-export function PhoneStage3D(props: { sources: ScreenSource[]; width: number; height: number; frames: number; still: boolean }) {
+export function PhoneStage3D(props: { sources: ScreenSource[]; width: number; height: number; frames: number; still: boolean; zoom?: Zoom }) {
   const two = props.sources.length === 2;
   // The camera sees SCREEN_H plus a margin top and bottom at rest.
   const viewH = (SCREEN_H + BEZEL * 2) / 0.9;
@@ -187,7 +232,7 @@ export function PhoneStage3D(props: { sources: ScreenSource[]; width: number; he
     <ThreeCanvas width={props.width} height={props.height} camera={{ fov, position: [0, 0, z], near: 0.1, far: 100 }} gl={{ antialias: true, alpha: true }}>
       <Light />
       {props.sources.map((src, i) => (
-        <Phone key={i} source={src} x={two ? (i === 0 ? -1 : 1) * (viewW / 4) : 0} scale={scale} frames={props.frames} still={props.still} phase={i * 1.7} />
+        <Phone key={i} source={src} x={two ? (i === 0 ? -1 : 1) * (viewW / 4) : 0} scale={scale} frames={props.frames} still={props.still} phase={i * 1.7} zoom={props.zoom} />
       ))}
     </ThreeCanvas>
   );

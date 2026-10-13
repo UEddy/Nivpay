@@ -120,7 +120,7 @@ test("fact() reads a path, says null for unmeasured and undefined for unknown; n
   assert.equal(fact("pot.nothing"), undefined);
   assert.equal(fact("pot"), undefined);
   assert.deepEqual(nullFacts({ a: { b: null, c: "x" }, d: null }), ["a.b", "d"]);
-  assert.ok(nullFacts().includes("hashes.take.send"));
+  assert.deepEqual(nullFacts({ hashes: { take: { send: null, swap: "0x1" } } }), ["hashes.take.send"]);
   assert.equal(shortHex(FACTS.hashes.showcase.createPot), "0x6d1d...199c");
 });
 
@@ -161,22 +161,14 @@ test("the confirm step is the app's own sheet: Sending to account ending and the
   assert.equal(copy.sendingTo(copy.accountEnding(id)), "Sending to account ending bCd1");
 });
 
-test("the take-share beat: Daniel takes his share, and the three shares are all of what was left", () => {
+test("the three shares are all of what was left", () => {
   const P = FACTS.pot;
   const shares = [P.shares.eddy, P.shares.maya, P.shares.daniel].map((s) => usd(Number(s.replace(/[$,]/g, ""))));
   assert.equal(cents(shares.reduce((a, b) => a + b, 0n)), P.left);
-  const demo = JSON.parse(doc("video/timelines/technical-demo.json")) as { segments: { id: string; caption?: string; callout?: string }[] };
-  const beat = demo.segments.find((s) => s.id === "take-daniel")!;
-  assert.match(beat.caption!, /^\{cast\.daniel\.name\} takes \{pot\.shares\.daniel\}/);
-  for (const t of ["{cast.eddy.name} {pot.shares.eddy}", "{cast.maya.name} {pot.shares.maya}", "{cast.daniel.name} {pot.shares.daniel}", "{pot.left}"]) {
-    assert.ok(beat.callout!.includes(t), t);
-  }
   assert.deepEqual([P.shares.eddy, P.shares.maya, P.shares.daniel], ["$57.80", "$46.24", "$11.56"]);
 });
 
-test("the technical demo is labelled an example story, with each person's city from facts", () => {
-  const demo = JSON.parse(doc("video/timelines/technical-demo.json")) as { legend: string[] };
-  assert.deepEqual(demo.legend, ["Example: {pot.name}", "{cast.eddy.name}, {cast.eddy.city}", "{cast.maya.name}, {cast.maya.city}", "{cast.daniel.name}, {cast.daniel.city}"]);
+test("the cast's cities and the end line come from facts", () => {
   assert.deepEqual(
     [FACTS.cast.eddy, FACTS.cast.maya, FACTS.cast.daniel].map((p) => `${p.name}, ${p.city}`),
     ["Eddy, London", "Maya, Houston", "Daniel, Nairobi"],
