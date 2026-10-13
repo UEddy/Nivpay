@@ -1555,6 +1555,42 @@ have to be settled first:
   or received. So a username must be opt-in, never assigned, and the app must
   keep working for people who never take one.
 
+**The plan: usernames that map to an Account ID.** Not built yet. In order:
+
+1. **A small name registry**, a new contract separate from NivPayPots, which
+   stays exactly as deployed. It maps a username to an Account ID and back,
+   one name per account. Only the account itself can claim, change or release
+   its name (the caller is the account, signed with its passkey like any
+   other request), so nobody can point a name at someone else. No admin can
+   move a name. Where Monad gains a widely used name service, NivPay can
+   read names from it instead of running its own registry.
+2. **Strict names.** Lowercase `a` to `z`, `0` to `9` and `_`, 3 to 20
+   characters, so there are no look-alike letters from other alphabets.
+   Names close to NivPay's own (`nivpay`, `support`, `help`, `admin`) are
+   reserved. A changed name can't be claimed again for a waiting period, so
+   a released name can't be taken over at once by someone else.
+3. **Opt in, from Account details.** "Choose a username" sits beside the
+   Account ID. Nobody gets one by default, and every flow keeps working with
+   links and Account IDs alone.
+4. **Paying `@idara`.** Send to accepts a username as well as an Account ID.
+   The phone looks the name up at the finalized block and shows the account
+   it belongs to ("@idara, account ending 7bC1"). The first payment to a name
+   asks for the same last 4 characters as a pasted Account ID, checked
+   against what the person was told. The phone then remembers that pairing,
+   and if the name later points at a different account, it stops and says so
+   before anything is signed.
+5. **Names in pots stay signed.** Pot and request links keep their signed
+   names. A username is shown next to them, never in place of them, and a
+   pot's payees stay fixed Account IDs: renaming can never redirect a pot.
+6. **Said honestly.** Taking a name links it to the account's public balance
+   and history, and releasing the name later doesn't erase payments already
+   made. The screen says both before the name is claimed.
+
+Disputes are the open question. A registry with no admin can't take a name
+back from a squatter; one with an admin adds a party who can move names. The
+plan starts with no admin, relying on the last 4 check and the remembered
+pairing, and revisits that before mainnet.
+
 ## A note on the benchmark files
 
 This repository also contains an earlier settlement benchmark: `StreamBench`,
