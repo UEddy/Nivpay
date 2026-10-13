@@ -218,9 +218,50 @@ h1 {
   padding: 12px 14px;
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus {
   outline: 2px solid var(--primary);
   outline-offset: 1px;
+}
+
+/* The currency picker: an input's look, with the phone's own list. */
+.field select {
+  font: 500 18px/1.3 var(--font-body);
+  color: var(--ink);
+  background: #ffffff;
+  border: 1.5px solid var(--card-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  width: 100%;
+  min-height: 48px;
+}
+
+.field select:disabled,
+.field input:disabled {
+  opacity: 0.6;
+}
+
+/* Add money and Cash out: test mode is said on every step. */
+.ramp-test {
+  align-self: flex-start;
+  margin: 0 0 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--primary-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ramp-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1.5px dashed var(--primary);
+  color: var(--primary-text);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .hint {

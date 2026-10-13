@@ -27,6 +27,7 @@ import type { Step } from "./lib/send.ts";
 import { latestReceipt, receiptUrl, rememberReceipt } from "./lib/receipts.ts";
 import { CURRENCY_LABEL } from "./lib/settle.ts";
 import { SEND_LABEL } from "./lib/transfer.ts";
+import { CASHOUT_LABEL } from "./lib/rampDesk.ts";
 import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
 // Every screen but Home loads when it is first opened, and so does the code
 // that signs (passkeys, keys, signatures): the first screen stays small.
@@ -39,6 +40,7 @@ const ReceiveScreen = lazy(() => reloadOnce(() => import("./screens/Receive.tsx"
 const RequestScreen = lazy(() => reloadOnce(() => import("./screens/Request.tsx")).then((m) => ({ default: m.RequestScreen })));
 const TimelineScreen = lazy(() => reloadOnce(() => import("./screens/Timeline.tsx")).then((m) => ({ default: m.TimelineScreen })));
 const CloseScreen = lazy(() => reloadOnce(() => import("./screens/Close.tsx")).then((m) => ({ default: m.CloseScreen })));
+const MoneyScreen = lazy(() => reloadOnce(() => import("./screens/Money.tsx")).then((m) => ({ default: m.MoneyScreen })));
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
 const sending = () => reloadOnce(() => import("./lib/send.ts"));
@@ -64,7 +66,8 @@ type Screen =
   | { kind: "story"; pot: StoredPot }
   | { kind: "close"; pot: StoredPot }
   | { kind: "send"; request: PayLink | null }
-  | { kind: "receive" };
+  | { kind: "receive" }
+  | { kind: "money"; mode: "add" | "out" };
 
 function storedFromLink(link: PotLink, fragment: string): StoredPot {
   return rememberPotLink(pots, link, fragment, Date.now());
@@ -370,6 +373,9 @@ function Screens() {
   if (active && !switching && screen.kind === "send") {
     return <SendScreen key={active.address} account={active} request={screen.request} banner={banner} onClose={() => go({ kind: "home" })} />;
   }
+  if (active && !switching && screen.kind === "money") {
+    return <MoneyScreen key={active.address + screen.mode} account={active} mode={screen.mode} banner={banner} onClose={() => go({ kind: "home" })} />;
+  }
   if (active && !switching && screen.kind === "receive") {
     return <ReceiveScreen key={active.address} account={active} banner={banner} onClose={() => go({ kind: "home" })} />;
   }
@@ -393,6 +399,7 @@ function Screens() {
           onOpenRequest={(pot, proposalId) => go({ kind: "request", pot, proposalId })}
           onSend={() => go({ kind: "send", request: null })}
           onReceive={() => go({ kind: "receive" })}
+          onMoney={(mode) => go({ kind: "money", mode })}
           onRename={renameActive}
         />
       ) : (
@@ -654,6 +661,7 @@ function Home(props: {
   onOpenRequest: (pot: StoredPot, proposalId: bigint) => void;
   onSend: () => void;
   onReceive: () => void;
+  onMoney: (mode: "add" | "out") => void;
   onRename: (name: string) => void;
 }) {
   const { account, connection } = props;
@@ -667,11 +675,19 @@ function Home(props: {
   const [balances, setBalances] = useState<Balances | null>(null);
   // A payment from this account still being confirmed: the Send screen follows it.
   const [sendInFlight, setSendInFlight] = useState(false);
+  // A cash out still being confirmed: the Cash out screen follows it.
+  const [cashOutInFlight, setCashOutInFlight] = useState(false);
   useEffect(() => {
     void idbWriteStore
       .get(account.address)
-      .then((w) => setSendInFlight(Boolean(w && (w.label.startsWith(`${SEND_LABEL} `) || w.label.startsWith(`${CURRENCY_LABEL} `)))))
-      .catch(() => setSendInFlight(false));
+      .then((w) => {
+        setSendInFlight(Boolean(w && (w.label.startsWith(`${SEND_LABEL} `) || w.label.startsWith(`${CURRENCY_LABEL} `))));
+        setCashOutInFlight(Boolean(w && w.label.startsWith(`${CASHOUT_LABEL} `)));
+      })
+      .catch(() => {
+        setSendInFlight(false);
+        setCashOutInFlight(false);
+      });
   }, [account.address]);
   const [amountText, setAmountText] = useState("1,000");
   const [step, setStep] = useState<Step | "landing" | null>(null);
@@ -916,6 +932,29 @@ function Home(props: {
           </>
         )}
       </section>
+
+      {DEPLOYMENT === "ausd" && (
+        <section className="card" aria-labelledby="your-bank">
+          <p className="eyebrow" id="your-bank">
+            {copy.yourBank}
+          </p>
+          <p className="hint">{copy.yourBankHint}</p>
+          <p className="ramp-test">{copy.rampTestMode}</p>
+          <div className="money-actions">
+            <button type="button" className="btn primary" onClick={() => props.onMoney("add")}>
+              {copy.addMoney}
+            </button>
+            <button type="button" className="btn" onClick={() => props.onMoney("out")}>
+              {copy.cashOut}
+            </button>
+          </div>
+          {cashOutInFlight && (
+            <button type="button" className="btn ghost small" onClick={() => props.onMoney("out")}>
+              {copy.cashOutStillGoing}
+            </button>
+          )}
+        </section>
+      )}
 
       <YourPots account={account} connection={props.connection} onOpen={props.onOpenDraft} onOpenPot={props.onOpenPot} onOpenRequest={props.onOpenRequest} />
 
