@@ -1446,6 +1446,53 @@ favicon, home-screen and maskable icons and its header mark use it.
 `brand/README.md` lists every file (lockups, one-colour versions, app tiles,
 a 1000 px square) and the palette; `brand/make-logo.mjs` rebuilds the SVGs.
 
+## Mainnet plan: money in and out in any currency
+
+On testnet, Add money and Cash out in the app are a clearly labelled
+simulation: only test AUSD moves, and no bank is involved (see
+[Add money and Cash out in test mode](#add-money-and-cash-out-in-test-mode)).
+On mainnet a licensed partner does the bank side. No single partner covers
+every currency in the world, so NivPay stacks them, and picks the route per
+currency:
+
+| Route | Partner | When | How money moves |
+| --- | --- | --- | --- |
+| 1. Direct | Ramp | Where Ramp sells and buys AUSD | Buy AUSD by card, bank transfer, Apple Pay or Google Pay; sell AUSD and cash out to a bank or card. AUSD bank cash out per corridor: [CHECK] |
+| 2. Local | Switch, plus Paj, HoneyCoin and Rampnow for Africa | Naira, shillings, cedis, euros, rupees, yuan, and where Ramp doesn't serve AUSD | Bank transfer or mobile money in local currency, settled as USDC on Monad. NivPay converts USDC to AUSD in the same confirm, and back the other way to cash out |
+| 3. Anywhere else | Onramper or Meld | Every other country | Aggregators that route each person to the licensed partner serving their country |
+| 4. Later | Agora's own mint and redeem | Once there is an Agora organisation account | Dollars in and out directly with the issuer of AUSD (see `docs/BOUNTIES.md`) |
+
+What the sources say, read on 13 Oct 2026:
+
+* **Ramp.** Its post announcing Monad support (page dated 3 June 2026) lists
+  buying and selling MON, USDC, USDT0 and AUSD on Monad. AUSD and USDT0 are
+  not available in the EU. Buying is by card, instant bank transfer, Apple
+  Pay, Google Pay and local options; selling cashes out to a bank or card.
+  Which bank corridors pay out AUSD is not stated: [CHECK] per corridor
+  before launch.
+* **Switch.** Monad's onramp list gives USDC and USDT0 on Monad, settled in
+  local currency (EUR, GBP, NGN, KES, GHS, INR, CNY and others) by bank
+  transfer, mobile money and SWIFT.
+* **Paj, HoneyCoin, Rampnow.** Listed for Africa; Rampnow names South Africa
+  and Nigeria.
+* **Onramper and Meld.** Listed as covering 190+ and 225+ countries.
+
+Mama's 60th, on mainnet: Idara pays in pounds from London (Ramp), Ubong in
+dollars from Houston (Ramp), and Aniekan in naira from Uyo (Switch, USDC
+converted to AUSD in the same confirm). All of it lands as AUSD in one pot.
+When the second yes pays the caterer, the caterer cashes out to naira in
+their own bank, through the local route.
+
+Revenue stays the pot fee on payouts (see [Fees](#fees)); NivPay adds no
+margin on top of a partner. The partner's fee and rate are shown before
+anything moves, on the same confirm sheet, and nothing moves without that
+confirm.
+
+Sources:
+
+* https://rampnetwork.com/blog/monad-live-on-ramp-network
+* https://docs.monad.xyz/tooling-and-infra/onramps
+
 ## Future work
 
 **Usernames for accounts.** Today an account is a 42 character address, and
