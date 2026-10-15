@@ -178,8 +178,14 @@ function HelpHost() {
   const [open, setOpen] = useState<{ code: number | null } | null>(null);
   useEffect(() => {
     const show = (e: Event) => setOpen({ code: (e as CustomEvent<{ code: number | null }>).detail?.code ?? null });
+    // A link opened meanwhile takes the person somewhere else: the sheet closes, not lingers over it.
+    const hide = () => setOpen(null);
     window.addEventListener("nivpay:help", show);
-    return () => window.removeEventListener("nivpay:help", show);
+    window.addEventListener("hashchange", hide);
+    return () => {
+      window.removeEventListener("nivpay:help", show);
+      window.removeEventListener("hashchange", hide);
+    };
   }, []);
   if (!open) return null;
   return (
