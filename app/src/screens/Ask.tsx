@@ -5,14 +5,14 @@ import { liveWriteChain } from "../lib/chain.ts";
 import { POTS } from "../lib/deployment.ts";
 import { describeFailure, SendFailure } from "../lib/errors.ts";
 import { idbWriteStore } from "../lib/idb.ts";
-import { formatAmount, parseAmount } from "../lib/money.ts";
+import { amountForField, amountIn, formatAmount } from "../lib/money.ts";
 import { askButtonText, askLabel, askView, ttlDays, type AskedRequest, type PotFacts } from "../lib/payout.ts";
 import { askCall, askData, askIn, proposalIdIn, readFeeTerms, refusalOf, type FeeTerms } from "../lib/payoutLive.ts";
 import { rememberReceipt } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
-import { Icon, NoticeLine, Sheet, STOPPED, useCancellable, type Notice } from "./ui.tsx";
+import { AmountUnderstood, Icon, type Notice, NoticeLine, Sheet, STOPPED, useCancellable } from "./ui.tsx";
 import { beforePasskey } from "../lib/cancel.ts";
 
 export type Asking = { payee: number; amount: bigint };
@@ -133,7 +133,7 @@ export function AskSheet(props: {
   const [terms, setTerms] = useState<FeeTerms | null>(null);
   const [termsFailed, setTermsFailed] = useState(false);
   const [payee, setPayee] = useState(flow.asking?.payee ?? 0);
-  const [text, setText] = useState(flow.asking ? fmt(flow.asking.amount).replace(/^\$/, "") : "");
+  const [text, setText] = useState(flow.asking ? amountForField(flow.asking.amount, d) : "");
 
   useEffect(() => {
     let live = true;
@@ -146,7 +146,7 @@ export function AskSheet(props: {
   }, []);
 
   const busy = flow.step !== null;
-  const amount = parseAmount(text, d);
+  const amount = amountIn(text, d);
   const chosen = facts.payees[payee];
   const view = terms ? askView(facts, props.me, payee, amount, terms.feeBps, terms.feeCap) : null;
   const what = flow.stuck ?? (busy && flow.asking ? flow.asking : null);
@@ -188,6 +188,7 @@ export function AskSheet(props: {
         <span>{copy.askAmount}</span>
         <input value={text} inputMode="decimal" disabled={busy || flow.stuck !== null} onChange={(e) => setText(e.target.value)} />
       </label>
+      <AmountUnderstood text={text} decimals={d} />
       {view && chosen && (
         <div className="money-rows">
           <div>

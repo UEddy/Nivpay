@@ -267,6 +267,8 @@ function allCopy(): [string, string][] {
     errNameNotFound: ["idara"],
     errNameChanged: ["idara"],
     helpAboutCode: [52],
+    amountUnderstood: ["$10.50"],
+    amountWriteLike: ["1,050.50"],
     supportSubjectCode: [52],
     supportVersionLine: ["abc1234"],
     supportCodeLine: [52],

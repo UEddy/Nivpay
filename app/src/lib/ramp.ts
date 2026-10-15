@@ -1,3 +1,4 @@
+import { groupedIn, numberLocale, parseAmountIn, separators } from "./locale.ts";
 /**
  * Add money and Cash out, in the person's own currency: the quotes, shared by
  * the phone (screens/Money.tsx) and the test desk (api/ramp/index.ts, which
@@ -196,38 +197,26 @@ export function defaultCurrency(timeZone: string | undefined, languages: readonl
 // Showing local money exactly
 // ---------------------------------------------------------------------------
 
-function grouped(whole: bigint): string {
-  const digits = whole.toString();
-  let out = "";
-  for (let i = 0; i < digits.length; i++) {
-    if (i > 0 && (digits.length - i) % 3 === 0) out += ",";
-    out += digits[i];
-  }
-  return out;
-}
-
-/** Local minor units as text, from the bigint, never a float: "₦76,725.00", "¥1,500", "KSh 1,290.00". */
+/** Local minor units as text, from the bigint, never a float, the reader's way: "₦76,725.00" in English, "₦76 725,00" in French. */
 export function formatLocal(currency: Currency, minor: bigint): string {
   const negative = minor < 0n;
   const abs = negative ? -minor : minor;
   const unit = 10n ** BigInt(currency.digits);
-  const whole = grouped(abs / unit);
-  const fraction = currency.digits > 0 ? "." + (abs % unit).toString().padStart(currency.digits, "0") : "";
+  const locale = numberLocale();
+  const whole = groupedIn(locale, abs / unit);
+  const fraction = currency.digits > 0 ? separators(locale).decimal + (abs % unit).toString().padStart(currency.digits, "0") : "";
   const gap = /[A-Za-z]$/.test(currency.symbol) ? " " : "";
   return `${negative ? "-" : ""}${currency.symbol}${gap}${whole}${fraction}`;
 }
 
 /**
- * Text typed in local money as minor units, or null. Commas allowed; no more
- * decimals than the currency has.
+ * Text typed in local money as minor units, or null, read the reader's way
+ * (lib/locale.ts): no more decimals than the currency has, anything
+ * ambiguous refused.
  */
 export function parseLocal(currency: Currency, text: string): bigint | null {
-  const t = text.trim().replace(/,/g, "");
-  const m = /^(\d+)(?:\.(\d*))?$/.exec(t);
-  if (!m) return null;
-  const fraction = m[2] ?? "";
-  if (fraction.length > currency.digits) return null;
-  return BigInt(m[1]!) * 10n ** BigInt(currency.digits) + BigInt(fraction.padEnd(currency.digits, "0") || "0");
+  const r = parseAmountIn(text, currency.digits, numberLocale(), currency.digits);
+  return "value" in r ? r.value : null;
 }
 
 // ---------------------------------------------------------------------------

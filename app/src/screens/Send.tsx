@@ -15,7 +15,7 @@ import { confirmsAccount, parseAccountId } from "../lib/draft.ts";
 import { AppError, describeFailure, SendFailure } from "../lib/errors.ts";
 import { idbWriteStore } from "../lib/idb.ts";
 import type { PayLink } from "../lib/invites.ts";
-import { formatAmount, formatCurrency, parseAmount } from "../lib/money.ts";
+import { amountForField, amountIn, formatAmount, formatCurrency } from "../lib/money.ts";
 import { receiptUrl, rememberReceipt } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
 import { retryStuckWrite, sendSequence, sendWrite, type Step } from "../lib/send.ts";
@@ -23,7 +23,7 @@ import { assertSameQuote, fromCurrencyLabel, quote, received, settlementCalls, s
 import { readSettlement } from "../lib/settleLive.ts";
 import { checkSend, SEND_LABEL, transferData, transferRefused } from "../lib/transfer.ts";
 import { followSequence, followToFinality, type PendingWrite } from "../lib/writes.ts";
-import { Icon, NoticeLine, Sheet, STOPPED, useCancellable, useOnline, type Notice } from "./ui.tsx";
+import { AmountUnderstood, Icon, type Notice, NoticeLine, Sheet, STOPPED, useCancellable, useOnline } from "./ui.tsx";
 import { beforePasskey } from "../lib/cancel.ts";
 import { balanceNote } from "../lib/connection.ts";
 
@@ -126,7 +126,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
 
   // A requested amount fills the field once decimals are known.
   useEffect(() => {
-    if (request && request.amount > 0n && holding && !amountText) setAmountText(formatAmount(request.amount, holding.decimals, "auto").replace(/^\$/, ""));
+    if (request && request.amount > 0n && holding && !amountText) setAmountText(amountForField(request.amount, holding.decimals));
   }, [request, holding, amountText]);
 
   const land = useCallback(
@@ -233,7 +233,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
   }, [me, land, landSequence]);
 
   const decimals = holding?.decimals ?? 6;
-  const amount = parseAmount(amountText, decimals);
+  const amount = amountIn(amountText, decimals);
   const pasted = parseAccountId(idText);
   const pastedOk = pasted !== null && confirmsAccount(pasted, last4);
 
@@ -510,6 +510,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
                   <span>{copy.howMuch}</span>
                   <input inputMode="decimal" value={amountText} disabled={step !== null || stuck} onChange={(e) => setAmountText(e.target.value)} placeholder={copy.amountPlaceholder} />
                 </label>
+                <AmountUnderstood text={amountText} decimals={holding?.decimals ?? null} />
                 {request && request.amount > 0n && <p className="hint">{copy.requestedAmount(money(request.amount))}</p>}
                 {holding && <p className="hint">{copy.yourBalanceIs(formatAmount(holding.balance, decimals, "cents"))}</p>}
                 {holding && !online && <p className="hint stale-note">{balanceNote(true, holding.readAt)}</p>}

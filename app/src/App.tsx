@@ -21,7 +21,7 @@ import { addDollarsField, checkClaim, claimData, cooldownIn, readFaucetTerms, se
 import { idbWriteStore, pendingWriteCount } from "./lib/idb.ts";
 import { InvitedStore, matchInvites, type AnsweredInvite } from "./lib/invited.ts";
 import { decodeLink, type AskLink, type Invite, type PayLink, type PotLink } from "./lib/invites.ts";
-import { formatAmount, parseAmount } from "./lib/money.ts";
+import { amountForField, amountIn, formatAmount } from "./lib/money.ts";
 import { hostCheck } from "./lib/passkeyHost.ts";
 import { readClient } from "./lib/rpc.ts";
 import { prefersReducedMotion } from "./lib/reduced.ts";
@@ -49,7 +49,7 @@ const UsernameSection = lazy(() => reloadOnce(() => import("./screens/Username.t
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
 const sending = () => reloadOnce(() => import("./lib/send.ts"));
-import { formatDay, Icon, InstallBanner, InstallHow, NoticeLine, openHelp, phoneTimeZone, Sheet, useInstallWay, useOnline, type Notice } from "./screens/ui.tsx";
+import { AmountUnderstood, formatDay, Icon, InstallBanner, InstallHow, type Notice, NoticeLine, openHelp, phoneTimeZone, Sheet, useInstallWay, useOnline } from "./screens/ui.tsx";
 import { balanceNote } from "./lib/connection.ts";
 import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/balanceRead.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
@@ -800,7 +800,7 @@ function Home(props: {
         setUsernameInFlight(false);
       });
   }, [account.address, details]);
-  const [amountText, setAmountText] = useState("1,000");
+  const [amountText, setAmountText] = useState(() => amountForField(1_000_000_000n, 6));
   const [step, setStep] = useState<Step | "landing" | null>(null);
   const [result, setResult] = useState<Notice | null>(null);
   const [stuck, setStuck] = useState(false);
@@ -917,7 +917,7 @@ function Home(props: {
       : null;
   const stale = balanceNote(connection.down, shown?.readAt ?? null, undefined, slow);
   const decimals = balances?.kind === "testusd" ? balances.testDollars.decimals : (balances?.dollars.decimals ?? 6);
-  const amount = balances?.kind === "ausd" ? balances.faucet.drip : parseAmount(amountText, decimals);
+  const amount = balances?.kind === "ausd" ? balances.faucet.drip : amountIn(amountText, decimals);
   const tooMuch = amount !== null && balances?.kind === "testusd" && amount > balances.maxMint;
   const valid = amount !== null && amount > 0n && !tooMuch;
 
@@ -1098,6 +1098,7 @@ function Home(props: {
           <label className="field">
             <span>{copy.howMany}</span>
             <input inputMode="decimal" value={amountText} onChange={(e) => setAmountText(e.target.value)} />
+            <AmountUnderstood text={amountText} decimals={decimals} />
           </label>
         )}
         {tooMuch && balances?.kind === "testusd" && (

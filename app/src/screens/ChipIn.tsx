@@ -10,7 +10,7 @@ import { AppError, describeFailure, SendFailure } from "../lib/errors.ts";
 import type { PotEvent } from "../lib/feed.ts";
 import { idbWriteStore } from "../lib/idb.ts";
 import type { PotLink } from "../lib/invites.ts";
-import { formatAmount, parseAmount } from "../lib/money.ts";
+import { amountForField, amountIn, formatAmount } from "../lib/money.ts";
 import { MAX_DRAWN_PEOPLE } from "../lib/potmap.ts";
 import { NO_DATA, POUR_GAS_HINT, POUR_LABEL, pourData, readPermitTerms, type PermitTerms } from "../lib/pour.ts";
 import { linkFor, type StoredPot } from "../lib/potstore.ts";
@@ -26,7 +26,7 @@ import { WhoControls } from "./WhoControls.tsx";
 import { ContactStore } from "../lib/contacts.ts";
 import { mapLines } from "./mapNames.ts";
 import { factsOf } from "./Request.tsx";
-import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, Sheet, STOPPED, useCancellable, useSlowStepLine, type Notice } from "./ui.tsx";
+import { AmountUnderstood, andList, copyLink, CopyLinkButton, Icon, type Notice, NoticeLine, shareLink, Sheet, STOPPED, useCancellable, useSlowStepLine } from "./ui.tsx";
 import { beforePasskey } from "../lib/cancel.ts";
 
 const orList = new Intl.ListFormat("en-GB", { style: "long", type: "disjunction" });
@@ -629,8 +629,8 @@ export function ChipInScreen(props: {
 }
 
 function ExactSheet(props: { decimals: number; value: bigint; onSave: (v: bigint) => void; onClose: () => void }) {
-  const [text, setText] = useState(formatAmount(props.value, props.decimals, "auto").replace(/^\$/, ""));
-  const v = parseAmount(text, props.decimals);
+  const [text, setText] = useState(amountForField(props.value, props.decimals));
+  const v = amountIn(text, props.decimals);
   const ok = v !== null && v > 0n;
   return (
     <Sheet title={copy.exactAmount} onClose={props.onClose}>
@@ -638,6 +638,7 @@ function ExactSheet(props: { decimals: number; value: bigint; onSave: (v: bigint
         <span>{copy.exactAmount}</span>
         <input value={text} inputMode="decimal" autoFocus onChange={(e) => setText(e.target.value)} />
       </label>
+      <AmountUnderstood text={text} decimals={props.decimals} />
       {text.trim() && !ok && <p className="error">{copy.limitInvalid}</p>}
       <button
         type="button"

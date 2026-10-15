@@ -35,7 +35,7 @@ import {
 import { describeFailure, SendFailure } from "../lib/errors.ts";
 import { idbWriteStore } from "../lib/idb.ts";
 import { decodeLink, linkUrl, ROLE, signLabels, type Reply } from "../lib/invites.ts";
-import { formatAmount, parseAmount } from "../lib/money.ts";
+import { amountForField, amountIn, formatAmount } from "../lib/money.ts";
 import { checkCreate, CREATE_LABEL, potFragment, potMadeBy, readCreateTerms, type CreateTerms } from "../lib/pots.ts";
 import { acceptReply } from "../lib/replies.ts";
 import { withSigner } from "../lib/passkey.ts";
@@ -44,7 +44,7 @@ import { fitsText32 } from "../lib/text32.ts";
 import { rememberReceipt } from "../lib/receipts.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { PotMap, type Coin, type MapPerson } from "./PotMap.tsx";
-import { andList, copyLink, CopyLinkButton, formatDay, Icon, NoticeLine, phoneTimeZone, shareLink, Sheet, type Notice, type ShareResult } from "./ui.tsx";
+import { AmountUnderstood, andList, copyLink, CopyLinkButton, formatDay, Icon, type Notice, NoticeLine, phoneTimeZone, shareLink, type ShareResult, Sheet } from "./ui.tsx";
 
 type SheetKind = "name" | "deciders" | "payees" | "closes" | "leftover" | "confirm" | "delete";
 
@@ -704,9 +704,8 @@ function RuleRow(props: {
 function ShareField(props: { decimals: number | null; value: bigint; optional?: boolean; onChange: (v: bigint) => void }) {
   const { decimals } = props;
   const [text, setText] = useState(() =>
-    decimals !== null && props.value > 0n ? formatAmount(props.value, decimals, "auto").replace(/^\$/, "") : "",
+    decimals !== null && props.value > 0n ? amountForField(props.value, decimals) : "",
   );
-  const parsed = decimals === null ? null : text.trim() === "" ? 0n : parseAmount(text, decimals);
   return (
     <label className="field">
       <span>{props.optional ? copy.suggestedShareOptional : copy.suggestedShare}</span>
@@ -717,11 +716,11 @@ function ShareField(props: { decimals: number | null; value: bigint; optional?: 
         disabled={decimals === null}
         onChange={(e) => {
           setText(e.target.value);
-          const v = decimals === null ? null : e.target.value.trim() === "" ? 0n : parseAmount(e.target.value, decimals);
+          const v = decimals === null ? null : e.target.value.trim() === "" ? 0n : amountIn(e.target.value, decimals);
           if (v !== null) props.onChange(v);
         }}
       />
-      {parsed === null && <span className="error">{copy.limitInvalid}</span>}
+      <AmountUnderstood text={text} decimals={decimals} />
     </label>
   );
 }
@@ -928,7 +927,7 @@ function PayeesSheet(props: {
   const [pasting, setPasting] = useState<Hex | null>(null);
   const [idText, setIdText] = useState("");
   const [last4, setLast4] = useState("");
-  const cap = decimals === null ? null : parseAmount(limit, decimals);
+  const cap = decimals === null ? null : amountIn(limit, decimals);
   const nameOk = fitsText32(name);
   const capOk = cap !== null && cap > 0n;
   const full = props.maxPayees !== null && draft.payees.length >= props.maxPayees;
@@ -1035,6 +1034,7 @@ function PayeesSheet(props: {
               <span>{copy.limit}</span>
               <input value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="decimal" placeholder={copy.amountPlaceholder} disabled={decimals === null} />
             </label>
+            <AmountUnderstood text={limit} decimals={decimals} />
           </div>
           {name.trim() && !nameOk && <p className="error">{copy.payeeNameTooLong}</p>}
           {limit.trim() && !capOk && <p className="error">{copy.limitInvalid}</p>}

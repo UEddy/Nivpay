@@ -38,3 +38,19 @@ test("amount fields use the neutral placeholder, never a sample amount", () => {
     for (const m of read("screens", screen).matchAll(/placeholder="([^"]*)"/g)) assert.doesNotMatch(m[1]!, /\d/, `${screen}: ${m[1]}`);
   }
 });
+
+test("every amount field reads the reader's way and says what it understood, before any confirm", () => {
+  const files = ["App.tsx", ...["Ask.tsx", "ChipIn.tsx", "Create.tsx", "Money.tsx", "Receive.tsx", "Send.tsx"].map((f) => join("screens", f))];
+  let fields = 0;
+  for (const f of files) {
+    const text = read(f);
+    assert.doesNotMatch(text, /\bparseAmount\(/, `${f} reads an amount the old way`);
+    assert.doesNotMatch(text, /replace\(\/\^\\$\//, `${f} turns a shown amount into field text by hand`);
+    for (const m of text.matchAll(/inputMode="decimal"/g)) {
+      fields++;
+      const after = text.slice(m.index!, m.index! + 700);
+      assert.match(after, /<AmountUnderstood /, `${f}: an amount field with no AmountUnderstood after it`);
+    }
+  }
+  assert.ok(fields >= 8, `found the amount fields (${fields})`);
+});

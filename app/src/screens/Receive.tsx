@@ -9,11 +9,11 @@ import { DEPLOYMENT, DOLLAR } from "../lib/deployment.ts";
 import { PotFeed } from "../lib/feed.ts";
 import { idbFeedStore } from "../lib/idb.ts";
 import { linkUrl } from "../lib/invites.ts";
-import { formatAmount, formatCurrency, parseAmount } from "../lib/money.ts";
+import { amountIn, formatAmount, formatCurrency } from "../lib/money.ts";
 import { receiptUrl } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
 import { incomingFrom, incomingSource, RECEIVE_BACKLOG_BLOCKS, senderKind, withFloor, type Incoming } from "../lib/transfer.ts";
-import { copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, useOnline } from "./ui.tsx";
+import { AmountUnderstood, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, useOnline } from "./ui.tsx";
 import { balanceNote } from "../lib/connection.ts";
 import { useUsernames, withUsernameOf } from "./Username.tsx";
 
@@ -125,7 +125,7 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
   }, [me]);
 
   const stale = balanceNote(failed || !online, balanceReadAt);
-  const requested = decimals === null ? null : parseAmount(amountText, decimals);
+  const requested = decimals === null ? null : amountIn(amountText, decimals);
   const url = useMemo(
     () => linkUrl(location.origin, { kind: "pay", deployment: DEPLOYMENT, account: me, name: shownName(props.account), amount: requested ?? 0n }),
     [me, props.account, requested],
@@ -167,6 +167,7 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
             <span>{copy.requestAmountOptional}</span>
             <input inputMode="decimal" value={amountText} onChange={(e) => setAmountText(e.target.value)} placeholder={copy.amountPlaceholder} />
           </label>
+          <AmountUnderstood text={amountText} decimals={decimals} />
           <button type="button" className="pill-btn" onClick={share}>
             <Icon name="share" />
             {copy.shareRequestLink}

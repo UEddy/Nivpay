@@ -814,6 +814,11 @@ export const en = {
   deleteDraftBeingMade: "This pot is being made right now, so its draft can't be deleted. Wait until it's made or the attempt ends.",
   draftDeleted: "Draft deleted.",
 
+  // Amount fields (lib/locale.ts): what was understood, before any confirm
+  amountUnderstood: (amount: string) => `That's ${amount}.`,
+  amountTooManyDecimals: "Use at most 2 digits after the decimal mark.",
+  amountWriteLike: (example: string) => `Write it like ${example}.`,
+
   // Installing the app (lib/install.ts)
   installNivPay: "Install NivPay",
   installHint: "Open it from your home screen, like any other app.",

@@ -4,6 +4,7 @@ import { SLOW_AFTER_MS, slowStepLine } from "../lib/slowStep.ts";
 import { Cancellable } from "../lib/cancel.ts";
 import type { ShareResult } from "../lib/share.ts";
 import { LastCodeStore } from "../lib/support.ts";
+import { amountForField, formatAmount, readAmount } from "../lib/money.ts";
 import { BANNER_MS, currentPlatform, InstallStore, installWay, onInstallChange, PausableTimer, promptInstall, shouldShowBanner, type InstallWay } from "../lib/install.ts";
 
 export type Notice = { tone: "ok" | "bad"; text: string; code?: number };
@@ -326,5 +327,28 @@ export function InstallBanner() {
         <Icon name="close" size={20} />
       </button>
     </aside>
+  );
+}
+
+/**
+ * Under every amount field: the amount the app understood, the reader's way
+ * ("That's $10.50."), before any confirm, or how to write it. In French
+ * "10,50" is $10.50, and "1,000" is refused, never read as $1.
+ */
+export function AmountUnderstood(props: { text: string; decimals: number | null; maxFraction?: number; show?: (v: bigint) => string }) {
+  const { text, decimals } = props;
+  if (decimals === null || !text.trim()) return null;
+  const r = readAmount(text, decimals, props.maxFraction ?? Math.min(2, decimals));
+  if ("value" in r) {
+    return (
+      <p className="hint amount-understood" aria-live="polite">
+        {copy.amountUnderstood(props.show ? props.show(r.value) : formatAmount(r.value, decimals, "cents"))}
+      </p>
+    );
+  }
+  return (
+    <p className="error" aria-live="polite">
+      {r.problem === "decimals" ? copy.amountTooManyDecimals : copy.amountWriteLike(amountForField(105_050n * 10n ** BigInt(Math.max(0, decimals - 2)), decimals))}
+    </p>
   );
 }

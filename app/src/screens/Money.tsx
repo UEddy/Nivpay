@@ -8,7 +8,7 @@ import { liveWriteChain, waitForFinalized } from "../lib/chain.ts";
 import { DOLLAR } from "../lib/deployment.ts";
 import { AppError, describeFailure, SendFailure } from "../lib/errors.ts";
 import { idbWriteStore } from "../lib/idb.ts";
-import { formatAmount, parseAmount } from "../lib/money.ts";
+import { amountForField, amountIn, formatAmount } from "../lib/money.ts";
 import { CURRENCIES, currencyFor, defaultCurrency, DOLLAR_DECIMALS, formatLocal, parseLocal, quoteAdd, quoteCashOut, referenceFrom, type Currency, type Limit, type Route } from "../lib/ramp.ts";
 import { askStatement, askToBuy, cashOutLabel, fromCashOutLabel, readDesk, type DeskInfo, type Statement } from "../lib/rampDesk.ts";
 import { receiptUrl, rememberReceipt } from "../lib/receipts.ts";
@@ -16,7 +16,7 @@ import { readClient } from "../lib/rpc.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { transferData, transferRefused } from "../lib/transfer.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
-import { Icon, NoticeLine, phoneTimeZone, Sheet, STOPPED, useCancellable, type Notice } from "./ui.tsx";
+import { AmountUnderstood, Icon, type Notice, NoticeLine, phoneTimeZone, Sheet, STOPPED, useCancellable } from "./ui.tsx";
 
 export type MoneyMode = "add" | "out";
 
@@ -229,6 +229,7 @@ function AddMoney(props: Props) {
               <span>{copy.rampYouPay}</span>
               <input inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} placeholder={copy.amountPlaceholder} />
             </label>
+            <AmountUnderstood text={text} decimals={currency.digits} maxFraction={currency.digits} show={(v) => formatLocal(currency, v)} />
             {quote && quote.localMinor > 0n && (
               <div className="list">
                 <Row label={copy.rampYouPay} value={formatLocal(currency, quote.localMinor)} sub={copy.rampRate(formatLocal(currency, currency.testMinorPerDollar))} />
@@ -374,7 +375,7 @@ function CashOut(props: Props) {
       const resumed = w ? fromCashOutLabel(w.label) : null;
       if (!w || !resumed || !alive.current) return;
       onCurrency(resumed.currency);
-      setAmountText(formatAmount(resumed.amount, DOLLAR_DECIMALS, "auto").replace(/^\$/, ""));
+      setAmountText(amountForField(resumed.amount, DOLLAR_DECIMALS));
       if (w.replaceable) {
         setStuck(true);
         setResult({ tone: "bad", text: copy.earlierStuck, code: ERROR_CODES.STUCK });
@@ -383,7 +384,7 @@ function CashOut(props: Props) {
   }, [me, land, onCurrency]);
 
   const decimals = holding?.decimals ?? DOLLAR_DECIMALS;
-  const amount = parseAmount(amountText, decimals);
+  const amount = amountIn(amountText, decimals);
   const quote = useMemo(() => (amount === null ? null : quoteCashOut(currency, amount)), [amount, currency]);
   const detailsOk = bankName.trim() !== "" && accountName.trim() !== "" && /\d{4}/.test(accountNumber);
   const last4 = accountNumber.replace(/\D/g, "").slice(-4);
@@ -488,6 +489,7 @@ function CashOut(props: Props) {
             <span>{copy.cashOutHowMuch}</span>
             <input inputMode="decimal" value={amountText} disabled={locked} onChange={(e) => setAmountText(e.target.value)} placeholder={copy.amountPlaceholder} />
           </label>
+          <AmountUnderstood text={amountText} decimals={decimals} />
           {holding && <p className="hint">{copy.yourBalanceIs(usd(holding.balance))}</p>}
           <CurrencyPicker value={currency.code} disabled={locked} onChange={props.onCurrency} />
           {quote && quote.dollars > 0n && (
