@@ -72,3 +72,10 @@ test("what the screen says about a name, from one finalized read", () => {
   assert.deepEqual(availability("idara", ME, { holder: null, availableAt: 1_800_000_000n, releasedBy: OTHER }), { kind: "held", until: 1_800_000_000n });
   assert.deepEqual(availability("idara", ME, { holder: null, availableAt: 1_800_000_000n, releasedBy: ME }), { kind: "takeBack", until: 1_800_000_000n });
 });
+
+test("Send to tells an Account ID from a username", async () => {
+  const { looksLikeAccountId } = await import("./usernames.ts");
+  assert.equal(looksLikeAccountId(" 0x725C"), true);
+  assert.equal(looksLikeAccountId("@idara"), false);
+  assert.equal(looksLikeAccountId("idara"), false);
+});

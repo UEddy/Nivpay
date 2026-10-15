@@ -76,3 +76,8 @@ export function availability(
   if (same(read.releasedBy)) return { kind: "takeBack", until: read.availableAt };
   return { kind: "held", until: read.availableAt };
 }
+
+/** Typed text that is meant as an Account ID, even a broken one, rather than a username. */
+export function looksLikeAccountId(typed: string): boolean {
+  return /^\s*0x/i.test(typed);
+}

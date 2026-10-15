@@ -4,7 +4,9 @@ import { copy, ERROR_CODES } from "../copy.ts";
 import { otherCurrencyNote } from "../lib/currencyNote.ts";
 import { recipientDetail } from "../lib/recipient.ts";
 import { cleanName, NAME_MAX, type StoredAccount } from "../lib/accounts.ts";
-import { ContactStore, PaidStore, sendWarnings, type Contact } from "../lib/contacts.ts";
+import { ContactStore, NamePairStore, namePairCheck, PaidStore, sendWarnings, type Contact } from "../lib/contacts.ts";
+import { holderOf, namesOn } from "../lib/names.ts";
+import { looksLikeAccountId, normalizeUsername, usernameProblem } from "../lib/usernames.ts";
 import { ERC20_READ_ABI } from "../lib/abi.ts";
 import { liveWriteChain } from "../lib/chain.ts";
 import { CTK, SETTLEMENT_PAIR, SETTLEMENT_WHITELISTER } from "../lib/config.ts";
@@ -25,7 +27,8 @@ import { Icon, NoticeLine, Sheet, STOPPED, useCancellable, useOnline, type Notic
 import { beforePasskey } from "../lib/cancel.ts";
 import { balanceNote } from "../lib/connection.ts";
 
-type Recipient = { account: Address; name: string };
+/** A username is set when the recipient was found by one, so it is checked again before signing. */
+type Recipient = { account: Address; name: string; username?: string };
 type Done = { to: Recipient; amount: bigint; settledMs: number; hash: Hex; received?: string; setupDone?: boolean };
 
 /** Sending in another currency works through Agora's pair, which pairs AUSD with CTK: AUSD builds only. */
@@ -65,6 +68,8 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
   const contactStore = useMemo(() => new ContactStore(localStorage, DEPLOYMENT, me), [me]);
   const paid = useMemo(() => new PaidStore(localStorage, DEPLOYMENT, me), [me]);
   const [contacts, setContacts] = useState<Contact[]>(() => contactStore.list());
+  // Usernames this account has paid, and the account each pointed at then (lib/contacts.ts).
+  const pairs = useMemo(() => new NamePairStore(localStorage, DEPLOYMENT, me), [me]);
   const saveContact = (account: Address, name: string) => {
     const ok = contactStore.save(account, name, Date.now());
     setContacts(contactStore.list());
@@ -134,6 +139,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         if (outcome.kind === "final") {
           rememberReceipt(write.address, write.hash);
           paid.add(recipient.account);
+          if (recipient.username) pairs.remember(recipient.username, recipient.account);
           setStuck(false);
           setDone({ to: recipient, amount, settledMs: outcome.settledMs, hash: write.hash });
           void readHolding().catch(() => {});
@@ -150,7 +156,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         setResult({ tone: "bad", ...describeFailure(new SendFailure("confirming", true, e)) });
       }
     },
-    [readHolding, paid],
+    [readHolding, paid, pairs],
   );
 
   /** Follows a payment in another currency through its steps, each final before the next. */
@@ -170,6 +176,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         if (outcome.kind === "final" && step === steps - 1) {
           rememberReceipt(last.address, last.hash);
           paid.add(recipient.account);
+          if (recipient.username) pairs.remember(recipient.username, recipient.account);
           setStuck(false);
           const receipt = await readClient.getTransactionReceipt({ hash: last.hash }).catch(() => null);
           const got = receipt ? received(receipt.logs, CTK, recipient.account) : null;
@@ -197,7 +204,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         setResult({ tone: "bad", ...describeFailure(new SendFailure("confirming", true, e)) });
       }
     },
-    [readHolding, paid],
+    [readHolding, paid, pairs],
   );
 
   // Resume a payment that was in flight when the app was closed.
@@ -234,6 +241,42 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
     if (pasted && pastedOk) setTo({ account: pasted, name: copy.accountEnding(pasted) });
   };
 
+  // Send to also takes @username, looked up at the finalized block a moment after typing stops.
+  const typedName = namesOn && !pasted && idText.trim() && !looksLikeAccountId(idText) ? normalizeUsername(idText) : "";
+  const nameProblem = typedName ? usernameProblem(typedName) : null;
+  const [found, setFound] = useState<{ name: string; account: Address | null } | "looking" | null>(null);
+  useEffect(() => {
+    if (!typedName || nameProblem) return setFound(null);
+    setFound("looking");
+    let live = true;
+    const t = setTimeout(() => {
+      holderOf(typedName)
+        .then((account) => live && setFound({ name: typedName, account }))
+        .catch(() => live && setFound(null));
+    }, 350);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [typedName, nameProblem]);
+  const foundName = found && found !== "looking" && found.name === typedName ? found : null;
+  // The first payment to a username asks for the last 4 characters, as a pasted Account ID does.
+  const pairCheck = foundName?.account ? namePairCheck(foundName.account, pairs.get(foundName.name)) : null;
+  const nameOk = foundName?.account && (pairCheck === "same" || (pairCheck === "first" && confirmsAccount(foundName.account, last4)));
+  const chooseName = () => {
+    if (foundName?.account && nameOk) setTo({ account: foundName.account, name: `@${foundName.name}`, username: foundName.name });
+  };
+
+  /** A username must still point where it did when it was chosen, and where it pointed when paid before. */
+  const assertNameStill = async (r: Recipient) => {
+    if (!r.username) return;
+    const holder = await holderOf(r.username);
+    const remembered = pairs.get(r.username);
+    if (!holder || !isAddressEqual(holder, r.account) || namePairCheck(holder, remembered) === "changed") {
+      throw new AppError(copy.errNameChanged(r.username), ERROR_CODES.NAME_CHANGED);
+    }
+  };
+
   /** Every check that needs no signature, then the confirm sheet. */
   const review = async () => {
     if (!to || !holding) return;
@@ -241,6 +284,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
     setStep("preparing");
     const run = running.start();
     try {
+      await assertNameStill(to);
       const code = await readClient.getCode({ address: to.account });
       const problem = checkSend({ me, to: to.account, amount: amount ?? 0n, balance: holding.balance, decimals, recipientHasCode: (code?.length ?? 0) > 2 });
       if (problem) throw problem;
@@ -279,12 +323,14 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
       onStep: run.track((s: Step) => setStep(s)),
     };
     try {
+      // Right before signing: the username still points where it did.
+      await assertNameStill(to);
       const write = retry ? await retryStuckWrite(call) : await sendWrite(call);
       await land(write, to, amount);
     } catch (e) {
       if (run.signal.aborted) return;
       setStep(null);
-      setResult({ tone: "bad", ...describeFailure(e) });
+      setResult({ tone: "bad", ...(e instanceof AppError ? { text: e.message, code: e.code } : describeFailure(e)) });
     }
   };
 
@@ -296,6 +342,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
     const run = running.start();
     let fresh: Quote;
     try {
+      await assertNameStill(to);
       const { state, deadline } = await readSettlement(readClient, SETTLEMENT, me, amount);
       if (run.signal.aborted) return;
       fresh = quote(state, amount, deadline);
@@ -421,12 +468,29 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
                     </div>
                   )}
                   <p className="eyebrow">{copy.sendTo}</p>
-                  <p className="hint">{copy.sendToHint}</p>
+                  <p className="hint">{namesOn ? copy.sendToHintNames : copy.sendToHint}</p>
                   <label className="field">
-                    <span>{copy.pasteAccountId}</span>
+                    <span>{namesOn ? copy.accountIdOrUsername : copy.pasteAccountId}</span>
                     <input value={idText} onChange={(e) => setIdText(e.target.value)} autoComplete="off" autoCapitalize="off" spellCheck={false} />
                   </label>
-                  {idText.trim() && !pasted && <p className="error">{copy.notAnAccountId}</p>}
+                  {idText.trim() && !pasted && !typedName && <p className="error">{copy.notAnAccountId}</p>}
+                  {typedName && nameProblem && <p className="error">{copy.notAUsername}</p>}
+                  {found === "looking" && <p className="hint">{copy.lookingUpUsername}</p>}
+                  {foundName && !foundName.account && <NoticeLine notice={{ tone: "bad", text: copy.errNameNotFound(foundName.name), code: ERROR_CODES.NAME_NOT_FOUND }} />}
+                  {foundName?.account && pairCheck === "changed" && (
+                    <NoticeLine notice={{ tone: "bad", text: copy.errNameChanged(foundName.name), code: ERROR_CODES.NAME_CHANGED }} />
+                  )}
+                  {foundName?.account && pairCheck === "first" && (
+                    <>
+                      <p className="hint">{copy.confirmUsernameLast4(foundName.name)}</p>
+                      <label className="field">
+                        <span>{copy.confirmLast4}</span>
+                        <input value={last4} onChange={(e) => setLast4(e.target.value)} maxLength={4} autoComplete="off" autoCapitalize="off" spellCheck={false} />
+                      </label>
+                      {last4.trim().length === 4 && !nameOk && <p className="error">{copy.last4Mismatch}</p>}
+                    </>
+                  )}
+                  {foundName?.account && nameOk && <p className="success">{copy.usernameLine(foundName.name, copy.accountEnding(foundName.account))}</p>}
                   {pasted && (
                     <label className="field">
                       <span>{copy.confirmLast4}</span>
@@ -434,7 +498,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
                     </label>
                   )}
                   {pasted && last4.trim().length === 4 && !pastedOk && <p className="error">{copy.last4Mismatch}</p>}
-                  <button type="button" className="btn" disabled={!pastedOk} onClick={choosePasted}>
+                  <button type="button" className="btn" disabled={!pastedOk && !nameOk} onClick={pastedOk ? choosePasted : chooseName}>
                     {copy.useThisAccount}
                   </button>
                 </>
