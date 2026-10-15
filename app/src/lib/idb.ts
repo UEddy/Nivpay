@@ -10,15 +10,22 @@ const DB = "nivpay";
 const STORE = "pendingWrites";
 /** Each pot's event feed: its cursor and the finalized events read so far. BigInts survive structured clone. */
 const FEEDS = "feeds";
+/**
+ * This phone's key for opening requests sent to an account (lib/inbox.ts).
+ * The private half is a CryptoKey made so it can't be exported: IndexedDB
+ * keeps it as it is, and no script can read its bytes.
+ */
+const INBOX_KEYS = "inboxKeys";
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    // Version 2 adds the feeds. Pending writes from version 1 are kept.
-    const request = indexedDB.open(DB, 2);
+    // Version 2 adds the feeds, version 3 the request keys. What earlier versions stored is kept.
+    const request = indexedDB.open(DB, 3);
     request.onupgradeneeded = () => {
       const names = request.result.objectStoreNames;
       if (!names.contains(STORE)) request.result.createObjectStore(STORE, { keyPath: "address" });
       if (!names.contains(FEEDS)) request.result.createObjectStore(FEEDS, { keyPath: "key" });
+      if (!names.contains(INBOX_KEYS)) request.result.createObjectStore(INBOX_KEYS, { keyPath: "account" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -82,3 +89,12 @@ export function idbFeedStore(key: string): FeedStore {
     },
   };
 }
+
+/** This phone's request key for an account: its id, the public bytes and the private half that never leaves. */
+export type InboxKey = { account: string; id: string; raw: Uint8Array; privateKey: CryptoKey };
+
+export const idbInboxKeys = {
+  get: (account: Address) => run<InboxKey | undefined>("readonly", (s) => s.get(account.toLowerCase()), INBOX_KEYS),
+  put: (key: InboxKey) => run("readwrite", (s) => s.put({ ...key, account: key.account.toLowerCase() }), INBOX_KEYS).then(() => undefined),
+  delete: (account: Address) => run("readwrite", (s) => s.delete(account.toLowerCase()), INBOX_KEYS).then(() => undefined),
+};

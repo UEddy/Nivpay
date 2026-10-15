@@ -156,3 +156,18 @@ test("stored notes of the new kinds read back", () => {
   store.set(s);
   assert.deepEqual(store.get(), s);
 });
+
+test("a request from a person: one note, not from a muted account, and gone for good once ignored", async () => {
+  const { fromRequests, dismiss, withoutRequestsFrom } = await import("./notes.ts");
+  const asked = { digest: "d1", from: IDARA, name: "Idara", amount: usd(20), at: T };
+  let s = fromRequests(start(EMPTY_NOTES, T, 1n), [asked, { ...asked, digest: "d2", from: STRANGER }], [STRANGER]);
+  assert.deepEqual(s.notes.map((n) => [n.kind, n.from, n.fromName, n.amount, n.read]), [["request", IDARA, "Idara", usd(20), false]]);
+  s = fromRequests(s, [asked], []);
+  assert.equal(s.notes.length, 1, "said once");
+  s = dismiss(s, "req:d1");
+  s = fromRequests(s, [asked], []);
+  assert.equal(s.notes.length, 0, "ignored stays ignored");
+  s = fromRequests(s, [{ ...asked, digest: "d3" }], []);
+  assert.equal(withoutRequestsFrom(s, IDARA).notes.length, 0, "muting clears that account's requests");
+  assert.deepEqual(fromRequests(EMPTY_NOTES, [asked], []), EMPTY_NOTES, "not before the list starts");
+});

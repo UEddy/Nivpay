@@ -4,6 +4,7 @@ import { copy } from "../copy.ts";
 import { AccountStore, shownName, type StoredAccount } from "../lib/accounts.ts";
 import { forgetAccount, LastUsedStore } from "../lib/forget.ts";
 import { idbWriteStore } from "../lib/idb.ts";
+import { forgetInboxKey } from "../lib/inboxLive.ts";
 import { dateLocale } from "../lib/locale.ts";
 import { NoticeLine, Sheet, type Notice } from "./ui.tsx";
 
@@ -32,6 +33,7 @@ export function DevicesSection(props: { current: Address; onRemoved: (account: A
       return;
     }
     forgetAccount(localStorage, a.address);
+    void forgetInboxKey(a.address);
     setAsking(null);
     setAccounts(new AccountStore(localStorage).list());
     props.onRemoved(a.address, shownName(a));

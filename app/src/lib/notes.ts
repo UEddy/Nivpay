@@ -27,7 +27,8 @@ export type NoteKind =
   | "limitRaised"
   | "sent"
   | "potNamesYou"
-  | "memberChippedIn";
+  | "memberChippedIn"
+  | "request";
 
 export type Note = {
   id: string;
@@ -47,6 +48,8 @@ export type Note = {
   to?: Address;
   /** The name they were paid under, cleaned, when the payment was made (sent). */
   toName?: string;
+  /** The name a requester signed their request with, cleaned (request). */
+  fromName?: string;
 };
 
 export type NotesState = {
@@ -64,10 +67,12 @@ export type NotesState = {
   potsSeen: string[] | null;
   /** Money put in by people in this account's own pots, already noted (fundings.ts ids). */
   fundsSeen: string[];
+  /** Requests ignored, by note id, so they don't come back from the inbox. */
+  dismissed: string[];
   notes: Note[];
 };
 
-export const EMPTY_NOTES: NotesState = { startedAt: null, startBlock: null, totals: {}, asked: [], poursSeen: [], potsSeen: null, fundsSeen: [], notes: [] };
+export const EMPTY_NOTES: NotesState = { startedAt: null, startBlock: null, totals: {}, asked: [], poursSeen: [], potsSeen: null, fundsSeen: [], dismissed: [], notes: [] };
 
 /** Money put into one of this account's own pots by someone in it, from its Funded event (fundings.ts). */
 export type Funding = { id: string; potId: string; from: Address; amount: string };
@@ -199,12 +204,33 @@ export function fromArrivals(s: NotesState, arrivals: Arrival[], now: number): N
   );
 }
 
+/** A request sent straight to this account (inbox.ts), already opened and checked. */
+export type Asked = { digest: string; from: Address; name: string; amount: string; at: number };
+
+/** Requests from people: one note each, never from a muted account, never again once ignored. */
+export function fromRequests(s: NotesState, asked: Asked[], muted: readonly Address[]): NotesState {
+  if (s.startedAt === null) return s;
+  const gone = new Set(s.dismissed);
+  return add(
+    s,
+    asked
+      .filter((a) => !gone.has(`req:${a.digest}`) && !muted.some((m) => sameAccount(m, a.from)))
+      .map((a) => ({ id: `req:${a.digest}`, kind: "request" as const, at: a.at, read: false, from: a.from, fromName: a.name, amount: a.amount, decimals: DOLLAR_DECIMALS })),
+  );
+}
+
+/** Ignore: the note goes, and stays gone. */
+export const dismiss = (s: NotesState, id: string): NotesState => ({ ...s, notes: s.notes.filter((n) => n.id !== id), dismissed: [...s.dismissed.filter((d) => d !== id), id].slice(-MAX_SEEN) });
+
+/** Mute: every request note from that account goes. */
+export const withoutRequestsFrom = (s: NotesState, who: Address): NotesState => ({ ...s, notes: s.notes.filter((n) => !(n.kind === "request" && n.from && sameAccount(n.from, who))) });
+
 export const unread = (s: NotesState) => s.notes.filter((n) => !n.read).length;
 export const markRead = (s: NotesState, id: string): NotesState => ({ ...s, notes: s.notes.map((n) => (n.id === id ? { ...n, read: true } : n)) });
 export const markAllRead = (s: NotesState): NotesState => ({ ...s, notes: s.notes.map((n) => ({ ...n, read: true })) });
 
 type KeyValue = Pick<Storage, "getItem" | "setItem">;
-const KINDS: NoteKind[] = ["received", "chippedIn", "askYes", "askClose", "paidOut", "closingSoon", "closedShare", "limitRaised", "sent", "potNamesYou", "memberChippedIn"];
+const KINDS: NoteKind[] = ["received", "chippedIn", "askYes", "askClose", "paidOut", "closingSoon", "closedShare", "limitRaised", "sent", "potNamesYou", "memberChippedIn", "request"];
 
 export class NotesStore {
   private readonly kv: KeyValue;
@@ -229,6 +255,7 @@ export class NotesStore {
         poursSeen: Array.isArray(raw.poursSeen) ? raw.poursSeen.filter((x) => typeof x === "string") : [],
         potsSeen: Array.isArray(raw.potsSeen) ? raw.potsSeen.filter((x) => typeof x === "string") : null,
         fundsSeen: Array.isArray(raw.fundsSeen) ? raw.fundsSeen.filter((x) => typeof x === "string") : [],
+        dismissed: Array.isArray(raw.dismissed) ? raw.dismissed.filter((x) => typeof x === "string") : [],
         notes,
       };
     } catch {

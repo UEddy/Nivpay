@@ -244,6 +244,20 @@ link.
 | --- | --- | --- |
 | 47 | Sharing or removing a city didn't reach `/api/city`, or it refused it: not set up (503), wrong origin (403), a proof that didn't check out or was over 5 minutes old (401), more than a sealed city (413), or too many changes in a minute on that server instance (429). Nothing else changed. | The request's status in the browser; Vercel function log for `/api/city` |
 
+## Requests to a person
+
+Asking someone directly, from Receive, and turning requests from people on
+or off, in Profile (README, "Requests to a person"). Requests are sealed on
+the phone so only the person's own phones can read them; `/api/inbox` keeps
+ciphertext only. Hidden until a Vercel Blob store is connected. Nothing here
+moves money.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 48 | The request didn't reach `/api/inbox`, or it refused it: not set up (503), wrong origin (403), a proof that didn't check out or was over 5 minutes old (401), too large (413), or too many in a minute on that server instance (429). Nothing was sent. | The request's status in the browser; Vercel function log for `/api/inbox` |
+| 49 | The person asked hasn't turned on requests from people on any phone, so there is nowhere to seal it to. Nothing was sent. Share the request link instead. | `GET /api/inbox?account=<theirs>&what=keys` returns no keys |
+| 57 | Turning requests from people on or off didn't reach `/api/inbox`, or it refused it, for the reasons under 48. Nothing changed on this phone. | The request's status in the browser; Vercel function log for `/api/inbox` |
+
 ## Usernames
 
 Usernames live in NivPayNames, a registry separate from the pots (README,

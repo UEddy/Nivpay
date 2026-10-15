@@ -2026,3 +2026,11 @@ button.avatar {
   flex-direction: column;
   gap: 8px;
 }
+
+/* A request from a person, in the notifications: Pay, Ignore, Mute. */
+.note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}

@@ -34,7 +34,9 @@ import { incomingFrom, incomingSource, SEND_LABEL, withFloor } from "./lib/trans
 import { PotFeed } from "./lib/feed.ts";
 import { idbFeedStore } from "./lib/idb.ts";
 import { LimitStore, settle } from "./lib/limits.ts";
-import { fromArrivals, fromPoll, markAllRead, markRead, NotesStore, start as startNotes, unread, type Funding, type Note, type NotesState, type PollInputs } from "./lib/notes.ts";
+import { dismiss, fromArrivals, fromPoll, fromRequests, markAllRead, markRead, NotesStore, start as startNotes, unread, withoutRequestsFrom, type Funding, type Note, type NotesState, type PollInputs } from "./lib/notes.ts";
+import { MutedStore } from "./lib/inbox.ts";
+import { readInbox } from "./lib/inboxLive.ts";
 import { CASHOUT_LABEL } from "./lib/rampDesk.ts";
 import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
 // Every screen but Home loads when it is first opened, and so does the code
@@ -54,6 +56,7 @@ const PhotoSection = lazy(() => reloadOnce(() => import("./screens/Photo.tsx")).
 const NotesSheet = lazy(() => reloadOnce(() => import("./screens/Notes.tsx")).then((m) => ({ default: m.NotesSheet })));
 const DevicesSection = lazy(() => reloadOnce(() => import("./screens/Devices.tsx")).then((m) => ({ default: m.DevicesSection })));
 const DailyLimitSection = lazy(() => reloadOnce(() => import("./screens/Limits.tsx")).then((m) => ({ default: m.DailyLimitSection })));
+const NotificationsSection = lazy(() => reloadOnce(() => import("./screens/Notify.tsx")).then((m) => ({ default: m.NotificationsSection })));
 const UsernameSection = lazy(() => reloadOnce(() => import("./screens/Username.tsx")).then((m) => ({ default: m.UsernameSection })));
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
@@ -474,6 +477,7 @@ function Screens() {
           onOpenPot={(pot) => go({ kind: "pot", pot })}
           onOpenRequest={(pot, proposalId) => go({ kind: "request", pot, proposalId })}
           onSend={() => go({ kind: "send", request: null })}
+          onPay={(request) => go({ kind: "send", request })}
           onReceive={() => go({ kind: "receive" })}
           onMoney={(mode) => go({ kind: "money", mode })}
           onRename={renameActive}
@@ -615,6 +619,8 @@ function AccountSheet(props: {
   onRename: (name: string) => void;
   /** The Profile tab: a page under the tab bar, not a sheet. */
   page?: boolean;
+  /** Notifications: requests from people, and who is muted. */
+  notifications?: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -679,6 +685,7 @@ function AccountSheet(props: {
             {copy.viewReceiptHint}
           </p>
         )}
+        {props.notifications}
         <Suspense fallback={null}>
           <DailyLimitSection account={props.account.address} />
         </Suspense>
@@ -815,6 +822,8 @@ function Home(props: {
   onOpenPot: (pot: StoredPot) => void;
   onOpenRequest: (pot: StoredPot, proposalId: bigint) => void;
   onSend: () => void;
+  /** Pay a request from a person: Send, filled in from it. */
+  onPay: (request: PayLink) => void;
   onReceive: () => void;
   onMoney: (mode: "add" | "out") => void;
   onRename: (name: string) => void;
@@ -912,6 +921,36 @@ function Home(props: {
       for (const f of feeds) f.stop();
     };
   }, [owner, notesStore]);
+  // Requests sent straight to this account (lib/inbox.ts), read while Home is open, if this phone turned them on.
+  const muted = useMemo(() => new MutedStore(localStorage, DEPLOYMENT, owner), [owner]);
+  useEffect(() => {
+    let live = true;
+    const read = async () => {
+      const got = await readInbox(owner, DEPLOYMENT).catch(() => []);
+      if (!live || !got.length) return;
+      const asked = got.map((g) => ({ digest: g.digest, from: g.request.from, name: g.request.name, amount: g.request.amount, at: g.request.at }));
+      setNotes(notesStore.update((s) => fromRequests(s, asked, muted.list())));
+    };
+    void read();
+    const t = setInterval(read, INBOX_EVERY_MS);
+    const onVisible = () => document.visibilityState === "visible" && void read();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      live = false;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [owner, notesStore, muted]);
+  const payNote = (n: Note) => {
+    setNotes(notesStore.update((s) => markRead(s, n.id)));
+    setNotesOpen(false);
+    if (n.from) props.onPay({ kind: "pay", deployment: DEPLOYMENT, account: n.from, name: n.fromName ?? "", amount: BigInt(n.amount ?? "0") });
+  };
+  const muteNote = (n: Note) => {
+    if (!n.from) return;
+    muted.mute(n.from);
+    setNotes(notesStore.update((s) => withoutRequestsFrom(s, n.from!)));
+  };
   /** A contact's name, or an account's on this phone, for notes about them. */
   const nameOf = (who: Address): string | null => nameOnPhone(who, new ContactStore(localStorage, DEPLOYMENT, owner).list(), accounts.list());
   const openNote = (n: Note) => {
@@ -1298,7 +1337,13 @@ function Home(props: {
 
       {notesOpen && (
         <Suspense fallback={null}>
-          <NotesSheet state={notes} nameOf={nameOf} onOpen={openNote} onReadAll={() => setNotes(notesStore.update(markAllRead))} onClose={() => setNotesOpen(false)} />
+          <NotesSheet
+            state={notes}
+            nameOf={nameOf}
+            onPay={payNote}
+            onIgnore={(n) => setNotes(notesStore.update((s) => dismiss(s, n.id)))}
+            onMute={muteNote}
+            onOpen={openNote} onReadAll={() => setNotes(notesStore.update(markAllRead))} onClose={() => setNotesOpen(false)} />
         </Suspense>
       )}
       {details && (
@@ -1306,6 +1351,11 @@ function Home(props: {
           page
           account={account}
           hidden={choices.hidden()}
+          notifications={
+            <Suspense fallback={null}>
+              <NotificationsSection account={account.address} names={(who) => nameOf(who) ?? copy.accountEnding(who)} onMuted={() => setNotes(notesStore.get())} />
+            </Suspense>
+          }
           username={
             namesOn ? (
               <Suspense fallback={null}>
@@ -1401,6 +1451,8 @@ function ProfileFace(props: { account: StoredAccount }) {
 }
 
 const FIND_POTS_EVERY_MS = 10_000;
+/** How often Home looks for requests sent straight to this account. */
+const INBOX_EVERY_MS = 30_000;
 /** When a request must be answered by, in the phone's own time. */
 const answerByFormat = new Intl.DateTimeFormat(dateLocale(), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const livePots = potsReader(readClient, POTS);

@@ -16,6 +16,17 @@ import { incomingFrom, incomingSource, RECEIVE_BACKLOG_BLOCKS, senderKind, withF
 import { AmountUnderstood, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, useOnline } from "./ui.tsx";
 import { balanceNote } from "../lib/connection.ts";
 import { useUsernames, withUsernameOf } from "./Username.tsx";
+import { ContactStore } from "../lib/contacts.ts";
+import { describeFailure } from "../lib/errors.ts";
+import { inboxEnabled, sendPersonRequest } from "../lib/inboxLive.ts";
+import { holderOf, namesOn } from "../lib/names.ts";
+import { notifyRequest } from "../lib/notify.ts";
+import { reloadOnce } from "../lib/reloadOnce.ts";
+import { normalizeUsername, usernameProblem } from "../lib/usernames.ts";
+import type { Notice } from "./ui.tsx";
+
+// The signing code loads only when a request is sent.
+const passkeys = () => reloadOnce(() => import("../lib/passkey.ts"));
 import { Avatar } from "./Avatar.tsx";
 
 const finalized = async () => (await readClient.getBlock({ blockTag: "finalized" })).number;
@@ -186,6 +197,7 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
             {copied ? copy.copied : copy.orShareAccountId}
           </button>
           {myUsername && <p className="hint">{copy.yourUsername(myUsername)}</p>}
+          <AskDirectly account={props.account} amount={requested ?? 0n} />
         </div>
 
         <section className="card enter" style={{ animationDelay: "80ms" }} aria-labelledby="payments-in">
@@ -219,5 +231,121 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
         </section>
       </div>
     </div>
+  );
+}
+
+/** An account to ask, and the name to show it by. */
+type Asked = { account: Address; name: string };
+
+/**
+ * Ask someone directly (lib/inbox.ts): a contact, or someone by their
+ * @username, for the amount above, or for any amount if it is empty. The
+ * request is signed with one fingerprint and reaches only their phones.
+ * Hidden while requests aren't set up on this site.
+ */
+function AskDirectly(props: { account: StoredAccount; amount: bigint }) {
+  const me = props.account.address;
+  const [on, setOn] = useState(false);
+  const [who, setWho] = useState<Asked | null>(null);
+  const [typed, setTyped] = useState("");
+  const [looking, setLooking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const contacts = useMemo(() => new ContactStore(localStorage, DEPLOYMENT, me).list(), [me]);
+  useEffect(() => {
+    let live = true;
+    void inboxEnabled(me).then((v) => live && setOn(v));
+    return () => {
+      live = false;
+    };
+  }, [me]);
+  if (!on || (contacts.length === 0 && !namesOn)) return null;
+
+  const name = normalizeUsername(typed);
+  const find = async () => {
+    setNotice(null);
+    setWho(null);
+    if (!name || usernameProblem(name)) return setNotice({ tone: "bad", text: copy.notAUsername });
+    setLooking(true);
+    try {
+      const holder = await holderOf(name);
+      if (!holder) setNotice({ tone: "bad", text: copy.errNameNotFound(name), code: ERROR_CODES.NAME_NOT_FOUND });
+      else if (holder.toLowerCase() === me.toLowerCase()) setNotice({ tone: "bad", text: copy.cantAskYourself });
+      else setWho({ account: holder, name: `@${name}` });
+    } catch {
+      setNotice({ tone: "bad", text: copy.errRequestSend, code: ERROR_CODES.REQUEST_SEND_FAILED });
+    } finally {
+      setLooking(false);
+    }
+  };
+  const ask = async () => {
+    if (!who) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const sign = async (message: string) => (await passkeys()).withSigner(me, (a) => a.signMessage({ message }));
+      const sent = await sendPersonRequest({ deployment: DEPLOYMENT, from: me, to: who.account, name: shownName(props.account), amount: props.amount.toString() }, sign);
+      void notifyRequest(sent);
+      setNotice({ tone: "ok", text: copy.requestSentTo(who.name) });
+      setWho(null);
+      setTyped("");
+    } catch (e) {
+      setNotice({ tone: "bad", ...describeFailure(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section aria-labelledby="ask-directly">
+      <p className="eyebrow" id="ask-directly">
+        {copy.askDirectly}
+      </p>
+      <p className="hint">{copy.askDirectlyHint}</p>
+      {contacts.length > 0 && (
+        <div className="list" aria-label={copy.yourContacts}>
+          {contacts.map((c) => (
+            <button
+              type="button"
+              className={`home-pot${who?.account === c.account ? " on" : ""}`}
+              aria-pressed={who?.account === c.account}
+              key={`ask-${c.account}`}
+              onClick={() => {
+                setNotice(null);
+                setWho({ account: c.account, name: c.name });
+              }}
+            >
+              <span className="grow">
+                <span className="name">{c.name}</span>
+                <span className="meta">{copy.accountEnding(c.account)}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {namesOn && (
+        <form
+          className="name-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void find();
+          }}
+        >
+          <label className="field">
+            <span>{copy.orTheirUsername}</span>
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={40} />
+          </label>
+          <button type="submit" className="btn small" disabled={!typed.trim() || looking}>
+            {looking ? copy.lookingUpUsername : copy.findThem}
+          </button>
+        </form>
+      )}
+      {who && (
+        <button type="button" className="pill-btn" disabled={busy} aria-busy={busy} onClick={() => void ask()}>
+          {busy ? copy.waitingForPasskey : props.amount > 0n ? copy.askThemFor(who.name, formatAmount(props.amount, 6, "cents")) : copy.askThem(who.name)}
+        </button>
+      )}
+      {notice && <NoticeLine notice={notice} />}
+    </section>
   );
 }
