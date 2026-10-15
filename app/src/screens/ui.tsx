@@ -3,6 +3,7 @@ import { copy } from "../copy.ts";
 import { SLOW_AFTER_MS, slowStepLine } from "../lib/slowStep.ts";
 import { Cancellable } from "../lib/cancel.ts";
 import type { ShareResult } from "../lib/share.ts";
+import { LastCodeStore } from "../lib/support.ts";
 import { BANNER_MS, currentPlatform, InstallStore, installWay, onInstallChange, PausableTimer, promptInstall, shouldShowBanner, type InstallWay } from "../lib/install.ts";
 
 export type Notice = { tone: "ok" | "bad"; text: string; code?: number };
@@ -48,12 +49,37 @@ export function useCancellable(): Cancellable {
 /** What a screen shows when X stopped its action. */
 export const STOPPED: Notice = { tone: "bad", text: copy.cancelledNothingSent };
 
-/** A result line. Failures end with a neutral code people can read out to support. */
+/** Opens Help and support over whatever screen is showing (App.tsx HelpHost), with this code filled in. */
+export function openHelp(code: number | null = null): void {
+  window.dispatchEvent(new CustomEvent("nivpay:help", { detail: { code } }));
+}
+
+/**
+ * A result line. Failures end with a neutral code people can read out to
+ * support, and a Get help link that opens support with the code filled in.
+ * The code is remembered on this phone as the last one shown.
+ */
 export function NoticeLine({ notice }: { notice: Notice }) {
+  const { code } = notice;
+  useEffect(() => {
+    if (code === undefined) return;
+    try {
+      new LastCodeStore(localStorage).shown(code);
+    } catch {
+      // Storage refused: support just won't have it filled in.
+    }
+  }, [code]);
   return (
     <div role="status">
       <p className={notice.tone === "ok" ? "success" : "error"}>{notice.text}</p>
-      {notice.code !== undefined && <p className="reason">{copy.code(notice.code)}</p>}
+      {code !== undefined && (
+        <p className="reason">
+          {copy.code(code)}{" "}
+          <button type="button" className="text-btn get-help" onClick={() => openHelp(code)}>
+            {copy.getHelp}
+          </button>
+        </p>
+      )}
     </div>
   );
 }

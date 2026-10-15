@@ -36,8 +36,12 @@ function serviceWorkerShell(): Plugin {
   };
 }
 
+// The version support is told about: the commit Vercel built, or "local".
+const appVersion = (process.env.VERCEL_GIT_COMMIT_SHA ?? "").slice(0, 7) || "local";
+
 export default defineConfig({
   plugins: [serviceWorkerShell()],
+  define: { "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion) },
   build: {
     target: "es2022",
     sourcemap: false,

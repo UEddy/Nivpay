@@ -266,6 +266,11 @@ function allCopy(): [string, string][] {
     errNameHeld: ["Thu 14 Jan 2027"],
     errNameNotFound: ["idara"],
     errNameChanged: ["idara"],
+    helpAboutCode: [52],
+    supportSubjectCode: [52],
+    supportVersionLine: ["abc1234"],
+    supportCodeLine: [52],
+    supportAccountLine: ["the Account ID, as data"],
   };
   return Object.entries(copy).map(([key, value]) => {
     if (typeof value === "string") return [key, value];

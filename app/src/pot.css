@@ -1760,3 +1760,50 @@
 .hide-pot {
   align-self: center;
 }
+
+/* Help and support. */
+.faq details {
+  border-top: 1px solid var(--divider);
+  padding: 10px 0;
+}
+
+.faq details:first-child {
+  border-top: 0;
+}
+
+.faq summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.check-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 15px;
+}
+
+.check-row input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--primary);
+}
+
+.link-btn {
+  text-align: center;
+  text-decoration: none;
+}
+
+.support-safety {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--chip);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.get-help {
+  font-size: 12px;
+}

@@ -796,6 +796,38 @@ const words = {
   hideFromHome: "Hide from Home",
   potHiddenFromHome: "Hidden from Home on this phone. Show it again from Account details.",
 
+  // Help and support (lib/support.ts, screens/Help.tsx)
+  helpAndSupport: "Help and support",
+  getHelp: "Get help",
+  helpAboutCode: (code: number) => `You're asking about Code ${code}.`,
+  faqPotQ: "What is a pot?",
+  faqPotA:
+    "A group purse for one purpose. Anyone can put money in. It can only pay the people named when it was made, each up to a limit, and only when enough of the people who decide say yes. Anyone can take their own share out.",
+  faqFinalQ: "Why is a payment final?",
+  faqFinalA:
+    "Once a payment shows as final, nobody can reverse or cancel it, NivPay included. That's why the app asks you to check who you're paying first. If you paid the wrong person, ask them to send it back.",
+  faqNewPhoneQ: "How do I get my account back on a new phone?",
+  faqNewPhoneA:
+    "Your account is a passkey, kept by your phone's password manager: iCloud Keychain on iPhone, Google Password Manager on Android. On a new phone signed in to the same one, open NivPay, choose I already have an account, and pick your passkey. Your money was never kept on the phone, so nothing is lost.",
+  faqCodeQ: "What does a code like Code 52 mean?",
+  faqCodeA:
+    "It's a short number that tells support exactly what happened. It says nothing about your money and is safe to share. Tap Get help next to it, or send it to support.",
+  faqTestQ: "What is test mode?",
+  faqTestA:
+    "NivPay is being tested. Everything uses test dollars, which aren't real money. Add money and Cash out are simulations: no bank is paid and no real money moves.",
+  includeAccountId: "Include my Account ID",
+  includeAccountIdHint: "It helps support find what happened. Leave it out if you'd rather not share it.",
+  emailSupport: "Email support",
+  chatOnWhatsApp: "Chat on WhatsApp",
+  supportSafety: "NivPay support will never ask you to send money, move money to keep it safe, or use your fingerprint for them.",
+  supportSubject: "NivPay help",
+  supportSubjectCode: (code: number) => `NivPay help, Code ${code}`,
+  supportPrompt: "Tell us what happened:",
+  supportVersionLine: (version: string) => `App version: ${version}`,
+  supportCodeLine: (code: number) => `Last code shown: Code ${code}`,
+  supportNoCode: "Last code shown: none",
+  supportAccountLine: (id: string) => `Account ID: ${id}`,
+
   // Deleting a draft (lib/draft.ts deleteRefusal)
   deleteDraft: "Delete draft",
   deleteDraftTitle: "Delete this draft?",

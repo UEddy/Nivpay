@@ -44,11 +44,12 @@ const RequestScreen = lazy(() => reloadOnce(() => import("./screens/Request.tsx"
 const TimelineScreen = lazy(() => reloadOnce(() => import("./screens/Timeline.tsx")).then((m) => ({ default: m.TimelineScreen })));
 const CloseScreen = lazy(() => reloadOnce(() => import("./screens/Close.tsx")).then((m) => ({ default: m.CloseScreen })));
 const MoneyScreen = lazy(() => reloadOnce(() => import("./screens/Money.tsx")).then((m) => ({ default: m.MoneyScreen })));
+const HelpSheet = lazy(() => reloadOnce(() => import("./screens/Help.tsx")).then((m) => ({ default: m.HelpSheet })));
 const UsernameSection = lazy(() => reloadOnce(() => import("./screens/Username.tsx")).then((m) => ({ default: m.UsernameSection })));
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
 const sending = () => reloadOnce(() => import("./lib/send.ts"));
-import { formatDay, Icon, InstallBanner, InstallHow, NoticeLine, phoneTimeZone, Sheet, useInstallWay, useOnline, type Notice } from "./screens/ui.tsx";
+import { formatDay, Icon, InstallBanner, InstallHow, NoticeLine, openHelp, phoneTimeZone, Sheet, useInstallWay, useOnline, type Notice } from "./screens/ui.tsx";
 import { balanceNote } from "./lib/connection.ts";
 import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/balanceRead.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
@@ -163,8 +164,27 @@ function TestModeBadge() {
 /** A screen still loading shows the page's background, briefly; nothing on it claims anything. */
 export function App() {
   return (
-    <Suspense fallback={<div className="page" aria-busy="true" />}>
-      <Screens />
+    <>
+      <Suspense fallback={<div className="page" aria-busy="true" />}>
+        <Screens />
+      </Suspense>
+      <HelpHost />
+    </>
+  );
+}
+
+/** Help and support, over any screen, opened by openHelp (a Get help link, or Account details). */
+function HelpHost() {
+  const [open, setOpen] = useState<{ code: number | null } | null>(null);
+  useEffect(() => {
+    const show = (e: Event) => setOpen({ code: (e as CustomEvent<{ code: number | null }>).detail?.code ?? null });
+    window.addEventListener("nivpay:help", show);
+    return () => window.removeEventListener("nivpay:help", show);
+  }, []);
+  if (!open) return null;
+  return (
+    <Suspense fallback={null}>
+      <HelpSheet code={open.code} onClose={() => setOpen(null)} />
     </Suspense>
   );
 }
@@ -595,6 +615,9 @@ function AccountSheet(props: {
             {copy.viewReceiptHint}
           </p>
         )}
+        <button type="button" className="btn" onClick={() => openHelp()}>
+          {copy.helpAndSupport}
+        </button>
         {installWay && (
           <section aria-labelledby="install-app">
             <p className="eyebrow" id="install-app">
