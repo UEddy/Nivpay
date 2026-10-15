@@ -1910,3 +1910,8 @@ button.avatar {
 .map-face.dim {
   opacity: 0.55;
 }
+
+/* Account details: a little air between its sections. */
+.sheet > section {
+  margin-top: 18px;
+}
