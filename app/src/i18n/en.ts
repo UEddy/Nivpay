@@ -825,6 +825,12 @@ export const en = {
   installIos: "Tap Share, then Add to Home Screen.",
   installTheApp: "Install the app",
 
+  // Language (lib/locale.ts), in Account details
+  language: "Language",
+  languagePhone: "Phone's language",
+  languageHint: "Changing it reloads the app.",
+  translationNote: "This language was translated by AI and hasn't been checked by a native speaker yet. If something reads wrong, tell support.",
+
   /** How a vendor or person is shown when a name alone isn't enough. */
   accountEnding: (id: string) => `account ending ${id.slice(-4)}`,
 };
