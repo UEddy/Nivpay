@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { Address, Hex } from "viem";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { isAddressEqual, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import { otherCurrencyNote } from "../lib/currencyNote.ts";
 import { recipientDetail } from "../lib/recipient.ts";
-import type { StoredAccount } from "../lib/accounts.ts";
+import { cleanName, NAME_MAX, type StoredAccount } from "../lib/accounts.ts";
+import { ContactStore, PaidStore, sendWarnings, type Contact } from "../lib/contacts.ts";
 import { ERC20_READ_ABI } from "../lib/abi.ts";
 import { liveWriteChain } from "../lib/chain.ts";
 import { CTK, SETTLEMENT_PAIR, SETTLEMENT_WHITELISTER } from "../lib/config.ts";
@@ -57,7 +58,18 @@ const STEP_TEXT: Record<Step | "landing", string> = {
 export function SendScreen(props: { account: StoredAccount; request: PayLink | null; banner: ReactNode; onClose: () => void }) {
   const me = props.account.address;
   const request = props.request && props.request.deployment === DEPLOYMENT ? props.request : null;
-  const [to, setTo] = useState<Recipient | null>(request ? { account: request.account, name: request.name } : null);
+  // A link's name is whatever its maker typed: cleaned, and checked against contacts before paying.
+  const linkName = request ? cleanName(request.name) || copy.accountEnding(request.account) : null;
+  const [to, setTo] = useState<Recipient | null>(request ? { account: request.account, name: linkName! } : null);
+  // Contacts and accounts paid before, on this phone, for this account (lib/contacts.ts).
+  const contactStore = useMemo(() => new ContactStore(localStorage, DEPLOYMENT, me), [me]);
+  const paid = useMemo(() => new PaidStore(localStorage, DEPLOYMENT, me), [me]);
+  const [contacts, setContacts] = useState<Contact[]>(() => contactStore.list());
+  const saveContact = (account: Address, name: string) => {
+    const ok = contactStore.save(account, name, Date.now());
+    setContacts(contactStore.list());
+    return ok;
+  };
   const [idText, setIdText] = useState("");
   const [last4, setLast4] = useState("");
   const [amountText, setAmountText] = useState("");
@@ -121,6 +133,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         setStep(null);
         if (outcome.kind === "final") {
           rememberReceipt(write.address, write.hash);
+          paid.add(recipient.account);
           setStuck(false);
           setDone({ to: recipient, amount, settledMs: outcome.settledMs, hash: write.hash });
           void readHolding().catch(() => {});
@@ -137,7 +150,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         setResult({ tone: "bad", ...describeFailure(new SendFailure("confirming", true, e)) });
       }
     },
-    [readHolding],
+    [readHolding, paid],
   );
 
   /** Follows a payment in another currency through its steps, each final before the next. */
@@ -156,6 +169,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         const setupDone = setupIncluded && (step > 0 || outcome.kind === "final");
         if (outcome.kind === "final" && step === steps - 1) {
           rememberReceipt(last.address, last.hash);
+          paid.add(recipient.account);
           setStuck(false);
           const receipt = await readClient.getTransactionReceipt({ hash: last.hash }).catch(() => null);
           const got = receipt ? received(receipt.logs, CTK, recipient.account) : null;
@@ -183,7 +197,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         setResult({ tone: "bad", ...describeFailure(new SendFailure("confirming", true, e)) });
       }
     },
-    [readHolding],
+    [readHolding, paid],
   );
 
   // Resume a payment that was in flight when the app was closed.
@@ -310,6 +324,32 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
     }
   };
 
+  /** A saved contact's name comes first; the link's name, if different, second. */
+  const savedFor = (account: Address) => contacts.find((c) => isAddressEqual(c.account, account));
+  const shownTo = (r: Recipient) => ({ account: r.account, name: savedFor(r.account)?.name ?? r.name });
+  const fromLink = to && request && linkName && isAddressEqual(to.account, request.account) ? linkName : null;
+  const warnings = to ? sendWarnings(to.account, fromLink, contacts, paid.has(to.account)) : null;
+  const toRow = to && (
+    <div className="list-row">
+      <div className="grow">
+        <span className="meta">{copy.confirmTo}</span>
+        <span className="name">{shownTo(to).name}</span>
+        {warnings?.savedAs && fromLink && <span className="meta">{copy.linkCallsThem(fromLink)}</span>}
+        {recipientDetail(shownTo(to)) && <span className="meta">{recipientDetail(shownTo(to))}</span>}
+      </div>
+    </div>
+  );
+  const warningLines = to && warnings && (
+    <>
+      {warnings.clash && (
+        <p className="risk-line strong" role="alert">
+          {copy.warnNameClash(warnings.clash.name)}
+        </p>
+      )}
+      {warnings.firstTime && <p className="risk-line">{copy.warnFirstTime(copy.accountEnding(to.account))}</p>}
+    </>
+  );
+
   const money = (v: bigint) => formatAmount(v, decimals, "auto");
   const other = (v: bigint) => (shown ? formatCurrency(v, shown.outDecimals, shown.outSymbol) : "");
   const symbol = otherSymbol ?? copy.anotherCurrency;
@@ -337,23 +377,27 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         {done ? (
           <div className="card enter sent-card" role="status">
             <p className="eyebrow">{copy.sentEyebrow}</p>
-            <h1>{copy.sentTitle(money(done.amount), done.to.name)}</h1>
+            <h1>{copy.sentTitle(money(done.amount), shownTo(done.to).name)}</h1>
             {done.received && <p className="lede">{copy.theyReceived(done.received)}</p>}
             <p className="lede">{copy.settledIn((done.settledMs / 1000).toFixed(1))}</p>
             {done.setupDone && <p className="hint">{copy.setupDoneNote}</p>}
             <a className="receipt-link" href={receiptUrl(done.hash)} target="_blank" rel="noopener noreferrer">
               {copy.viewReceipt}
             </a>
+            {!savedFor(done.to.account) && <SaveContact suggested={done.to.name} onSave={(name) => saveContact(done.to.account, name)} />}
           </div>
         ) : (
           <>
-            {request && <p className="lede enter">{copy.sendFromRequest(request.name)}</p>}
+            {request && linkName && <p className="lede enter">{copy.sendFromRequest(linkName)}</p>}
+            {request && linkName && !savedFor(request.account) && !step && (
+              <SaveContact suggested={linkName} onSave={(name) => saveContact(request.account, name)} />
+            )}
             <div className="card enter" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {to ? (
                 <div className="list-row">
                   <div className="grow">
-                    <span className="name">{copy.sendingTo(to.name)}</span>
-                    {recipientDetail(to) && <span className="meta">{recipientDetail(to)}</span>}
+                    <span className="name">{copy.sendingTo(shownTo(to).name)}</span>
+                    {recipientDetail(shownTo(to)) && <span className="meta">{recipientDetail(shownTo(to))}</span>}
                   </div>
                   {!step && !stuck && (
                     <button type="button" className="btn ghost small" onClick={() => setTo(null)}>
@@ -363,6 +407,19 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
                 </div>
               ) : (
                 <>
+                  {contacts.length > 0 && (
+                    <div className="list" aria-label={copy.yourContacts}>
+                      <p className="eyebrow">{copy.yourContacts}</p>
+                      {contacts.map((c) => (
+                        <button type="button" className="home-pot" key={`contact-${c.account}`} onClick={() => setTo({ account: c.account, name: c.name })}>
+                          <span className="grow">
+                            <span className="name">{c.name}</span>
+                            <span className="meta">{copy.accountEnding(c.account)}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <p className="eyebrow">{copy.sendTo}</p>
                   <p className="hint">{copy.sendToHint}</p>
                   <label className="field">
@@ -450,13 +507,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
       {confirming && to && amount !== null && currency === "other" && shown && (
         <Sheet title={copy.confirmSendTitle} onClose={() => (beforePasskey(step) ? stop(setSheetNotice) : step === null && setConfirming(false))}>
           <div className="list">
-            <div className="list-row">
-              <div className="grow">
-                <span className="meta">{copy.confirmTo}</span>
-                <span className="name">{to.name}</span>
-                {recipientDetail(to) && <span className="meta">{recipientDetail(to)}</span>}
-              </div>
-            </div>
+            {toRow}
             <div className="list-row">
               <div className="grow">
                 <span className="meta">{copy.youSend}</span>
@@ -484,6 +535,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
               </div>
             </div>
           </div>
+          {warningLines}
           <p className="hint">{copy.atLeastHint}</p>
           {shown.needsSetup && <p className="hint">{copy.oneTimeSetup}</p>}
           <p className="hint">{copy.stepsLine(1 + (shown.needsSetup ? 1 : 0) + (shown.needsAllowance ? 1 : 0))}</p>
@@ -505,13 +557,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
       {confirming && to && amount !== null && currency === "dollars" && (
         <Sheet title={copy.confirmSendTitle} onClose={() => setConfirming(false)}>
           <div className="list">
-            <div className="list-row">
-              <div className="grow">
-                <span className="meta">{copy.confirmTo}</span>
-                <span className="name">{to.name}</span>
-                {recipientDetail(to) && <span className="meta">{recipientDetail(to)}</span>}
-              </div>
-            </div>
+            {toRow}
             <div className="list-row">
               <div className="grow">
                 <span className="meta">{copy.confirmAmount}</span>
@@ -531,6 +577,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
               </div>
             </div>
           </div>
+          {warningLines}
           <button type="button" className="pill-btn" onClick={() => send(false)}>
             {copy.sendAction(money(amount))}
           </button>
@@ -540,5 +587,49 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         </Sheet>
       )}
     </div>
+  );
+}
+
+/**
+ * Saves who this is as a contact, on this phone (lib/contacts.ts). Offered on
+ * a pay link and after a final payment. A contact is a label, not a check.
+ */
+function SaveContact(props: { suggested: string; onSave: (name: string) => boolean }) {
+  const [open, setOpen] = useState(false);
+  // "account ending 7bC1" is what shows when there's no name; it isn't one to save.
+  const [name, setName] = useState(/^account ending /i.test(props.suggested) ? "" : props.suggested);
+  const [saved, setSaved] = useState<string | null>(null);
+  const clean = cleanName(name);
+  if (saved) {
+    return (
+      <p className="success" role="status">
+        {copy.contactSaved(saved)}
+      </p>
+    );
+  }
+  if (!open) {
+    return (
+      <button type="button" className="btn ghost small" onClick={() => setOpen(true)}>
+        {copy.saveAsContact}
+      </button>
+    );
+  }
+  return (
+    <form
+      className="name-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (clean && props.onSave(clean)) setSaved(clean);
+      }}
+    >
+      <label className="field">
+        <span>{copy.contactName}</span>
+        <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" maxLength={NAME_MAX * 2} placeholder={copy.theirNamePlaceholder} />
+      </label>
+      <p className="hint">{copy.contactHint}</p>
+      <button type="submit" className="btn primary" disabled={!clean}>
+        {copy.saveName}
+      </button>
+    </form>
   );
 }
