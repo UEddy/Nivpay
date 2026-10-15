@@ -65,12 +65,13 @@ export const DEPLOY_BLOCK = {
 
 /**
  * NivPayNames, the username registry (README, "Usernames for accounts"), one
- * for both deployments. Null until it is deployed, and while it is null
- * every username feature is hidden and the app works as it did without them.
+ * for both deployments. Deployed in transaction 0x9bf29091dbe3167dfd72f6602a1f4d4d32f06039b6d001f7c1199f74df4d949e
+ * (broadcast/DeployNames.s.sol/10143/). Set to null and every username
+ * feature is hidden and the app works as it did without them.
  */
-export const NAMES: Address | null = null;
+export const NAMES: Address | null = "0x798f4a11c16C96561fE7834365420505542e280D";
 /** The block NivPayNames was deployed in, from its receipt. Null with NAMES. */
-export const NAMES_DEPLOY_BLOCK: bigint | null = null;
+export const NAMES_DEPLOY_BLOCK: bigint | null = 71283172n;
 
 /** eth_getLogs on the public RPC allows toBlock - fromBlock <= 100 (measured). */
 export const LOG_PAGE_BLOCKS = 101n;

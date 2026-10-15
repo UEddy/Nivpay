@@ -280,6 +280,7 @@ Oct 2026.
 | --- | --- | --- | --- |
 | NivPayPots on AUSD | [`0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB`](https://testnet.monadvision.com/address/0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB) | The product. Pots funded in AUSD. The app runs on this by default. |
 | NivPayPots on TESTUSD | [`0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA`](https://testnet.monadvision.com/address/0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA) | The same bytecode bound to TESTUSD, the fallback for testing. |
+| NivPayNames | [`0x798f4a11c16C96561fE7834365420505542e280D`](https://testnet.monadvision.com/address/0x798f4a11c16C96561fE7834365420505542e280D) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0x798f4a11c16C96561fE7834365420505542e280D) | The username registry, one for both pot instances. No owner, no admin, no fee. See [Usernames for accounts](#usernames-for-accounts). |
 | NivPayTestDollar (TESTUSD) | [`0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7`](https://testnet.monadvision.com/address/0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7) | A worthless test token anyone can mint, 100,000 per call. Testnet only. |
 | AUSD (Agora) | [`0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC`](https://testnet.monadvision.com/address/0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC) | [Monadscan](https://testnet.monadscan.com/address/0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC#code): proxy `AgoraDollarErc1967Proxy`, implementation `AgoraDollar`, both exact matches; not on Monad's Sourcify | Agora's six decimal dollar. Not ours. |
 | Agora AUSD faucet | [`0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C`](https://testnet.monadvision.com/address/0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C) | [Monadscan](https://testnet.monadscan.com/address/0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C#code): proxy `AgoraTransparentUpgradeableProxy`, exact match; implementation a similar match (same bytecode as another verified contract); not on Monad's Sourcify | Dispenses test AUSD. Not ours. |
@@ -296,11 +297,10 @@ Monadscan shows verified source for all of Agora's contracts here, with the
 names and match kinds in the table above (read from its public pages on 10
 Oct 2026).
 
-NivPayNames, the username registry, is built and tested but not deployed yet;
-see [Usernames for accounts](#usernames-for-accounts). Its row goes in the
-table above once it is.
+NivPayNames was deployed on 15 Oct 2026 in block 71,283,172; its Sourcify
+record was checked the same day.
 
-The three NivPay contracts were deployed from
+The four NivPay contracts were deployed from
 `0x7EAf7f3e330ac388A0e951e80957B7274597297c`. Their deploy transactions, from
 the committed broadcast receipts under `broadcast/*/10143/`:
 
@@ -308,6 +308,7 @@ the committed broadcast receipts under `broadcast/*/10143/`:
 NivPayPots on AUSD          0xa2de65f6cdc7bcd8ab0d3e4e11f7652fb2e0392e2e5eff88bc31c4548a18a286
 NivPayTestDollar (TESTUSD)  0x561e99082af17a9873948ccbe32b534b311777db6a995d6f48ee047440a5d856
 NivPayPots on TESTUSD       0x68e15496691cfbe7bfa117db8e023141309a03e52b42e30b98fbca1bb19fe0eb
+NivPayNames                 0x9bf29091dbe3167dfd72f6602a1f4d4d32f06039b6d001f7c1199f74df4d949e
 ```
 
 Both pot instances have identical fee settings, read back from the chain on 9
@@ -1125,9 +1126,11 @@ and the design answers each:
   working for people who never take one. The screen says so before a name is
   claimed.
 
-**Status.** Built and tested; the registry is not deployed yet. Until its
-address is set in `app/src/lib/config.ts` (`NAMES`, with `NAMES_DEPLOY_BLOCK`),
-the app hides every username feature and works exactly as before.
+**Status.** Live. The registry is deployed at
+[`0x798f4a11c16C96561fE7834365420505542e280D`](https://testnet.monadvision.com/address/0x798f4a11c16C96561fE7834365420505542e280D)
+(block 71,283,172, [Sourcify exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0x798f4a11c16C96561fE7834365420505542e280D)), set in
+`app/src/lib/config.ts` (`NAMES`, with `NAMES_DEPLOY_BLOCK`). With `NAMES` set
+to null the app hides every username feature and works exactly as before.
 
 ### What was built
 
@@ -1155,7 +1158,7 @@ the app hides every username feature and works exactly as before.
    can't be claimed by anyone else for 90 days (`HOLD_PERIOD`), so it can't
    be taken over the moment it is released. The account that released it can
    take it back at any time.
-4. **Choose a username, in Account details**, beside the Account ID. As the
+4. **Choose a username, in Account details** (the Profile tab), beside the Account ID. As the
    person types, the screen says whether the name is available, taken, not
    allowed (and why), or free again on a given date. Before claiming it says
    plainly that anyone who knows the name can see this account's balance and
@@ -1746,7 +1749,9 @@ forge verify-contract `
 
 ### NivPayNames, the username registry
 
-**Not deployed yet.** One transaction, no constructor arguments: the rules,
+**Deployed** at `0x798f4a11c16C96561fE7834365420505542e280D`, transaction `0x9bf29091dbe3167dfd72f6602a1f4d4d32f06039b6d001f7c1199f74df4d949e`,
+block 71,283,172; the receipt is committed under
+`broadcast/DeployNames.s.sol/10143/`. To deploy it again: one transaction, no constructor arguments: the rules,
 the reserved names and the 90 day hold are fixed in the source. Use the same
 `nivpay-deployer` keystore.
 
