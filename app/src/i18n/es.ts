@@ -811,6 +811,23 @@ export const es: Dictionary = {
     `El límite vive en esta app. Protege contra errores y presiones, no contra alguien que tenga tu llave de acceso y use otro programa. Borrar los datos de este sitio lo devuelve a ${fallback}.`,
   errDailyLimit: (left: string) => `Es más de lo que permite tu límite diario. Hoy todavía puedes enviar ${left}. No se envió nada.`,
 
+  thisPhone: "Este teléfono",
+  signedInHere: "sesión iniciada",
+  lastUsed: (when: string) => `Último uso: ${when}`,
+  notUsedHereYet: "Aún no se ha usado en este teléfono",
+  removeFromPhone: "Quitar de este teléfono",
+  removeTitle: (name: string) => `¿Quitar ${name} de este teléfono?`,
+  removeLede:
+    "Este teléfono olvida el nombre, los borradores y los ajustes que guarda para esta cuenta: contactos, fondos ocultos, el límite diario y lo demás. Los borradores que aún no son fondos se pierden para siempre. La cuenta y su dinero se quedan donde están, y su llave de acceso la recupera.",
+  removeInFlight: "Una solicitud de esta cuenta aún está en curso. Espera a que termine y luego quítala.",
+  removedFromPhone: (name: string) => `${name} se quitó de este teléfono. Su llave de acceso la recupera.`,
+  signing: "Firma",
+  signingEachTime: "Cada pago pide tu huella. NivPay no mantiene ninguna sesión de firma abierta entre pagos.",
+  yourPasskey: "Tu llave de acceso",
+  passkeyWhere:
+    "Tu llave de acceso vive en el gestor de contraseñas de tu teléfono (llavero de iCloud, Gestor de contraseñas de Google o 1Password) y se sincroniza con tus otros dispositivos que lo usan. Para cortar un teléfono perdido, quítalo allí.",
+  passkeyNoServer: "NivPay no guarda sesiones en un servidor, así que no puede listar tus dispositivos ni cerrar su sesión.",
+
   language: "Idioma",
   languagePhone: "Idioma del teléfono",
   languageHint: "Al cambiarlo, la app se vuelve a cargar.",

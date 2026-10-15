@@ -208,4 +208,7 @@ export const SAMPLES: Record<string, unknown[]> = {
   limitRaiseStarts: ["$5,000.00", "Fri 16 Oct 2026, 14:02"],
   limitAppOnly: ["$1,000.00"],
   errDailyLimit: ["$400.00"],
+  lastUsed: ["Thu 15 Oct, 14:02"],
+  removeTitle: ["Idara"],
+  removedFromPhone: ["Idara"],
 };

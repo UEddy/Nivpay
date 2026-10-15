@@ -811,6 +811,23 @@ export const pt: Dictionary = {
     `O limite fica neste app. Ele protege contra erros e pressão, não contra alguém que tenha sua chave de acesso e use outro programa. Apagar os dados deste site volta o limite para ${fallback}.`,
   errDailyLimit: (left: string) => `Isso é mais do que seu limite diário permite. Você ainda pode enviar ${left} hoje. Nada foi enviado.`,
 
+  thisPhone: "Este celular",
+  signedInHere: "conectada",
+  lastUsed: (when: string) => `Último uso: ${when}`,
+  notUsedHereYet: "Ainda não usada neste celular",
+  removeFromPhone: "Remover deste celular",
+  removeTitle: (name: string) => `Remover ${name} deste celular?`,
+  removeLede:
+    "Este celular esquece o nome, os rascunhos e os ajustes que guarda para esta conta: contatos, vaquinhas ocultas, o limite diário e o resto. Rascunhos que ainda não viraram vaquinhas se perdem para sempre. A conta e o dinheiro dela continuam onde estão, e a chave de acesso traz a conta de volta.",
+  removeInFlight: "Um pedido desta conta ainda está em andamento. Espere terminar e depois remova.",
+  removedFromPhone: (name: string) => `${name} foi removida deste celular. A chave de acesso traz a conta de volta.`,
+  signing: "Assinatura",
+  signingEachTime: "Cada pagamento pede sua digital. A NivPay não mantém nenhuma sessão de assinatura aberta entre um pagamento e outro.",
+  yourPasskey: "Sua chave de acesso",
+  passkeyWhere:
+    "Sua chave de acesso fica no gerenciador de senhas do celular (Porta-chaves do iCloud, Gerenciador de senhas do Google ou 1Password) e é sincronizada com seus outros aparelhos conectados a ele. Para cortar um celular perdido, remova-o lá.",
+  passkeyNoServer: "A NivPay não guarda sessões em um servidor, então não pode listar seus aparelhos nem desconectá-los.",
+
   language: "Idioma",
   languagePhone: "Idioma do celular",
   languageHint: "Ao mudar, o app recarrega.",

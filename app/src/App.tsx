@@ -45,6 +45,7 @@ const TimelineScreen = lazy(() => reloadOnce(() => import("./screens/Timeline.ts
 const CloseScreen = lazy(() => reloadOnce(() => import("./screens/Close.tsx")).then((m) => ({ default: m.CloseScreen })));
 const MoneyScreen = lazy(() => reloadOnce(() => import("./screens/Money.tsx")).then((m) => ({ default: m.MoneyScreen })));
 const HelpSheet = lazy(() => reloadOnce(() => import("./screens/Help.tsx")).then((m) => ({ default: m.HelpSheet })));
+const DevicesSection = lazy(() => reloadOnce(() => import("./screens/Devices.tsx")).then((m) => ({ default: m.DevicesSection })));
 const DailyLimitSection = lazy(() => reloadOnce(() => import("./screens/Limits.tsx")).then((m) => ({ default: m.DailyLimitSection })));
 const UsernameSection = lazy(() => reloadOnce(() => import("./screens/Username.tsx")).then((m) => ({ default: m.UsernameSection })));
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
@@ -54,6 +55,7 @@ import { AmountUnderstood, formatDay, Icon, InstallBanner, InstallHow, type Noti
 import { balanceNote } from "./lib/connection.ts";
 import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/balanceRead.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
+import { LastUsedStore } from "./lib/forget.ts";
 import { namesOn, USERNAME_LABEL, usernameOf } from "./lib/names.ts";
 import { dateLocale, LANGS, LANGUAGE_NAMES, language, readPick, type Lang } from "./lib/locale.ts";
 import { pickLanguage } from "./i18n/start.ts";
@@ -66,6 +68,7 @@ const invited = new InvitedStore(localStorage);
 const potBlocks = new PotBlocks(localStorage, DEPLOYMENT);
 const potMakers = new PotMakers(localStorage, DEPLOYMENT);
 const lastBalances = new LastBalanceStore(localStorage);
+const lastUsed = new LastUsedStore(localStorage);
 
 type Screen =
   | { kind: "home" }
@@ -302,6 +305,7 @@ function Screens() {
 
   const choose = (address: Address, name: string, credentialId: string) => {
     accounts.upsert({ address, name });
+    lastUsed.touch(address, Date.now());
     credentials.rememberCredential(address, credentialId);
     accounts.setActive(address);
     setActive(accounts.active());
@@ -447,6 +451,12 @@ function Screens() {
           onReceive={() => go({ kind: "receive" })}
           onMoney={(mode) => go({ kind: "money", mode })}
           onRename={renameActive}
+          onRemoved={(removed, name) => {
+            // Removing the account in use leaves no active one: Welcome shows, with the others listed.
+            setActive(accounts.active());
+            setSwitching(false);
+            go({ kind: "home" }, { tone: "ok", text: copy.removedFromPhone(name) });
+          }}
         />
       ) : (
         <Welcome
@@ -570,6 +580,8 @@ function AccountSheet(props: {
   account: StoredAccount;
   hidden: HiddenPot[];
   onUnhide: (potId: string) => void;
+  /** After an account is removed from this phone (screens/Devices.tsx). */
+  onRemoved: (account: Address, name: string) => void;
   /** Choose a username, beside the Account ID. Absent while usernames are off. */
   username?: ReactNode;
   onSwitch: () => void;
@@ -626,6 +638,9 @@ function AccountSheet(props: {
         )}
         <Suspense fallback={null}>
           <DailyLimitSection account={props.account.address} />
+        </Suspense>
+        <Suspense fallback={null}>
+          <DevicesSection current={props.account.address} onRemoved={props.onRemoved} />
         </Suspense>
         <button type="button" className="btn" onClick={() => openHelp()}>
           {copy.helpAndSupport}
@@ -757,6 +772,7 @@ function Home(props: {
   onReceive: () => void;
   onMoney: (mode: "add" | "out") => void;
   onRename: (name: string) => void;
+  onRemoved: (account: Address, name: string) => void;
 }) {
   const { account, connection } = props;
   // A passkey brings back its account but not its name. With usernames on,
@@ -789,6 +805,14 @@ function Home(props: {
   // A payment from this account still being confirmed: the Send screen follows it.
   const [sendInFlight, setSendInFlight] = useState(false);
   const [details, setDetails] = useState(false);
+  // When this account was last used on this phone (Account details, This phone).
+  useEffect(() => {
+    try {
+      lastUsed.touch(account.address, Date.now());
+    } catch {
+      // Storage refused: the date just won't show.
+    }
+  }, [account.address]);
   // A cash out still being confirmed: the Cash out screen follows it.
   const [cashOutInFlight, setCashOutInFlight] = useState(false);
   // A username claim, change or let go still being confirmed: Account details follows it.
@@ -1153,6 +1177,10 @@ function Home(props: {
             choiceChanged();
           }}
           onRename={props.onRename}
+          onRemoved={(removed, name) => {
+            setDetails(false);
+            props.onRemoved(removed, name);
+          }}
           onClose={() => setDetails(false)}
           onSwitch={() => {
             setDetails(false);

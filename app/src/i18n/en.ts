@@ -842,6 +842,24 @@ export const en = {
     `The limit lives in this app. It guards against mistakes and pressure, not against someone with your passkey using other software. Clearing this site's data resets it to ${fallback}.`,
   errDailyLimit: (left: string) => `That's more than your daily limit allows. You can still send ${left} today. Nothing was sent.`,
 
+  // Devices and sessions (lib/forget.ts), in Account details
+  thisPhone: "This phone",
+  signedInHere: "signed in",
+  lastUsed: (when: string) => `Last used ${when}`,
+  notUsedHereYet: "Not used on this phone yet",
+  removeFromPhone: "Remove from this phone",
+  removeTitle: (name: string) => `Remove ${name} from this phone?`,
+  removeLede:
+    "This phone forgets the name, drafts and settings it keeps for this account: contacts, hidden pots, the daily limit and the rest. Drafts not yet made into pots are lost for good. The account and its money stay where they are, and its passkey brings it back.",
+  removeInFlight: "A request from this account is still going through. Wait for it to finish, then remove it.",
+  removedFromPhone: (name: string) => `${name} was removed from this phone. Its passkey brings it back.`,
+  signing: "Signing",
+  signingEachTime: "Every payment asks for your fingerprint. NivPay keeps no signing session open between them.",
+  yourPasskey: "Your passkey",
+  passkeyWhere:
+    "Your passkey lives in your phone's password manager (iCloud Keychain, Google Password Manager or 1Password) and syncs to your other devices signed in to it. To cut off a lost phone, remove it there.",
+  passkeyNoServer: "NivPay keeps no sessions on a server, so it can't list your devices or sign them out.",
+
   // Language (lib/locale.ts), in Account details
   language: "Language",
   languagePhone: "Phone's language",

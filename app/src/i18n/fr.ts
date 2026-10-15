@@ -810,6 +810,23 @@ export const fr: Dictionary = {
     `La limite vit dans cette appli. Elle protège contre les erreurs et la pression, pas contre quelqu'un qui a votre clé d'accès et utilise un autre logiciel. Effacer les données de ce site la remet à ${fallback}.`,
   errDailyLimit: (left: string) => `C'est plus que ce que votre limite quotidienne permet. Vous pouvez encore envoyer ${left} aujourd'hui. Rien n'a été envoyé.`,
 
+  thisPhone: "Ce téléphone",
+  signedInHere: "connecté",
+  lastUsed: (when: string) => `Dernière utilisation le ${when}`,
+  notUsedHereYet: "Pas encore utilisé sur ce téléphone",
+  removeFromPhone: "Retirer de ce téléphone",
+  removeTitle: (name: string) => `Retirer ${name} de ce téléphone ?`,
+  removeLede:
+    "Ce téléphone oublie le nom, les brouillons et les réglages qu'il garde pour ce compte : contacts, cagnottes masquées, limite quotidienne et le reste. Les brouillons pas encore créés en cagnottes sont perdus pour de bon. Le compte et son argent restent où ils sont, et sa clé d'accès le ramène.",
+  removeInFlight: "Une demande de ce compte est encore en cours. Attendez qu'elle se termine, puis retirez-le.",
+  removedFromPhone: (name: string) => `${name} a été retiré de ce téléphone. Sa clé d'accès le ramène.`,
+  signing: "Signature",
+  signingEachTime: "Chaque paiement demande votre empreinte. NivPay ne garde aucune session de signature ouverte entre deux paiements.",
+  yourPasskey: "Votre clé d'accès",
+  passkeyWhere:
+    "Votre clé d'accès vit dans le gestionnaire de mots de passe de votre téléphone (trousseau iCloud, Gestionnaire de mots de passe de Google ou 1Password) et se synchronise avec vos autres appareils connectés. Pour couper un téléphone perdu, retirez-le là-bas.",
+  passkeyNoServer: "NivPay ne garde aucune session sur un serveur, donc NivPay ne peut ni lister vos appareils ni les déconnecter.",
+
   language: "Langue",
   languagePhone: "Langue du téléphone",
   languageHint: "Changer de langue recharge l'appli.",

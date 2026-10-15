@@ -963,6 +963,26 @@ Said honestly:
   contracts know nothing of it.
 * **Clearing the site's data resets it** to the default, $1,000.
 
+## Devices and sessions
+
+Account details has three parts here (`app/src/screens/Devices.tsx`):
+
+* **This phone** lists the accounts on it and when each was last used here,
+  with Remove from this phone. That forgets this phone's name, drafts and
+  settings for that account (contacts, hidden pots, the daily limit, what Home
+  found), after a confirm that says unmade drafts are lost
+  (`app/src/lib/forget.ts`). The account and its money stay; its passkey
+  brings it back. It is refused while a request from that account is in
+  flight, since that request's record is needed to finish it.
+* **Signing.** NivPay keeps no signing session: each signature opens and ends
+  its own (`app/src/lib/passkey.ts`), so every payment asks for the
+  fingerprint, and the screen says so.
+* **Your passkey** lives in the phone's password manager (iCloud Keychain,
+  Google Password Manager or 1Password) and syncs to the person's other
+  devices. To cut off a lost phone, remove it there. NivPay keeps no sessions
+  on a server, so it can't list or sign out other devices, and doesn't
+  pretend to.
+
 ## Languages
 
 NivPay speaks English, French, Spanish and Portuguese. It uses the first
