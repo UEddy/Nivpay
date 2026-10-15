@@ -24,8 +24,9 @@ gas_limit = 150000000
 block_gas_limit = 150000000
 no_match_path = "test/StreamBench.t.sol"
 
-# Needed so the retired benchmark's gas sweep can emit bench/gas.json.
-fs_permissions = [{ access = "read-write", path = "./bench" }]
+# Needed so the retired benchmark's gas sweep can emit bench/gas.json, and so
+# the NivPayNames suite can read the name vectors it shares with the app.
+fs_permissions = [{ access = "read-write", path = "./bench" }, { access = "read", path = "./test/vectors" }]
 
 # The retired streaming benchmark, kept as evidence of process and kept
 # passing. Its N = 10000 measurements deliberately exceed Monad's block gas
