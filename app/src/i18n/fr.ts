@@ -827,6 +827,22 @@ export const fr: Dictionary = {
     "Votre clé d'accès vit dans le gestionnaire de mots de passe de votre téléphone (trousseau iCloud, Gestionnaire de mots de passe de Google ou 1Password) et se synchronise avec vos autres appareils connectés. Pour couper un téléphone perdu, retirez-le là-bas.",
   passkeyNoServer: "NivPay ne garde aucune session sur un serveur, donc NivPay ne peut ni lister vos appareils ni les déconnecter.",
 
+  notifications: "Notifications",
+  notificationsUnread: (n: number) => (n === 0 ? "Notifications" : `Notifications, ${n} non ${n === 1 ? "lue" : "lues"}`),
+  noNotesYet: "Rien pour l'instant.",
+  markAllRead: "Tout marquer comme lu",
+  noteNew: "Nouveau",
+  notesSince: (date: string) =>
+    `Elles commencent le ${date}, quand ce téléphone a lancé les notifications pour la première fois. NivPay les construit à partir de ce qu'il lit pendant que l'appli est ouverte : pas de serveur, pas de notifications push.`,
+  noteReceived: (amount: string, from: string) => `${amount} reçus de ${from}.`,
+  noteChippedIn: (amount: string, pot: string) => `Quelqu'un a mis ${amount} dans ${pot}.`,
+  noteAskYes: (amount: string, pot: string) => `Un paiement de ${amount} depuis ${pot} attend votre oui.`,
+  noteAskClose: (pot: string) => `Une demande de fermer ${pot} plus tôt attend votre oui.`,
+  notePaidOut: (amount: string, pot: string) => `${pot} a versé ${amount}.`,
+  noteClosingSoon: (pot: string) => `${pot} ferme dans moins d'un jour.`,
+  noteClosedShare: (pot: string) => `${pot} est fermée. Votre part est prête à être reprise.`,
+  noteLimitRaised: (limit: string) => `Votre limite quotidienne de ${limit} est maintenant en vigueur.`,
+
   language: "Langue",
   languagePhone: "Langue du téléphone",
   languageHint: "Changer de langue recharge l'appli.",

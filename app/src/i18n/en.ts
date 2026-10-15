@@ -860,6 +860,23 @@ export const en = {
     "Your passkey lives in your phone's password manager (iCloud Keychain, Google Password Manager or 1Password) and syncs to your other devices signed in to it. To cut off a lost phone, remove it there.",
   passkeyNoServer: "NivPay keeps no sessions on a server, so it can't list your devices or sign them out.",
 
+  // Notifications (lib/notes.ts): from what the app reads, while it is open
+  notifications: "Notifications",
+  notificationsUnread: (n: number) => (n === 0 ? "Notifications" : `Notifications, ${n} unread`),
+  noNotesYet: "Nothing yet.",
+  markAllRead: "Mark all as read",
+  noteNew: "New",
+  notesSince: (date: string) =>
+    `These start from ${date}, when this phone first ran notifications. NivPay builds them from what it reads while the app is open: no server, no push messages.`,
+  noteReceived: (amount: string, from: string) => `${amount} came in from ${from}.`,
+  noteChippedIn: (amount: string, pot: string) => `Someone put ${amount} into ${pot}.`,
+  noteAskYes: (amount: string, pot: string) => `A payment of ${amount} from ${pot} is waiting for your yes.`,
+  noteAskClose: (pot: string) => `A request to close ${pot} early is waiting for your yes.`,
+  notePaidOut: (amount: string, pot: string) => `${pot} paid out ${amount}.`,
+  noteClosingSoon: (pot: string) => `${pot} closes within a day.`,
+  noteClosedShare: (pot: string) => `${pot} has closed. Your share is ready to take.`,
+  noteLimitRaised: (limit: string) => `Your daily limit of ${limit} is now in effect.`,
+
   // Language (lib/locale.ts), in Account details
   language: "Language",
   languagePhone: "Phone's language",

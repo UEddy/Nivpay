@@ -828,6 +828,22 @@ export const es: Dictionary = {
     "Tu llave de acceso vive en el gestor de contraseñas de tu teléfono (llavero de iCloud, Gestor de contraseñas de Google o 1Password) y se sincroniza con tus otros dispositivos que lo usan. Para cortar un teléfono perdido, quítalo allí.",
   passkeyNoServer: "NivPay no guarda sesiones en un servidor, así que no puede listar tus dispositivos ni cerrar su sesión.",
 
+  notifications: "Avisos",
+  notificationsUnread: (n: number) => (n === 0 ? "Avisos" : `Avisos, ${n} sin leer`),
+  noNotesYet: "Nada todavía.",
+  markAllRead: "Marcar todo como leído",
+  noteNew: "Nuevo",
+  notesSince: (date: string) =>
+    `Empiezan el ${date}, cuando este teléfono activó los avisos por primera vez. NivPay los crea a partir de lo que lee mientras la app está abierta: sin servidor y sin notificaciones push.`,
+  noteReceived: (amount: string, from: string) => `Llegaron ${amount} de ${from}.`,
+  noteChippedIn: (amount: string, pot: string) => `Alguien puso ${amount} en ${pot}.`,
+  noteAskYes: (amount: string, pot: string) => `Un pago de ${amount} desde ${pot} espera tu sí.`,
+  noteAskClose: (pot: string) => `Una petición para cerrar ${pot} antes espera tu sí.`,
+  notePaidOut: (amount: string, pot: string) => `${pot} pagó ${amount}.`,
+  noteClosingSoon: (pot: string) => `${pot} cierra en menos de un día.`,
+  noteClosedShare: (pot: string) => `${pot} se cerró. Tu parte está lista para recuperarla.`,
+  noteLimitRaised: (limit: string) => `Tu límite diario de ${limit} ya está en vigor.`,
+
   language: "Idioma",
   languagePhone: "Idioma del teléfono",
   languageHint: "Al cambiarlo, la app se vuelve a cargar.",

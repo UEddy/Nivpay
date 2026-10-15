@@ -983,6 +983,30 @@ Account details has three parts here (`app/src/screens/Devices.tsx`):
   on a server, so it can't list or sign out other devices, and doesn't
   pretend to.
 
+## Notifications
+
+A bell on Home shows the unread count and opens a list, newest first
+(`app/src/lib/notes.ts`): money received, someone chipping in to a pot you're
+in, a payment request waiting for your yes, a payment paid out, a pot closing
+within a day, a pot closed with your share ready to take, and a raised daily
+limit now in effect. Tapping one opens the right screen. Read and unread are
+kept per account on this phone.
+
+They are built only from what the app already reads at the finalized block:
+the pots found for the account, the requests waiting for its yes, its own
+pours and limit, and payments coming in (read like Receive reads them, every
+15 seconds while Home is open). No server and no push messages, so they
+appear only while the app is open. Said honestly:
+
+* **The list starts from when this phone first ran the feature**, and says
+  so; nothing earlier is listed.
+* **"A payment paid out" covers pots the account decides on**, where the app
+  already follows each request to its end.
+* **"Someone chipped in" is a pot's total rising** between reads, less the
+  account's own pours; two things in the same few seconds can show as one.
+* **Pots new to the account, or hidden, never notify** (see Protecting
+  people from bad actors).
+
 ## Languages
 
 NivPay speaks English, French, Spanish and Portuguese. It uses the first
@@ -1870,6 +1894,12 @@ Sources:
 * https://docs.monad.xyz/tooling-and-infra/onramps
 
 ## Future work
+
+**System push notifications.** Notifications that reach a phone with the app
+closed need a server that watches the chain for each account, and the
+person's permission for push messages. Both are a step away from "no server
+ever sees an account": the server would learn which accounts belong to which
+phone. To be designed with that in the open, and opt in.
 
 **More languages, with native speakers.** Yoruba, Igbo, Hausa and Nigerian
 Pidgin, for the people NivPay was first built for, and Arabic, which reads

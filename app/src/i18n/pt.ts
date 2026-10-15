@@ -828,6 +828,22 @@ export const pt: Dictionary = {
     "Sua chave de acesso fica no gerenciador de senhas do celular (Porta-chaves do iCloud, Gerenciador de senhas do Google ou 1Password) e é sincronizada com seus outros aparelhos conectados a ele. Para cortar um celular perdido, remova-o lá.",
   passkeyNoServer: "A NivPay não guarda sessões em um servidor, então não pode listar seus aparelhos nem desconectá-los.",
 
+  notifications: "Avisos",
+  notificationsUnread: (n: number) => (n === 0 ? "Avisos" : `Avisos, ${n} não ${n === 1 ? "lido" : "lidos"}`),
+  noNotesYet: "Nada ainda.",
+  markAllRead: "Marcar tudo como lido",
+  noteNew: "Novo",
+  notesSince: (date: string) =>
+    `Eles começam em ${date}, quando este celular ativou os avisos pela primeira vez. A NivPay cria os avisos a partir do que lê enquanto o app está aberto: sem servidor e sem notificações push.`,
+  noteReceived: (amount: string, from: string) => `Chegaram ${amount} de ${from}.`,
+  noteChippedIn: (amount: string, pot: string) => `Alguém colocou ${amount} em ${pot}.`,
+  noteAskYes: (amount: string, pot: string) => `Um pagamento de ${amount} de ${pot} está esperando seu sim.`,
+  noteAskClose: (pot: string) => `Um pedido para fechar ${pot} antes está esperando seu sim.`,
+  notePaidOut: (amount: string, pot: string) => `${pot} pagou ${amount}.`,
+  noteClosingSoon: (pot: string) => `${pot} fecha em menos de um dia.`,
+  noteClosedShare: (pot: string) => `${pot} fechou. Sua parte está pronta para pegar.`,
+  noteLimitRaised: (limit: string) => `Seu limite diário de ${limit} já está valendo.`,
+
   language: "Idioma",
   languagePhone: "Idioma do celular",
   languageHint: "Ao mudar, o app recarrega.",

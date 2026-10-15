@@ -31,7 +31,12 @@ export type AskScan = {
   /** Requests below this number have been read once. */
   checkedUpTo: number;
   open: OpenRequest[];
+  /** Requests that were open on the poll before and aren't any more, with how they ended. This poll only. */
+  ended?: EndedRequest[];
 };
+
+/** 1 Executed (paid, or closed early), 2 Cancelled, 3 Expired: proposalInfo's status, or 3 once past its time. */
+export type EndedRequest = { proposalId: string; potId: string; kind: number; payee: number; amount: string; status: number };
 
 export const EMPTY_ASK_SCAN: AskScan = { checkedUpTo: 0, open: [] };
 
@@ -90,7 +95,17 @@ export async function findOpenRequests(reader: AskReader, previous: AskScan, dec
     });
   });
   open.sort((a, b) => Number(b.proposalId) - Number(a.proposalId));
-  return { checkedUpTo: to, open };
+  const stillOpen = new Set(open.map((r) => r.proposalId));
+  const ended: EndedRequest[] = previous.open
+    .filter((r) => !stillOpen.has(r.proposalId))
+    .flatMap((r) => {
+      const i = ids.indexOf(Number(r.proposalId));
+      const info = infos[i];
+      if (!info) return [];
+      const status = info.status === 0 ? 3 : info.status;
+      return [{ proposalId: r.proposalId, potId: r.potId, kind: r.kind, payee: r.payee, amount: r.amount, status }];
+    });
+  return { checkedUpTo: to, open, ended };
 }
 
 /** Open requests this account hasn't said yes to: the ones Home asks it about. */

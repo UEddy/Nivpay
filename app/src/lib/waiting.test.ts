@@ -112,3 +112,19 @@ test("a pot's creation block is found once by bisecting the pot count, then reme
   kv.setItem("nivpay.potblocks.v1.ausd", JSON.stringify({ "0": "1000", x: "1", "2": 7 }));
   assert.deepEqual(blocks.all(), { "0": "1000" }, "anything malformed is ignored");
 });
+
+test("a request that leaves the open list says how it ended, once", async () => {
+  const all = [info(), info(), info()];
+  const first = await findOpenRequests(reader(all), EMPTY_ASK_SCAN, new Set(["0"]));
+  assert.deepEqual(first.ended, [], "nothing ended on the first look");
+  all[0] = info({ status: 1 });
+  all[1] = info({ status: 2 });
+  const next = await findOpenRequests(reader(all, NOW + 1_001n), first, new Set(["0"]));
+  assert.deepEqual(
+    next.ended?.map((e) => [e.proposalId, e.status]).sort(),
+    [["0", 1], ["1", 2], ["2", 3]],
+    "paid, withdrawn, and still pending but past its time counts as expired",
+  );
+  const after = await findOpenRequests(reader(all, NOW + 1_001n), next, new Set(["0"]));
+  assert.deepEqual(after.ended, [], "said once, not again");
+});

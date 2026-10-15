@@ -1807,3 +1807,33 @@
 .get-help {
   font-size: 12px;
 }
+
+/* Notifications: a bell beside Account details, with the unread count. */
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bell {
+  position: relative;
+  color: var(--ink);
+}
+
+.bell-count {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font: 600 11px/18px var(--font-body);
+  text-align: center;
+}
+
+.note.unread .name {
+  font-weight: 700;
+}

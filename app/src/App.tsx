@@ -1,12 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { encodeFunctionData, type Address, type Hex } from "viem";
+import { encodeFunctionData, type Address, type Hex, type Log } from "viem";
 import { copy, ERROR_CODES, offlineMessage } from "./copy.ts";
 import { CredentialStore } from "./lib/credentials.ts";
 import { AccountStore, cleanName, NAME_MAX, shownName, type StoredAccount } from "./lib/accounts.ts";
 import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
-import { AUSD, AUSD_FAUCET, TESTUSD } from "./lib/config.ts";
+import { AUSD, AUSD_FAUCET, CTK, LOG_PAGE_BLOCKS, TESTUSD } from "./lib/config.ts";
 import { DEPLOYMENT, POTS, POTS_DEPLOY_BLOCK } from "./lib/deployment.ts";
 import { DraftStore, newDraft } from "./lib/draft.ts";
 import { findPots, ScanStore, type FoundPot, type Role, type ScanState } from "./lib/discover.ts";
@@ -29,7 +29,11 @@ import { PotStore, rememberPotLink, type StoredPot } from "./lib/potstore.ts";
 import type { Step } from "./lib/send.ts";
 import { latestReceipt, receiptUrl, rememberReceipt } from "./lib/receipts.ts";
 import { CURRENCY_LABEL } from "./lib/settle.ts";
-import { SEND_LABEL } from "./lib/transfer.ts";
+import { incomingFrom, incomingSource, SEND_LABEL, withFloor } from "./lib/transfer.ts";
+import { PotFeed } from "./lib/feed.ts";
+import { idbFeedStore } from "./lib/idb.ts";
+import { LimitStore, settle } from "./lib/limits.ts";
+import { fromArrivals, fromPoll, markAllRead, markRead, NotesStore, start as startNotes, unread, type Note, type NotesState, type PollInputs } from "./lib/notes.ts";
 import { CASHOUT_LABEL } from "./lib/rampDesk.ts";
 import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
 // Every screen but Home loads when it is first opened, and so does the code
@@ -45,6 +49,7 @@ const TimelineScreen = lazy(() => reloadOnce(() => import("./screens/Timeline.ts
 const CloseScreen = lazy(() => reloadOnce(() => import("./screens/Close.tsx")).then((m) => ({ default: m.CloseScreen })));
 const MoneyScreen = lazy(() => reloadOnce(() => import("./screens/Money.tsx")).then((m) => ({ default: m.MoneyScreen })));
 const HelpSheet = lazy(() => reloadOnce(() => import("./screens/Help.tsx")).then((m) => ({ default: m.HelpSheet })));
+const NotesSheet = lazy(() => reloadOnce(() => import("./screens/Notes.tsx")).then((m) => ({ default: m.NotesSheet })));
 const DevicesSection = lazy(() => reloadOnce(() => import("./screens/Devices.tsx")).then((m) => ({ default: m.DevicesSection })));
 const DailyLimitSection = lazy(() => reloadOnce(() => import("./screens/Limits.tsx")).then((m) => ({ default: m.DailyLimitSection })));
 const UsernameSection = lazy(() => reloadOnce(() => import("./screens/Username.tsx")).then((m) => ({ default: m.UsernameSection })));
@@ -69,6 +74,17 @@ const potBlocks = new PotBlocks(localStorage, DEPLOYMENT);
 const potMakers = new PotMakers(localStorage, DEPLOYMENT);
 const lastBalances = new LastBalanceStore(localStorage);
 const lastUsed = new LastUsedStore(localStorage);
+
+/** The dollar this deployment pays in, for notifications of money coming in. */
+const DOLLAR_FOR_NOTES: Address = DEPLOYMENT === "ausd" ? AUSD : TESTUSD;
+
+/** A pot to open by its number: its link on this phone, else its creation block alone. Null if neither is known yet. */
+function potToOpen(potId: string): StoredPot | null {
+  const known = pots.get(DEPLOYMENT, potId);
+  if (known) return known;
+  const block = potBlocks.get(potId);
+  return block ? { deployment: DEPLOYMENT, potId, block, fragment: "", name: "", addedAt: 0 } : null;
+}
 
 type Screen =
   | { kind: "home" }
@@ -805,6 +821,72 @@ function Home(props: {
   // A payment from this account still being confirmed: the Send screen follows it.
   const [sendInFlight, setSendInFlight] = useState(false);
   const [details, setDetails] = useState(false);
+  // Notifications (lib/notes.ts), per account on this phone.
+  const owner = account.address;
+  const notesStore = useMemo(() => new NotesStore(localStorage, DEPLOYMENT, owner), [owner]);
+  const [notes, setNotes] = useState<NotesState>(() => notesStore.get());
+  const [notesOpen, setNotesOpen] = useState(false);
+  useEffect(() => setNotes(notesStore.get()), [notesStore]);
+  const unreadCount = unread(notes);
+  const onPoll = useCallback(
+    (inputs: Omit<PollInputs, "now" | "pours" | "raised">) => {
+      try {
+        const limit = settle(new LimitStore(localStorage, DEPLOYMENT, owner).get(), Date.now());
+        setNotes(notesStore.update((s) => fromPoll(s, { ...inputs, now: Date.now(), pours: limit.spends.filter((x) => x.kind === "pour"), raised: limit.raised })));
+      } catch {
+        // Storage refused: no notifications this time.
+      }
+    },
+    [owner, notesStore],
+  );
+  // Payments coming in, read like Receive reads them but less often, from where the list started.
+  useEffect(() => {
+    let live = true;
+    const feeds: PotFeed[] = [];
+    const finalizedBlock = async () => (await readClient.getBlock({ blockTag: "finalized" })).number;
+    void (async () => {
+      try {
+        const first = await finalizedBlock();
+        if (!live) return;
+        const started = notesStore.update((s) => startNotes(s, Date.now(), first));
+        setNotes(started);
+        const floor = BigInt(started.startBlock ?? first);
+        const watched: { asset: Address; decimals: number; symbol: string }[] = [{ asset: DOLLAR_FOR_NOTES, decimals: 6, symbol: "$" }];
+        if (DEPLOYMENT === "ausd") {
+          const [decimals, symbol] = await Promise.all([
+            readClient.readContract({ address: CTK, abi: ERC20_READ_ABI, functionName: "decimals" }),
+            readClient.readContract({ address: CTK, abi: ERC20_READ_ABI, functionName: "symbol" }),
+          ]);
+          watched.push({ asset: CTK, decimals, symbol });
+        }
+        if (!live) return;
+        for (const w of watched) {
+          const source = incomingSource(w.asset, owner, finalizedBlock, (params) => readClient.request({ method: "eth_getLogs", params: [params] }) as Promise<Log[]>);
+          const feed = new PotFeed(source, withFloor(idbFeedStore(`notes-in:${w.asset}:${owner}`), floor), floor, { pageSize: LOG_PAGE_BLOCKS, parallel: 2, everyMs: 15_000 });
+          feeds.push(feed);
+          feed.start((_all, added) => {
+            const arrivals = incomingFrom(added, owner).map((a) => ({ ...a, decimals: w.decimals, symbol: w.symbol }));
+            if (live && arrivals.length) setNotes(notesStore.update((s) => fromArrivals(s, arrivals, Date.now())));
+          });
+        }
+      } catch {
+        // Reads failed: Home's own reads say so; notifications just wait for the next open.
+      }
+    })();
+    return () => {
+      live = false;
+      for (const f of feeds) f.stop();
+    };
+  }, [owner, notesStore]);
+  const openNote = (n: Note) => {
+    setNotes(notesStore.update((s) => markRead(s, n.id)));
+    setNotesOpen(false);
+    const pot = n.potId === undefined ? null : potToOpen(n.potId);
+    if (n.kind === "received") props.onReceive();
+    else if (n.kind === "limitRaised") setDetails(true);
+    else if ((n.kind === "askYes" || n.kind === "askClose") && pot && n.proposalId) props.onOpenRequest(pot, BigInt(n.proposalId));
+    else if (pot) props.onOpenPot(pot);
+  };
   // When this account was last used on this phone (Account details, This phone).
   useEffect(() => {
     try {
@@ -1011,9 +1093,19 @@ function Home(props: {
           {account.name && <p className="account-line">{copy.accountIdLine(account.address)}</p>}
           <TestModeBadge />
         </div>
-        <button className="btn ghost small" onClick={() => setDetails(true)}>
-          {copy.accountDetails}
-        </button>
+        <div className="top-actions">
+          <button type="button" className="icon-btn bell" aria-label={copy.notificationsUnread(unreadCount)} onClick={() => setNotesOpen(true)}>
+            <Icon name="bell" size={22} />
+            {unreadCount > 0 && (
+              <span className="bell-count" aria-hidden="true">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </button>
+          <button className="btn ghost small" onClick={() => setDetails(true)}>
+            {copy.accountDetails}
+          </button>
+        </div>
       </header>
 
       {props.notice && <NoticeLine notice={props.notice} />}
@@ -1107,6 +1199,7 @@ function Home(props: {
       )}
 
       <YourPots
+        onPoll={onPoll}
         account={account}
         connection={props.connection}
         choices={choices}
@@ -1161,6 +1254,11 @@ function Home(props: {
         {result && <NoticeLine notice={result} />}
       </section>
 
+      {notesOpen && (
+        <Suspense fallback={null}>
+          <NotesSheet state={notes} onOpen={openNote} onReadAll={() => setNotes(notesStore.update(markAllRead))} onClose={() => setNotesOpen(false)} />
+        </Suspense>
+      )}
       {details && (
         <AccountSheet
           account={account}
@@ -1358,6 +1456,8 @@ function MatchedRow(props: { row: AnsweredInvite; pot: FoundPot | undefined; dec
 
 /** Pots this account is making, pots made or opened on this phone, invites it answered, and pots it is named on. */
 function YourPots(props: {
+  /** Each poll's reads, for notifications (lib/notes.ts): only pots that are this account's own. */
+  onPoll: (inputs: Omit<PollInputs, "now" | "pours" | "raised">) => void;
   account: StoredAccount;
   connection: ReturnType<typeof useConnection>;
   choices: PotChoiceStore;
@@ -1408,6 +1508,12 @@ function YourPots(props: {
   };
   // A pot that is new to you, or hidden, never asks for your yes on Home.
   const waitingMine = needingMyYes(asks, props.account.address).filter((r) => !notYours.has(r.potId));
+  // Notifications from the same reads: never about a pot that is new to this account or hidden.
+  const { onPoll } = props;
+  useEffect(() => {
+    onPoll({ found: scan.found.filter((p) => !notYours.has(p.potId)), waiting: waitingMine, ended: (asks.ended ?? []).filter((e) => !notYours.has(e.potId)) });
+    // Once per poll: scan and asks are new objects after each one.
+  }, [scan, asks]);
   const start = () => {
     const draft = newDraft(props.account.address, phoneTimeZone(), Date.now(), (n) => crypto.getRandomValues(new Uint8Array(n)));
     drafts.put(draft);
