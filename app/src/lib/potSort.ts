@@ -15,7 +15,9 @@ import type { FoundPot } from "./discover.ts";
  *  - its maker is one of this phone's accounts, or a saved contact
  *  - you chose Keep
  *
- * Everything else is new to you, unless you chose Hide. New pots get no badge
+ * Everything else is new to you, unless you chose Hide. Hide holds even if
+ * the maker later becomes a contact; only opening the pot's link or putting
+ * money in brings a hidden pot back. New pots get no badge
  * and no announcement, and their requests for a yes are not shown on Home.
  * Nothing here changes what a pot can do: it only decides where Home lists it.
  */
@@ -45,8 +47,9 @@ export function isYours(pot: Pick<FoundPot, "potId" | "roles">, facts: SortFacts
 export function sortFound<T extends Pick<FoundPot, "potId" | "roles">>(found: T[], facts: SortFacts): Sorted<T> {
   const out: Sorted<T> = { yours: [], fresh: [], hidden: [] };
   for (const p of found) {
-    if (isYours(p, facts)) out.yours.push(p);
-    else if (facts.hidden.has(p.potId)) out.hidden.push(p);
+    const hidden = facts.hidden.has(p.potId) && !facts.opened.has(p.potId) && !p.roles.includes("putIn");
+    if (hidden) out.hidden.push(p);
+    else if (isYours(p, facts)) out.yours.push(p);
     else out.fresh.push(p);
   }
   return out;

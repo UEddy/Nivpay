@@ -887,8 +887,10 @@ with no badge and no announcement, and its requests never show under
 it ("account ending 7bC1") and your role, with three buttons:
 
 * **Keep** moves it to Your pots.
-* **Hide** takes it off Home on this phone, per account and per deployment.
-  "Hidden pots" under Account details lists them, with Show again.
+* **Hide** takes it off Home on this phone, per account and per deployment,
+  and it stays off even if its maker later becomes a contact. Only opening
+  its link or putting money in brings it back. "Hidden pots" under Account
+  details lists them, with Show again.
 * **Report** asks for a reason ("Scam", "Pretending to be someone", "Spam" or
   "Not for me"), sends it to `/api/report`, then hides the pot.
 

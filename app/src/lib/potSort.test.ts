@@ -39,10 +39,10 @@ test("each reason on its own makes a pot yours", () => {
   for (const [why, facts, roles] of cases) assert.deepEqual(ids(sortFound([pot("7", roles)], { ...none, ...facts }).yours), ["7"], why);
 });
 
-test("Hide takes a new pot off Home, but never one that is yours", () => {
-  const facts = { ...none, hidden: new Set(["7", "8"]), opened: new Set(["8"]) };
-  const s = sortFound([pot("7"), pot("8"), pot("9")], facts);
-  assert.deepEqual([ids(s.yours), ids(s.fresh), ids(s.hidden)], [["8"], ["9"], ["7"]]);
+test("Hide holds even once the maker is a contact; opening its link or putting money in brings it back", () => {
+  const facts = { ...none, hidden: new Set(["6", "7", "8"]), opened: new Set(["8"]), trusted: [ME, FRIEND], makers: { "7": FRIEND } };
+  const s = sortFound([pot("6", ["decides", "putIn"]), pot("7"), pot("8"), pot("9")], facts);
+  assert.deepEqual([ids(s.yours), ids(s.fresh), ids(s.hidden)], [["6", "8"], ["9"], ["7"]]);
 });
 
 test("Keep and Hide are stored per account and deployment, exclusive, and Hide can be undone", () => {
