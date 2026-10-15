@@ -1,5 +1,6 @@
 import { copy } from "../copy.ts";
 import { replyProgress, type Draft } from "./draft.ts";
+import { dateLocale } from "./locale.ts";
 
 /**
  * What the make a pot screen shows at each stage, worked out in one place so
@@ -74,7 +75,7 @@ const STEP_LABEL: Record<CreateStep, string> = {
   landing: copy.createConfirming,
 };
 
-const listFormat = new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" });
+const listFormat = new Intl.ListFormat(dateLocale(), { style: "long", type: "conjunction" });
 
 /** The progress line: who has replied and who the draft is still waiting for. */
 export function progressLine(draft: Draft): string {

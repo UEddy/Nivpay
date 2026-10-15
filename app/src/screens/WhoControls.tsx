@@ -6,8 +6,9 @@ import { formatAmount } from "../lib/money.ts";
 import { potRisks } from "../lib/potRisks.ts";
 import { useUsernames, withUsernameOf } from "./Username.tsx";
 import type { PotState } from "../lib/potview.ts";
+import { dateLocale } from "../lib/locale.ts";
 
-const whenFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const whenFormat = new Intl.DateTimeFormat(dateLocale(), { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
 /**
  * Who decides, who can be paid and when it closes, all read from the chain,

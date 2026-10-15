@@ -1,6 +1,7 @@
 import { isAddressEqual, type Address, type Hex } from "viem";
 import { copy } from "../copy.ts";
 import { byChainOrder, type PotEvent } from "./feed.ts";
+import { dateLocale } from "./locale.ts";
 
 /**
  * The pot's story (Live-Timeline), from its finalized events only. Every row
@@ -49,7 +50,7 @@ export type StoryNames = {
 };
 
 const key = (e: PotEvent) => `${e.tx}:${e.logIndex}`;
-const list = new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" });
+const list = new Intl.ListFormat(dateLocale(), { style: "long", type: "conjunction" });
 
 /** Rows in chain order, oldest first. */
 export function storyRows(events: PotEvent[], n: StoryNames): StoryRow[] {

@@ -3,6 +3,7 @@ import { copy, ERROR_CODES } from "../copy.ts";
 import { AppError } from "./errors.ts";
 import type { PotEvent } from "./feed.ts";
 import { formatAmount } from "./money.ts";
+import { dateLocale } from "./locale.ts";
 
 /**
  * Paying from a pot (docs/APP-CONTRACT-MAP.md, screen 3). A decider asks for
@@ -324,7 +325,7 @@ const askedAtFormats = new Map<string, Intl.DateTimeFormat>();
 export function askedAt(seconds: bigint, timeZone: string): string {
   let f = askedAtFormats.get(timeZone);
   if (!f) {
-    f = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone });
+    f = new Intl.DateTimeFormat(dateLocale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone });
     askedAtFormats.set(timeZone, f);
   }
   return f.format(new Date(Number(seconds) * 1000));
@@ -332,7 +333,7 @@ export function askedAt(seconds: bigint, timeZone: string): string {
 
 /** A person's local time now, "12:40", for the map. */
 export function localTime(nowMs: number, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone }).format(new Date(nowMs));
+  return new Intl.DateTimeFormat(dateLocale(), { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone }).format(new Date(nowMs));
 }
 
 /**

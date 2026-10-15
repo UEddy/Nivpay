@@ -54,6 +54,7 @@ import { balanceNote } from "./lib/connection.ts";
 import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/balanceRead.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
 import { namesOn, USERNAME_LABEL, usernameOf } from "./lib/names.ts";
+import { dateLocale } from "./lib/locale.ts";
 
 const accounts = new AccountStore(localStorage);
 const credentials = new CredentialStore(localStorage);
@@ -1159,7 +1160,7 @@ function Home(props: {
 
 const FIND_POTS_EVERY_MS = 10_000;
 /** When a request must be answered by, in the phone's own time. */
-const answerByFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const answerByFormat = new Intl.DateTimeFormat(dateLocale(), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const livePots = potsReader(readClient, POTS);
 const liveCreators = creatorReader(readClient, POTS);
 const liveAsks = askReader(readClient, POTS);

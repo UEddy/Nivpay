@@ -13,6 +13,7 @@ import type { Step } from "../lib/send.ts";
 import { availability, normalizeUsername, usernameProblem, type Availability, type UsernameProblem } from "../lib/usernames.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { NoticeLine, type Notice } from "./ui.tsx";
+import { dateLocale } from "../lib/locale.ts";
 
 /**
  * Usernames on screen (README, "Usernames for accounts"). Everything here is
@@ -34,7 +35,7 @@ function fromLabel(label: string): { kind: Kind; name: string } | null {
 /** An Account ID. Named so, since what a screen file says is checked for words people mustn't see. */
 type Account = Address;
 
-const dayFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const dayFormat = new Intl.DateTimeFormat(dateLocale(), { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 /** A time in seconds as "Thu 14 Jan 2027", in the phone's own time. */
 export const dayOf = (seconds: bigint) => dayFormat.format(new Date(Number(seconds) * 1000)).replace(",", "");
 

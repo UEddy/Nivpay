@@ -6,6 +6,7 @@ import type { ShareResult } from "../lib/share.ts";
 import { LastCodeStore } from "../lib/support.ts";
 import { amountForField, formatAmount, readAmount } from "../lib/money.ts";
 import { BANNER_MS, currentPlatform, InstallStore, installWay, onInstallChange, PausableTimer, promptInstall, shouldShowBanner, type InstallWay } from "../lib/install.ts";
+import { dateLocale } from "../lib/locale.ts";
 
 export type Notice = { tone: "ok" | "bad"; text: string; code?: number };
 
@@ -207,14 +208,14 @@ export function CopyLinkButton(props: { onCopy: () => Promise<ShareResult>; clas
   );
 }
 
-const listFormat = new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" });
+const listFormat = new Intl.ListFormat(dateLocale(), { style: "long", type: "conjunction" });
 
 /** "Caterer and Event hall", "A, B and C". */
 export function andList(items: string[]): string {
   return listFormat.format(items);
 }
 
-const dayFormat = new Intl.DateTimeFormat("en-GB", {
+const dayFormat = new Intl.DateTimeFormat(dateLocale(), {
   weekday: "short",
   day: "numeric",
   month: "short",

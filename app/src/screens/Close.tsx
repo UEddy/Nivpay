@@ -26,12 +26,13 @@ import { PotMap, type Coin, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { layersOf, peopleOf } from "./Request.tsx";
 import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, STOPPED, useCancellable, type Notice } from "./ui.tsx";
 import { beforePasskey } from "../lib/cancel.ts";
+import { dateLocale } from "../lib/locale.ts";
 
 type Action = "take" | "ask close";
 const FLIGHT_MS = 900;
 const blockTimes = new BlockTimes(localStorage, DEPLOYMENT);
-const dayFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
-const whenFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const dayFormat = new Intl.DateTimeFormat(dateLocale(), { day: "numeric", month: "short" });
+const whenFormat = new Intl.DateTimeFormat(dateLocale(), { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
 /** Close and split (docs/design/Live-Close.dc.html): the closing date, each share, and taking yours out. */
 export function CloseScreen(props: {

@@ -28,8 +28,9 @@ import { mapLines } from "./mapNames.ts";
 import { factsOf } from "./Request.tsx";
 import { AmountUnderstood, andList, copyLink, CopyLinkButton, Icon, type Notice, NoticeLine, shareLink, Sheet, STOPPED, useCancellable, useSlowStepLine } from "./ui.tsx";
 import { beforePasskey } from "../lib/cancel.ts";
+import { dateLocale } from "../lib/locale.ts";
 
-const orList = new Intl.ListFormat("en-GB", { style: "long", type: "disjunction" });
+const orList = new Intl.ListFormat(dateLocale(), { style: "long", type: "disjunction" });
 const FLIGHT_MS = 900;
 
 /** Whole dollars while a number moves, exact at rest (docs/MOTION.md). */

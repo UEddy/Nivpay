@@ -22,10 +22,11 @@ import { mapLines } from "./mapNames.ts";
 import { PotMap, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { factsOf, layersOf, peopleOf } from "./Request.tsx";
 import { Icon, NoticeLine, type Notice } from "./ui.tsx";
+import { dateLocale } from "../lib/locale.ts";
 
 const blockTimes = new BlockTimes(localStorage, DEPLOYMENT);
 const ORDER_KEY = "nivpay.storyorder.v1";
-const dayFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+const dayFormat = new Intl.DateTimeFormat(dateLocale(), { day: "numeric", month: "short" });
 
 function savedOrder(): Order {
   try {
