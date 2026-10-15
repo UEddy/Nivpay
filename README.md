@@ -296,6 +296,10 @@ Monadscan shows verified source for all of Agora's contracts here, with the
 names and match kinds in the table above (read from its public pages on 10
 Oct 2026).
 
+NivPayNames, the username registry, is built and tested but not deployed yet;
+see [Usernames for accounts](#usernames-for-accounts). Its row goes in the
+table above once it is.
+
 The three NivPay contracts were deployed from
 `0x7EAf7f3e330ac388A0e951e80957B7274597297c`. Their deploy transactions, from
 the committed broadcast receipts under `broadcast/*/10143/`:
@@ -929,14 +933,134 @@ pays, a payment can go out the moment it is asked, before anyone sees it. A cont
 helps only if the person saved the right account in the first place, and a
 report is read by a person, later; nothing acts on it automatically.
 
+## Usernames for accounts
+
+An account is a 42 character Account ID, and the names people see ("Idara",
+"the caterer") are labels signed inside pot and request links: whoever made
+the link signs the name together with the account it belongs to, and the app
+shows it only in that link's context. A name is never looked up from, or
+trusted because of, the account alone.
+
+A username lets someone pay `@idara` without a link. It comes with two costs,
+and the design answers each:
+
+* **Squatting and impersonation.** Names are first come, first served.
+  Someone can claim `@caterer`, or a name one letter away from a real
+  person's. So names are strict (no look-alike letters from other
+  alphabets), names close to NivPay's own are reserved, and the first payment
+  to a name asks for the last 4 characters of the Account ID, as a pasted ID
+  does.
+* **A public name links an identity to a balance.** Anyone who resolves a
+  name can read that account's balance and every payment it has made or
+  received. So a username is opt in, never assigned, and every flow keeps
+  working for people who never take one. The screen says so before a name is
+  claimed.
+
+**Status.** Built and tested; the registry is not deployed yet. Until its
+address is set in `app/src/lib/config.ts` (`NAMES`, with `NAMES_DEPLOY_BLOCK`),
+the app hides every username feature and works exactly as before.
+
+### What was built
+
+1. **NivPayNames** (`src/NivPayNames.sol`), a new contract separate from
+   NivPayPots, which stays exactly as deployed. It maps a username to an
+   Account ID and back, one name per account. Only the account itself can
+   claim, change or let go of its name: every write reads `msg.sender`, so
+   nobody can point a name at someone else. There is no owner, no admin, no
+   pause, no upgrade, no fee and no payable function.
+   * `claim(name)` takes a name. If the caller already has one, the old name
+     is released in the same call. `release()` gives it up.
+   * Views: `accountOf(name)`, `nameOf(account)`, `availableAt(name)` (0 if
+     free now, the end of its hold if recently released, never if held or
+     not allowed) and `releasedBy(name)`.
+   * Events: `NameClaimed(account, name)` and
+     `NameReleased(account, name, availableAt)`.
+2. **Strict names**, checked in the contract: 3 to 20 characters, only `a`
+   to `z`, `0` to `9` and `_`, starting with a letter, no `__`, not ending in
+   `_`. Reserved for good: `nivpay`, `support`, `help`, `admin`, `official`,
+   `team`, `security`, `staff`, `agora`, `monad`, `mera`, and any name
+   containing `nivpay`. The phone has the same rules in
+   `app/src/lib/usernames.ts`, and both test suites read one file of sample
+   names, `test/vectors/usernames.json`, so the two can never disagree.
+3. **A 90 day hold.** A name that is let go, or left behind by a change,
+   can't be claimed by anyone else for 90 days (`HOLD_PERIOD`), so it can't
+   be taken over the moment it is released. The account that released it can
+   take it back at any time.
+4. **Choose a username, in Account details**, beside the Account ID. As the
+   person types, the screen says whether the name is available, taken, not
+   allowed (and why), or free again on a given date. Before claiming it says
+   plainly that anyone who knows the name can see this account's balance and
+   payments, that letting the name go later doesn't erase payments already
+   made, and that a name let go is held for 90 days. Claim, Change and Let go
+   each take one fingerprint through the usual send flow, with a `username`
+   write label so a reload picks a change in flight back up. The name shows
+   only once the change is final.
+5. **Paying `@idara`.** Send to takes a username as well as an Account ID.
+   The phone looks the name up at the finalized block. The first payment to
+   a name asks for the last 4 characters of the Account ID, which the person
+   gets from the payee, as with a pasted ID; only once they match does the
+   screen show "@idara, account ending 7bC1". When a payment to the name is
+   final, the pair (name and account) is remembered on this phone and not
+   asked about again. If the name later points at a different account, the
+   payment stops before anything is signed: "@idara belongs to a different
+   account than the one you paid before. Nothing was sent." The name is
+   checked again right before signing. The first time and name clash
+   warnings from [Protecting people from bad actors](#protecting-people-from-bad-actors)
+   still apply.
+6. **Names in pots stay signed.** A username shows beside a name, as
+   "Idara (@idara)", in Who controls this pot, payment requests, the pot's
+   story and Receive; never in place of it. A pot's payees stay fixed Account
+   IDs: a username can never change who a pot can pay. Receive shows "Your
+   username: @eddy".
+7. **A name that comes back from the passkey.** When an account signs in on
+   a phone with no name for it (a new phone, or cleared site data), the app
+   reads its username and uses it as the name, instead of asking.
+
+Every read is at the finalized block, and names are read in batches through
+Multicall3, as discovery reads pots.
+
+### NivPayNames, each claim and the line that proves it
+
+Checked against `src/NivPayNames.sol` at this commit.
+
+| Claim | Where |
+| --- | --- |
+| No owner or admin, no roles, nothing imported | the contract imports nothing; no `owner`, `Ownable` or `AccessControl` anywhere |
+| Nothing can be set after deploy | the only constants are `MIN_LENGTH` 3, `MAX_LENGTH` 20 (30 to 31) and `HOLD_PERIOD` 90 days (35); there is no setter, no pause, no `delegatecall`, no assembly, no `payable` function, no `receive` or `fallback` |
+| Only an account changes its own name | a name is written only for `msg.sender`: set in `claim` (85 to 86), released by `_release(msg.sender)` from `claim` (83) and `release` (95) |
+| A name someone holds can't be taken | `claim` refuses a held name (79) |
+| The rules are checked on chain | `claim` refuses a name that breaks them (74) or is reserved (75); the rules are `isWellFormed` (144) and `isReserved` (162), reserving any name containing `nivpay` (169) |
+| One name per account | claiming a second releases the first in the same call (83) |
+| A released name is held for 90 days | `_release` holds it until now plus `HOLD_PERIOD` (101) for the account that released it (104); `claim` refuses anyone else until then (81) |
+
+Four deliberate bugs were run against the names suite before this was
+written, each reverted after: removing the hold, holding a name against the
+account that released it, allowing a trailing `_`, and letting a held name
+be claimed. Each failed two or three tests.
+
+### Disputes, and squatting: decisions before mainnet
+
+**Disputes are the open question.** A registry with no admin can't take a
+name back from a squatter; one with an admin adds a party who can move names.
+NivPayNames has no admin, relying on the last 4 check and the remembered
+pairing, and this is revisited before mainnet.
+
+**Squatting is a decision to make before mainnet.** On testnet a name costs
+only the gas to claim it, so one person can claim many. Options: a small
+refundable deposit to claim a name, returned when it is let go, which makes
+holding hundreds of names cost something without charging honest users; a
+limit per account is already there (one name each), but accounts are free to
+make. Whatever is chosen has to keep the registry free of an admin, or say
+plainly who the admin is.
+
 ## Tests
 
 ```powershell
 forge test
 ```
 
-166 test cases. The one skip is the faucet test, which skips only when Agora's public
-faucet is out of stock (see below). The fork tests need network access; the rest
+192 test cases, all passing on 15 Oct 2026 with none skipped. The faucet test
+skips only when Agora's public faucet is out of stock (see below). The fork tests need network access; the rest
 do not.
 
 | Suite | What it covers |
@@ -949,6 +1073,9 @@ do not.
 | `test/PotsInvariant.t.sol` | invariants and ten adversarial attack categories |
 | `test/PotsFork.t.sol` | the whole lifecycle against real AUSD on Monad testnet |
 | `test/NivPayTestDollar.t.sol` | the TESTUSD test token: metadata, open mint, the per call mint cap, permit, refusal of every non test chain |
+| `test/NamesCore.t.sol` | NivPayNames: every name rule, reserved names, claim, change, release, the 90 day hold and taking a name back, only an account changing its own name; reads `test/vectors/usernames.json`, as the app's tests do |
+| `test/NamesFuzz.t.sol` | NivPayNames: the name check against a reference written separately, on random input and on any bytes |
+| `test/NamesInvariant.t.sol` | NivPayNames: `accountOf(nameOf(a)) == a` for every holder, at most one holder per name, only an account changing its own name, a held name taken only by its releaser |
 
 ### Invariants
 
@@ -1179,8 +1306,8 @@ forge test
 $env:FOUNDRY_PROFILE = "bench"; forge test
 ```
 
-`quick` runs **every test the default profile runs**, all 8 suites and the same
-166 cases, under the same Monad execution rules and the same invariant depth.
+`quick` runs **every test the default profile runs**, all 11 suites and the same
+192 cases, under the same Monad execution rules and the same invariant depth.
 The only difference is 24 invariant runs instead of 256, which takes the suite
 from around ten minutes to around twelve seconds.
 
@@ -1448,6 +1575,43 @@ forge verify-contract `
     --constructor-args (cast abi-encode "constructor(address,uint256,uint256,address)" $env:TEST_DOLLAR 50 50000000 $env:FEE_RECIPIENT)
 ```
 
+### NivPayNames, the username registry
+
+**Not deployed yet.** One transaction, no constructor arguments: the rules,
+the reserved names and the 90 day hold are fixed in the source. Use the same
+`nivpay-deployer` keystore.
+
+```powershell
+$env:FOUNDRY_PROFILE = "deploy"
+
+# Dry run. Deploys nothing.
+forge script script/DeployNames.s.sol:DeployNames --rpc-url https://testnet-rpc.monad.xyz -g 105
+
+# Broadcast.
+forge script script/DeployNames.s.sol:DeployNames `
+    --rpc-url https://testnet-rpc.monad.xyz `
+    --account nivpay-deployer `
+    -g 105 `
+    --broadcast
+```
+
+The dry run against the live chain reports **1,025,914 gas**, about
+**0.21 MON** at a 204.5 gwei max fee. The script refuses any chain but
+`10143`, then reads the deployed rules back (the hold, the lengths, a name
+check and the reserved names) and fails if any is wrong. Note the
+`NivPayNames` address it prints, and the block of the transaction.
+
+Verify, with no constructor arguments:
+
+```powershell
+forge verify-contract `
+    <NivPayNames address> `
+    src/NivPayNames.sol:NivPayNames `
+    --chain 10143 `
+    --verifier sourcify `
+    --verifier-url https://sourcify-api-monad.blockvision.org/
+```
+
 ### Broadcast receipts are committed on purpose
 
 `broadcast/Deploy.s.sol/10143/` is **deliberately not gitignored**. The receipt
@@ -1623,61 +1787,14 @@ Sources:
 
 ## Future work
 
-**Usernames for accounts.** Today an account is a 42 character address, and
-the names people see ("Idara", "the caterer") are labels signed inside pot and request
-links: the person who made the link signs the name together with the account
-it belongs to, and the app shows it only in that link's context. A name is
-never looked up from, or trusted because of, the account alone.
-
-A human-readable username, through a name registry or an ENS-style resolver,
-would let someone pay `@idara` without a link. It comes with tradeoffs that
-have to be settled first:
-
-* **Squatting and impersonation.** Names are first come, first served unless
-  something says otherwise. Someone can claim `@caterer`, or a name one letter
-  away from a real person's, and collect payments meant for them. A registry
-  needs a rule for disputes and a way to show that two similar names are
-  different accounts.
-* **A public name links an identity to a balance.** Anyone who resolves a name
-  to an account can read that account's balance and every payment it has made
-  or received. So a username must be opt-in, never assigned, and the app must
-  keep working for people who never take one.
-
-**The plan: usernames that map to an Account ID.** Not built yet. In order:
-
-1. **A small name registry**, a new contract separate from NivPayPots, which
-   stays exactly as deployed. It maps a username to an Account ID and back,
-   one name per account. Only the account itself can claim, change or release
-   its name (the caller is the account, signed with its passkey like any
-   other request), so nobody can point a name at someone else. No admin can
-   move a name. Where Monad gains a widely used name service, NivPay can
-   read names from it instead of running its own registry.
-2. **Strict names.** Lowercase `a` to `z`, `0` to `9` and `_`, 3 to 20
-   characters, so there are no look-alike letters from other alphabets.
-   Names close to NivPay's own (`nivpay`, `support`, `help`, `admin`) are
-   reserved. A changed name can't be claimed again for a waiting period, so
-   a released name can't be taken over at once by someone else.
-3. **Opt in, from Account details.** "Choose a username" sits beside the
-   Account ID. Nobody gets one by default, and every flow keeps working with
-   links and Account IDs alone.
-4. **Paying `@idara`.** Send to accepts a username as well as an Account ID.
-   The phone looks the name up at the finalized block and shows the account
-   it belongs to ("@idara, account ending 7bC1"). The first payment to a name
-   asks for the same last 4 characters as a pasted Account ID, checked
-   against what the person was told. The phone then remembers that pairing,
-   and if the name later points at a different account, it stops and says so
-   before anything is signed.
-5. **Names in pots stay signed.** Pot and request links keep their signed
-   names. A username is shown next to them, never in place of them, and a
-   pot's payees stay fixed Account IDs: renaming can never redirect a pot.
-6. **Said honestly.** Taking a name links it to the account's public balance
-   and history, and releasing the name later doesn't erase payments already
-   made. The screen says both before the name is claimed.
-
-Disputes are the open question. A registry with no admin can't take a name
-back from a squatter; one with an admin adds a party who can move names. The
-plan starts with no admin, relying on the last 4 check and the remembered
-pairing, and revisits that before mainnet.
+**Inviting people to a pot by username.** Today a decider or a payee joins a
+pot by answering an invite link, which proves the account is theirs. With
+usernames, the maker could type `@idara` instead of sending a link and
+waiting for a reply: the phone looks the name up at the finalized block and
+asks for the same last 4 characters as Send does. It needs care, because a
+pot's payees can never change: a name that points at the wrong account
+there is wrong for good, so it would ask for the last 4 every time, not
+only the first.
 
 **A 24 hour wait on payouts.** In the next contract version, a payment that
 reaches its rule would wait 24 hours before it pays, so everyone with money

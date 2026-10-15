@@ -194,3 +194,33 @@ test("the README's contract claims point at the source lines that prove them", (
   assert.doesNotMatch(code, /\bowner\b|Ownable|AccessControl|delegatecall|selfdestruct|assembly/, "outside comments");
   assert.match(README, /\| A pause stops pour-ins and payments, never exits \| frozen is checked in `_fund` \(337\)/);
 });
+
+test("the README's username registry claims point at the source lines that prove them", () => {
+  const sol = doc("src/NivPayNames.sol").split("\n");
+  const at = (line: number) => sol[line - 1] ?? "";
+  const expect: [number, RegExp][] = [
+    [30, /MIN_LENGTH = 3;/],
+    [31, /MAX_LENGTH = 20;/],
+    [35, /HOLD_PERIOD = 90 days;/],
+    [74, /!isWellFormed\(b\)\) revert NameNotAllowed/],
+    [75, /isReserved\(b\)\) revert NameReserved/],
+    [79, /holder != address\(0\)\) revert NameTaken/],
+    [81, /_releasedBy\[key\] != msg\.sender\) revert NameHeld/],
+    [83, /_release\(msg\.sender\)/],
+    [85, /_accountOf\[key\] = msg\.sender/],
+    [86, /_nameOf\[msg\.sender\] = name/],
+    [95, /_release\(msg\.sender\)/],
+    [101, /uint64\(block\.timestamp\) \+ HOLD_PERIOD/],
+    [104, /_releasedBy\[key\] = account/],
+    [144, /function isWellFormed\(/],
+    [162, /function isReserved\(/],
+    [169, /_contains\(name, "nivpay"\)/],
+  ];
+  for (const [line, re] of expect) assert.match(at(line), re, `src/NivPayNames.sol:${line}`);
+  // A name is written only for the caller: _release is only ever called with msg.sender.
+  assert.deepEqual(sol.filter((l) => /_release\(/.test(l) && !/function _release/.test(l)).map((l) => /_release\(msg\.sender\)/.test(l)), [true, true]);
+  assert.equal(sol.filter((l) => /_nameOf\[[^\]]+\] = /.test(l)).length, 1, "a name is set in one place");
+  const code = sol.filter((l) => !/^\s*(\/\/|\*)/.test(l)).join("\n");
+  assert.doesNotMatch(code, /^import|\bowner\b|Ownable|AccessControl|delegatecall|selfdestruct|assembly|payable|receive\(|fallback\(/m, "outside comments");
+  assert.match(README, /\| A released name is held for 90 days \| `_release` holds it until now plus `HOLD_PERIOD` \(101\)/);
+});
