@@ -483,6 +483,9 @@ chain but Monad testnet and local test chains.
    |-- POST /api/fund (Vercel function): a small grant of testnet MON
    |   before an account's first transactions, so nobody sees fees.
    |
+   |-- POST /api/report (Vercel function): a report about a pot that
+   |   named someone, written as one log line. Nothing is stored.
+   |
    |-- Links shared in chats: invites, signed replies, pot links and
    |   requests to be paid, packed binary in the URL fragment.
    |
@@ -602,7 +605,7 @@ None is needed to run the app locally or the tests.
 | `RAMP_ENABLED` | Vercel, server | no | The test desk's kill switch (`/api/ramp`). Add money and Cash out work only when it is exactly `true`. Anything else, or unset, pauses the desk without reading its key. |
 | `RAMP_DESK_PRIVATE_KEY` | Vercel, server, Sensitive | only if the desk is enabled | A dedicated testnet key for the test desk, which sends test AUSD for Add money and receives it on Cash out. Read only after every check has passed, never on a cash out, never logged. Not the funder key, never in the repo. |
 | `RAMP_DESK_ADDRESS` | Vercel, server | only if the desk is enabled | The address of that key; the desk refuses to sign unless the key derives exactly this address. It needs testnet MON for its own gas (it stops under 0.2 MON) and claims test AUSD from Agora's faucet for itself when low. |
-| `ALLOWED_ORIGINS` | Vercel, server | no | Comma separated extra origins allowed to call `/api/fund`, for example `http://localhost:5173`. The deployment's own origin is always allowed. |
+| `ALLOWED_ORIGINS` | Vercel, server | no | Comma separated extra origins allowed to call `/api/fund`, `/api/ramp` and `/api/report`, for example `http://localhost:5173`. The deployment's own origin is always allowed. |
 | `VITE_PRODUCTION_HOSTNAME` | Vercel, build time | yes in production | The only hostname besides `localhost` where passkeys can be made or used. For this deployment, `nivpay.vercel.app`, and it must never change. |
 | `VITE_NIVPAY_POTS` | build time | no | `testusd` builds the app on the TESTUSD instance. Anything else, or unset, is AUSD. |
 | `NIVPAY_API_TARGET` | your machine, `npm run dev` | no | Forwards `/api` from the dev server to a Vercel deployment. |
@@ -840,6 +843,89 @@ These are limits of the design as built, stated so nobody relies on more.
   pot 0) and fills its history newest first, but the oldest entries arrive
   last: pot 0, 167,624 blocks old with its only events at the start when it was
   timed on 10 Oct 2026, took 11.6 minutes to complete. See `docs/APP-CONTRACT-MAP.md` section 12.
+
+## Protecting people from bad actors
+
+Three kinds of bad actor can use a group purse without breaking any rule:
+someone who builds a "fundraiser" that only they control, someone who makes
+pots naming strangers so they show up on their Home, and someone who uses a
+relative's name, or "Event hall", on a link. The contract can't tell any of
+these from honest use, and it stays exactly as deployed. The app answers them
+with warnings and choices for the person, on their phone. **None of them
+blocks or delays a payment.**
+
+**Who controls this pot.** The pot screen, where people pour in, shows a
+"Who controls this pot" card before the Pour in button: who decides and the
+rule ("2 of 3 must say yes to each payment"), who can be paid and up to
+what, and the closing date. Each person shows by the name this phone saved
+for them as a contact, else the pot's own label, and always with "account
+ending 7bC1", since a label is only what the maker typed. Then a calm line
+for each thing the rules allow (`app/src/lib/potRisks.ts`):
+
+* "One yes is enough to pay out."
+* "Ubong decides and can also be paid."
+* "Account ending 7bC1 made this pot and can be paid from it." The maker
+  comes from the pot's `PotCreated` event, which the pot screen already
+  checks every link against.
+* "The people who can be paid have enough yeses between them to pay
+  themselves."
+
+And always: "NivPay makes sure money only goes to the people named here.
+It can't check who they are." A pot where one person decides alone and is
+the only payee is a fine way to collect for your own party, and a scam looks
+the same; the card says what the rules allow and leaves the choice to the
+person.
+
+**New pots that name you.** Anyone can make a pot naming any account, and
+Home finds every pot that names you from the chain. So Home now sorts what it
+finds (`app/src/lib/potSort.ts`). A pot is yours if this phone made it, its
+link was opened here, you answered its invite, you put money in, its maker
+is one of this phone's accounts or a saved contact, or you chose Keep. Every
+other pot goes in "New pots that name you", a separate section, collapsed,
+with no badge and no announcement, and its requests never show under
+"Waiting for your yes". Each row shows the pot's name as plain text, who made
+it ("account ending 7bC1") and your role, with three buttons:
+
+* **Keep** moves it to Your pots.
+* **Hide** takes it off Home on this phone, per account and per deployment.
+  "Hidden pots" under Account details lists them, with Show again.
+* **Report** asks for a reason ("Scam", "Pretending to be someone", "Spam" or
+  "Not for me"), sends it to `/api/report`, then hides the pot.
+
+Reports only reach the server logs, and are read by hand. `/api/report`
+takes the deployment, the pot number and one of those four reasons, nothing
+about the person reporting, and writes one log line. It stores nothing. It
+has the same origin check and body cap as `/api/fund`, and takes at most 30
+reports a minute on each server instance. A report changes nothing about the
+pot.
+
+**Contacts, and the first payment to an account.** "Save as contact" is
+offered when someone opens a pay link, and on the Sent card after a payment
+is final. Contacts show at the top of Send, so a person can pick one instead
+of pasting an Account ID. The confirm sheet then warns:
+
+* the first time this account pays another with a final payment: "First time
+  paying account ending 7bC1. If you're not sure it's them, check by phone
+  first."
+* strongly, when a link's name matches a contact's name (ignoring case and
+  spacing, after cleaning) but the account is different: "You have a contact
+  called Idara with a different account. This may not be them."
+* when the account is a contact saved under another name than the link's,
+  the saved name first and the link's name second.
+
+Contacts are a convenience on this phone, not an identity. Nobody checks
+them, they are never sent anywhere, and clearing the site's data removes
+them, along with the record of who this phone has paid
+(`app/src/lib/contacts.ts`).
+
+**What this can't stop.** People who agree among themselves: if two of three
+deciders decide to pay themselves, the rules allow it, and the card can only
+say so beforehand. A pot whose maker controls everything is still a valid
+pot: NivPay warns, and nothing more. People who pour in anyway can take their
+own share out at any time, as [The rules](#the-rules) say, but where one yes
+pays, a payment can go out the moment it is asked, before anyone sees it. A contact name
+helps only if the person saved the right account in the first place, and a
+report is read by a person, later; nothing acts on it automatically.
 
 ## Tests
 
@@ -1590,6 +1676,25 @@ Disputes are the open question. A registry with no admin can't take a name
 back from a squatter; one with an admin adds a party who can move names. The
 plan starts with no admin, relying on the last 4 check and the remembered
 pairing, and revisits that before mainnet.
+
+**A 24 hour wait on payouts.** In the next contract version, a payment that
+reaches its rule would wait 24 hours before it pays, so everyone with money
+in the pot sees it coming and can take their share out first. That turns
+"the deciders agreed among themselves" from a surprise into a choice, at the
+cost of slower payouts. It needs a new contract; NivPayPots stays as
+deployed.
+
+**Fees paid through a sponsor.** Today `/api/fund` sends each account a
+little testnet MON before its first requests. A sponsor that pays fees
+directly, and only for NivPay's own actions on NivPay's own contracts, would
+remove the grant, the per-account limits that come with it, and the chance of
+someone spending a grant on something else.
+
+**Sanctions screening and ID checks** through the licensed money partners
+that would run Add money and Cash out at launch (see
+[Mainnet plan](#mainnet-plan-money-in-and-out-in-any-currency)). They hold
+the licences and do the checks where money meets a bank; NivPay itself keeps
+no identity documents.
 
 ## A note on the benchmark files
 
