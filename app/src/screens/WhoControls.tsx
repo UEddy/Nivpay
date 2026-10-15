@@ -26,21 +26,27 @@ export function WhoControls(props: {
 }) {
   const { state, me } = props;
   const fmt = (v: bigint) => formatAmount(v, state.decimals, "auto");
+  const payeeLabel = (a: Address) => state.payees.find((p) => isAddressEqual(p.to, a))?.name;
+  /** A contact's name, else the pot's label for them (signed link, then payee label), else their account ending. */
   const nameOf = (a: Address, label?: string): string => {
     if (isAddressEqual(a, me)) return copy.youCap;
     const saved = props.contacts.find((c) => isAddressEqual(c.account, a))?.name;
-    const labelled = label ?? props.labels.find((p) => isAddressEqual(p.account, a))?.name;
+    const labelled = label ?? props.labels.find((p) => isAddressEqual(p.account, a))?.name ?? payeeLabel(a);
     return cleanName(saved ?? labelled ?? "") || copy.accountEnding(a);
+  };
+  /** "Idara · account ending 7bC1", or the ending alone when there is no name. */
+  const who = (a: Address, label?: string) => {
+    const name = nameOf(a, label);
+    return name === copy.accountEnding(a) ? name : `${name} · ${copy.accountEnding(a)}`;
   };
   const risks = potRisks({ deciders: state.deciders, threshold: state.threshold, payees: state.payees, maker: props.maker });
   // Lines about the person reading are left out: they know what they can do.
   const others = risks.deciderPayees.filter((a) => !isAddressEqual(a, me));
-  const payeeLabel = (a: Address) => state.payees.find((p) => isAddressEqual(p.to, a))?.name;
   const lines = [
     ...(risks.oneCanPay ? [copy.riskOneCanPay] : []),
-    ...others.map((a) => copy.riskDeciderIsPayee(nameOf(a, props.labels.find((p) => isAddressEqual(p.account, a))?.name ?? payeeLabel(a)))),
+    ...others.map((a) => copy.riskDeciderIsPayee(nameOf(a))),
     ...(risks.makerIsPayee && !isAddressEqual(props.maker, me) && !others.some((a) => isAddressEqual(a, props.maker))
-      ? [copy.riskMakerIsPayee(nameOf(props.maker, payeeLabel(props.maker)))]
+      ? [copy.riskMakerIsPayee(nameOf(props.maker))]
       : []),
     ...(risks.payeesCanPayThemselves && risks.deciderPayees.length > 1 ? [copy.riskPayeesPayThemselves] : []),
   ];
@@ -56,7 +62,7 @@ export function WhoControls(props: {
           <span className="name">{copy.ruleLine(state.threshold, state.deciders.length)}</span>
           {state.deciders.map((d) => (
             <span className="meta" key={`d-${d}`}>
-              {nameOf(d)} · {copy.accountEnding(d)}
+              {who(d)}
             </span>
           ))}
         </div>
@@ -64,12 +70,11 @@ export function WhoControls(props: {
           <span className="meta">{copy.controlCanBePaid}</span>
           {state.payees.map((p, i) => (
             <span className="meta" key={`p-${i}`}>
-              {nameOf(p.to, p.name)} · {copy.accountEnding(p.to)} · {copy.upTo(fmt(p.cap))}
+              {who(p.to, p.name)} · {copy.upTo(fmt(p.cap))}
             </span>
           ))}
         </div>
         <div className="list-row stacked">
-          <span className="meta">{copy.closes}</span>
           <span className="name">{state.closed ? copy.potClosedNote : copy.closesAt(whenFormat.format(new Date(Number(state.endTime) * 1000)).replace(",", ""))}</span>
         </div>
       </div>
