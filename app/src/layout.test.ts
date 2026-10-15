@@ -54,3 +54,17 @@ test("every amount field reads the reader's way and says what it understood, bef
   }
   assert.ok(fields >= 8, `found the amount fields (${fields})`);
 });
+
+test("the tab bar: Home, the pot mark for Pots, Profile with a photo or a letter; it never covers a button", () => {
+  const app = read("App.tsx");
+  const bar = app.slice(app.indexOf("function TabBar("), app.indexOf("function ProfileFace("));
+  assert.deepEqual([...bar.matchAll(/tabProps\("(\w+)"\)/g)].map((m) => m[1]), ["home", "pots", "profile"], "three tabs, in this order");
+  assert.match(bar, /"aria-current": props\.tab === t \? \("page" as const\)/, "the current tab is announced");
+  assert.match(bar, /<PotMark \/>/, "the middle tab is the pot mark");
+  assert.match(app, /function ProfileFace[\s\S]*?Array\.from\(shownName\(props\.account\)\.trim\(\)\)\[0\]/, "no photo: the first letter of the name");
+  assert.match(app, /className="tab-panel" hidden=\{props\.tab !== "pots"\}/, "Pots stays mounted, so pots are found and notifications made on any tab");
+  const css = read("pot.css");
+  assert.match(rule(css, ".tab-bar"), /position:\s*fixed/);
+  assert.match(rule(css, ".page.with-tabs"), /padding-bottom:\s*calc\(96px/, "room under the content for the bar");
+  assert.doesNotMatch(app.slice(app.indexOf("function Home("), app.indexOf("function TabBar(")), /\{copy\.accountDetails\}\n\s*<\/button>/, "Profile replaced the Account details button");
+});

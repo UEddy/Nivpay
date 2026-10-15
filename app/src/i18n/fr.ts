@@ -880,6 +880,11 @@ export const fr: Dictionary = {
   notNow: "Pas maintenant",
   errCitySave: "Impossible de partager votre ville. Réessayez.",
 
+  mainNav: "Navigation principale",
+  tabHome: "Accueil",
+  tabPots: "Cagnottes",
+  tabProfile: "Profil",
+
   language: "Langue",
   languagePhone: "Langue du téléphone",
   languageHint: "Changer de langue recharge l'appli.",

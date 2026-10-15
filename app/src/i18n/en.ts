@@ -916,6 +916,12 @@ export const en = {
   notNow: "Not now",
   errCitySave: "Couldn't share your city. Try again.",
 
+  // The tab bar on the signed-in page
+  mainNav: "Main",
+  tabHome: "Home",
+  tabPots: "Pots",
+  tabProfile: "Profile",
+
   // Language (lib/locale.ts), in Account details
   language: "Language",
   languagePhone: "Phone's language",

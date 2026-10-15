@@ -1915,3 +1915,114 @@ button.avatar {
 .sheet > section {
   margin-top: 18px;
 }
+
+/* The tab bar: Home, the pot mark for Pots, and Profile. Fixed at the bottom;
+   the signed-in page leaves room under its content so it never covers a button. */
+.page.with-tabs {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+.tab-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 8px 12px max(10px, env(safe-area-inset-bottom));
+  background: var(--card);
+  border-top: 1px solid var(--card-border);
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 600 13px var(--font-body);
+  cursor: pointer;
+}
+
+.tab.on {
+  color: var(--primary-text);
+}
+
+.tab-icon {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+.tab.on .tab-icon {
+  fill: currentColor;
+}
+
+.tab-pot {
+  position: relative;
+  display: block;
+  width: 30px;
+  height: 30px;
+}
+
+.tab-pot .pot-mark {
+  width: 30px;
+  height: 30px;
+  opacity: 0.7;
+}
+
+.tab.on .tab-pot .pot-mark {
+  opacity: 1;
+}
+
+.tab-badge {
+  position: absolute;
+  top: -4px;
+  right: -10px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font: 600 11px/18px var(--font-body);
+  text-align: center;
+}
+
+.tab-face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  background: var(--chip);
+  font: 700 14px var(--font-body);
+}
+
+.tab-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-page > section {
+  margin-top: 18px;
+}
+
+.profile-page {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

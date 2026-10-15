@@ -63,6 +63,7 @@ import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/
 import { reloadOnce } from "./lib/reloadOnce.ts";
 import { LastUsedStore } from "./lib/forget.ts";
 import { namesOn, USERNAME_LABEL, usernameOf } from "./lib/names.ts";
+import { photosEnabled, photoUrl } from "./lib/photo.ts";
 import { dateLocale, LANGS, LANGUAGE_NAMES, language, readPick, type Lang } from "./lib/locale.ts";
 import { pickLanguage } from "./i18n/start.ts";
 
@@ -218,8 +219,12 @@ function HelpHost() {
   );
 }
 
+/** The three places the tab bar leads to, on the signed-in page. */
+type Tab = "home" | "pots" | "profile";
+
 function Screens() {
   const [active, setActive] = useState<StoredAccount | undefined>(() => accounts.active());
+  const [tab, setTab] = useState<Tab>("home");
   const [switching, setSwitching] = useState(false);
   const [screen, setScreen] = useState<Screen>({ kind: "home" });
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -327,6 +332,7 @@ function Screens() {
     accounts.setActive(address);
     setActive(accounts.active());
     setSwitching(false);
+    setTab("home");
     if (pendingInvite) {
       go({ kind: "join", invite: pendingInvite });
       setPendingInvite(null);
@@ -452,11 +458,13 @@ function Screens() {
   }
 
   return (
-    <div className="page">
+    <div className={`page${active && !switching ? " with-tabs" : ""}`}>
       <InstallBanner />
       {banner}
       {active && !switching ? (
         <Home
+          tab={tab}
+          onTab={setTab}
           account={active}
           connection={connection}
           notice={notice}
@@ -604,6 +612,8 @@ function AccountSheet(props: {
   onSwitch: () => void;
   onClose: () => void;
   onRename: (name: string) => void;
+  /** The Profile tab: a page under the tab bar, not a sheet. */
+  page?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -615,9 +625,21 @@ function AccountSheet(props: {
       .then(() => setCopied(true))
       .catch(() => setCopied(false));
   };
-  return (
-    <div className="sheet-backdrop" role="presentation" onClick={props.onClose}>
-      <section className="sheet" role="dialog" aria-modal="true" aria-label={copy.accountDetails} onClick={(e) => e.stopPropagation()}>
+  // A plain function, not a component: the page keeps its state across renders.
+  const wrap = (children: ReactNode) =>
+    props.page ? (
+      <section className="profile-page" aria-label={copy.tabProfile}>
+        {children}
+      </section>
+    ) : (
+      <div className="sheet-backdrop" role="presentation" onClick={props.onClose}>
+        <section className="sheet" role="dialog" aria-modal="true" aria-label={copy.accountDetails} onClick={(e) => e.stopPropagation()}>
+          {children}
+        </section>
+      </div>
+    );
+  return wrap(
+    <>
         <p className="eyebrow">{copy.accountDetails}</p>
         <h2>{shownName(props.account)}</h2>
         <Suspense fallback={null}>
@@ -699,11 +721,12 @@ function AccountSheet(props: {
         <button className="btn" onClick={props.onSwitch}>
           {copy.switchAccount}
         </button>
-        <button className="btn ghost" onClick={props.onClose}>
-          {copy.close}
-        </button>
-      </section>
-    </div>
+        {!props.page && (
+          <button className="btn ghost" onClick={props.onClose}>
+            {copy.close}
+          </button>
+        )}
+    </>,
   );
 }
 
@@ -781,6 +804,8 @@ const STEP_LABEL: Record<Step, string> = {
 };
 
 function Home(props: {
+  tab: Tab;
+  onTab: (tab: Tab) => void;
   account: StoredAccount;
   connection: ReturnType<typeof useConnection>;
   notice: Notice | null;
@@ -824,7 +849,11 @@ function Home(props: {
   const [balances, setBalances] = useState<Balances | null>(null);
   // A payment from this account still being confirmed: the Send screen follows it.
   const [sendInFlight, setSendInFlight] = useState(false);
-  const [details, setDetails] = useState(false);
+  // Account details is the Profile tab.
+  const details = props.tab === "profile";
+  const setDetails = (open: boolean) => props.onTab(open ? "profile" : "home");
+  // Requests waiting for this account's yes, for the count on the Pots tab.
+  const [waitingCount, setWaitingCount] = useState(0);
   // Notifications (lib/notes.ts), per account on this phone.
   const owner = account.address;
   const notesStore = useMemo(() => new NotesStore(localStorage, DEPLOYMENT, owner), [owner]);
@@ -1106,9 +1135,6 @@ function Home(props: {
               </span>
             )}
           </button>
-          <button className="btn ghost small" onClick={() => setDetails(true)}>
-            {copy.accountDetails}
-          </button>
         </div>
       </header>
 
@@ -1119,7 +1145,7 @@ function Home(props: {
         </button>
       )}
 
-      {askName && (
+      {props.tab === "home" && askName && (
         <section className="card" aria-labelledby="ask-name">
           <p className="eyebrow" id="ask-name">
             {copy.yourName}
@@ -1137,6 +1163,7 @@ function Home(props: {
         </section>
       )}
 
+      {props.tab === "home" && (
       <section className={`card balances${stale ? " stale" : ""}`} aria-live="polite">
         <p className="eyebrow">{copy.yourBalance}</p>
         {stale && <p className="hint stale-note">{stale}</p>}
@@ -1179,7 +1206,9 @@ function Home(props: {
         )}
       </section>
 
-      {DEPLOYMENT === "ausd" && (
+      )}
+
+      {props.tab === "home" && DEPLOYMENT === "ausd" && (
         <section className="card" aria-labelledby="your-bank">
           <p className="eyebrow" id="your-bank">
             {copy.yourBank}
@@ -1202,7 +1231,10 @@ function Home(props: {
         </section>
       )}
 
+      {/* Always mounted, so pots are found and notifications made whichever tab is open. */}
+      <div className="tab-panel" hidden={props.tab !== "pots"}>
       <YourPots
+        onWaiting={setWaitingCount}
         onPoll={onPoll}
         account={account}
         connection={props.connection}
@@ -1212,7 +1244,9 @@ function Home(props: {
         onOpenPot={props.onOpenPot}
         onOpenRequest={props.onOpenRequest}
       />
+      </div>
 
+      {props.tab === "home" && (
       <section className="card">
         <p className="eyebrow">{copy.addTestDollars}</p>
         <p className="hint">{copy.addTestDollarsHint}</p>
@@ -1257,6 +1291,7 @@ function Home(props: {
         )}
         {result && <NoticeLine notice={result} />}
       </section>
+      )}
 
       {notesOpen && (
         <Suspense fallback={null}>
@@ -1265,6 +1300,7 @@ function Home(props: {
       )}
       {details && (
         <AccountSheet
+          page
           account={account}
           hidden={choices.hidden()}
           username={
@@ -1290,7 +1326,74 @@ function Home(props: {
           }}
         />
       )}
+      <TabBar tab={props.tab} onTab={props.onTab} account={account} waiting={waitingCount} />
     </>
+  );
+}
+
+/**
+ * The tab bar: Home, the pot mark for Pots, and Profile with the person's
+ * photo, or the first letter of their name. Fixed at the bottom of the
+ * signed-in page, which leaves room under it so it never covers a button.
+ */
+function TabBar(props: { tab: Tab; onTab: (tab: Tab) => void; account: StoredAccount; waiting: number }) {
+  const tabProps = (t: Tab) => ({
+    type: "button" as const,
+    className: `tab${props.tab === t ? " on" : ""}`,
+    "aria-current": props.tab === t ? ("page" as const) : undefined,
+    onClick: () => props.onTab(t),
+  });
+  return (
+    <nav className="tab-bar" aria-label={copy.mainNav}>
+      <button {...tabProps("home")}>
+        <svg className="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />
+        </svg>
+        <span>{copy.tabHome}</span>
+      </button>
+      <button {...tabProps("pots")}>
+        <span className="tab-pot">
+          <PotMark />
+          {props.waiting > 0 && (
+            <span className="tab-badge" aria-label={copy.waitingForYourYes}>
+              {props.waiting > 9 ? "9+" : props.waiting}
+            </span>
+          )}
+        </span>
+        <span>{copy.tabPots}</span>
+      </button>
+      <button {...tabProps("profile")}>
+        <ProfileFace account={props.account} />
+        <span>{copy.tabProfile}</span>
+      </button>
+    </nav>
+  );
+}
+
+/** The person's photo when photos are set up and they have one, else the first letter of their name. */
+function ProfileFace(props: { account: StoredAccount }) {
+  const [on, setOn] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    let live = true;
+    void photosEnabled().then((v) => live && setOn(v));
+    // A photo saved or removed in Profile: show the new one.
+    const changed = () => {
+      setFailed(false);
+      setVersion((n) => n + 1);
+    };
+    window.addEventListener("nivpay:photo", changed);
+    return () => {
+      live = false;
+      window.removeEventListener("nivpay:photo", changed);
+    };
+  }, []);
+  const letter = (Array.from(shownName(props.account).trim())[0] ?? "?").toLocaleUpperCase();
+  return (
+    <span className="tab-face" aria-hidden="true">
+      {on && !failed ? <img src={photoUrl(props.account.address, version)} alt="" width={28} height={28} onError={() => setFailed(true)} /> : letter}
+    </span>
   );
 }
 
@@ -1460,6 +1563,8 @@ function MatchedRow(props: { row: AnsweredInvite; pot: FoundPot | undefined; dec
 
 /** Pots this account is making, pots made or opened on this phone, invites it answered, and pots it is named on. */
 function YourPots(props: {
+  /** How many requests wait for this account's yes, for the count on the Pots tab. */
+  onWaiting: (n: number) => void;
   /** Each poll's reads, for notifications (lib/notes.ts): only pots that are this account's own. */
   onPoll: (inputs: Omit<PollInputs, "now" | "pours" | "raised">) => void;
   account: StoredAccount;
@@ -1513,7 +1618,8 @@ function YourPots(props: {
   // A pot that is new to you, or hidden, never asks for your yes on Home.
   const waitingMine = needingMyYes(asks, props.account.address).filter((r) => !notYours.has(r.potId));
   // Notifications from the same reads: never about a pot that is new to this account or hidden.
-  const { onPoll } = props;
+  const { onPoll, onWaiting } = props;
+  useEffect(() => onWaiting(waitingMine.length), [onWaiting, waitingMine.length]);
   useEffect(() => {
     onPoll({ found: scan.found.filter((p) => !notYours.has(p.potId)), waiting: waitingMine, ended: (asks.ended ?? []).filter((e) => !notYours.has(e.potId)) });
     // Once per poll: scan and asks are new objects after each one.

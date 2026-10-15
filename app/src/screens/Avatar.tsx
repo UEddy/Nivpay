@@ -42,6 +42,7 @@ export function photoChanged(account: Address, removed = false): void {
   versions.set(key, (versions.get(key) ?? 0) + 1);
   if (removed) missing.add(key);
   else missing.delete(key);
+  window.dispatchEvent(new CustomEvent("nivpay:photo"));
 }
 
 export const photoVersion = (account: Address) => versions.get(account.toLowerCase()) ?? 0;

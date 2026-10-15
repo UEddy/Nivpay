@@ -881,6 +881,11 @@ export const pt: Dictionary = {
   notNow: "Agora não",
   errCitySave: "Não foi possível compartilhar sua cidade. Tente de novo.",
 
+  mainNav: "Navegação principal",
+  tabHome: "Início",
+  tabPots: "Vaquinhas",
+  tabProfile: "Perfil",
+
   language: "Idioma",
   languagePhone: "Idioma do celular",
   languageHint: "Ao mudar, o app recarrega.",
