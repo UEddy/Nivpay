@@ -570,6 +570,7 @@ export function ChipInScreen(props: {
           <VoiceButton
             account={me}
             mode="put"
+            onStart={() => setVoiceNote(null)}
             onCommand={(cmd: VoiceCommand, heard: string) => {
               if (cmd.kind !== "put") return;
               setVoiceNote(null);

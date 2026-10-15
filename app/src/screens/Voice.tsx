@@ -32,7 +32,14 @@ function MicIcon() {
  * screen to fill in. Before the first use it says who turns the words into
  * text. Hidden unless voice is on for this account (VoiceSection).
  */
-export function VoiceButton(props: { account: Account; mode: VoiceCommand["kind"]; disabled?: boolean; onCommand: (cmd: VoiceCommand, heard: string) => void }) {
+export function VoiceButton(props: {
+  account: Account;
+  mode: VoiceCommand["kind"];
+  disabled?: boolean;
+  /** A new attempt starts: the screen clears what the last one said. */
+  onStart?: () => void;
+  onCommand: (cmd: VoiceCommand, heard: string) => void;
+}) {
   const store = useMemo(() => new VoiceStore(localStorage, DEPLOYMENT, props.account), [props.account]);
   const [explaining, setExplaining] = useState(false);
   const [listening, setListening] = useState(false);
@@ -42,6 +49,7 @@ export function VoiceButton(props: { account: Account; mode: VoiceCommand["kind"
   if (!voiceReady(props.account)) return null;
 
   const listen = async () => {
+    props.onStart?.();
     setNotice(null);
     setHeard(null);
     setListening(true);
