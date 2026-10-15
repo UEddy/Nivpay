@@ -833,7 +833,7 @@ export const fr: Dictionary = {
   markAllRead: "Tout marquer comme lu",
   noteNew: "Nouveau",
   notesSince: (date: string) =>
-    `Elles commencent le ${date}, quand ce téléphone a lancé les notifications pour la première fois. NivPay les construit à partir de ce qu'il lit pendant que l'appli est ouverte : pas de serveur, pas de notifications push.`,
+    `Elles commencent le ${date}, quand ce téléphone a lancé les notifications pour la première fois. NivPay les construit à partir de ce qu'il lit pendant que l'appli est ouverte, et des demandes qu'on vous envoie. Les notifications sur le téléphone s'activent à part, dans Profil.`,
   noteReceived: (amount: string, from: string) => `${amount} reçus de ${from}.`,
   noteChippedIn: (amount: string, pot: string) => `Quelqu'un a mis ${amount} dans ${pot}.`,
   noteAskYes: (amount: string, pot: string) => `Un paiement de ${amount} depuis ${pot} attend votre oui.`,

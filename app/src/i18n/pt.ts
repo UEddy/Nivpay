@@ -834,7 +834,7 @@ export const pt: Dictionary = {
   markAllRead: "Marcar tudo como lido",
   noteNew: "Novo",
   notesSince: (date: string) =>
-    `Eles começam em ${date}, quando este celular ativou os avisos pela primeira vez. A NivPay cria os avisos a partir do que lê enquanto o app está aberto: sem servidor e sem notificações push.`,
+    `Eles começam em ${date}, quando este celular ativou os avisos pela primeira vez. A NivPay cria os avisos a partir do que lê enquanto o app está aberto e dos pedidos enviados a você. As notificações no celular são ativadas à parte, em Perfil.`,
   noteReceived: (amount: string, from: string) => `Chegaram ${amount} de ${from}.`,
   noteChippedIn: (amount: string, pot: string) => `Alguém colocou ${amount} em ${pot}.`,
   noteAskYes: (amount: string, pot: string) => `Um pagamento de ${amount} de ${pot} está esperando seu sim.`,

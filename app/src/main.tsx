@@ -31,14 +31,18 @@ createRoot(root).render(
 );
 
 // The service worker only in production builds, so development always sees
-// fresh files.
+// fresh files. The awaits above usually outlast the page's load event, so
+// waiting for "load" alone would never register it: register now if the page
+// has loaded, else on load.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
+  const register = () => {
     const tt = (window as unknown as { trustedTypes?: TrustedTypesLike }).trustedTypes;
     // register() takes a TrustedScriptURL; the cast is only for TypeScript's older signature.
     navigator.serviceWorker.register(serviceWorkerUrl(tt) as string, { scope: "/" }).catch(() => {
       // An app that works without its offline shell is better than one that
       // breaks because of it.
     });
-  });
+  };
+  if (document.readyState === "complete") register();
+  else window.addEventListener("load", register, { once: true });
 }

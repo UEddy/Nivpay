@@ -52,6 +52,8 @@ test("Trusted Types are required, with one policy, the one the app uses for its 
   assert.deepEqual(csp["trusted-types"], [SW_POLICY]);
   const main = readFileSync(new URL("../main.tsx", import.meta.url), "utf8");
   assert.match(main, /serviceWorkerUrl\(tt\)/);
+  // main.tsx awaits the language and the app first, so the load event has usually passed by then.
+  assert.match(main, /document\.readyState === "complete"\) register\(\)/, "registers even when the page has already loaded");
   assert.ok(!/register\("\/sw\.js"/.test(main), "the worker is never registered from a plain string");
 });
 

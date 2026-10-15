@@ -63,7 +63,7 @@ export function noteText(n: Note, nameOf?: NameOf): string {
 /**
  * The notifications list, newest first (lib/notes.ts). Tapping one opens the
  * screen it is about and marks it read. It says when the list started and
- * where it comes from: no server, no push messages.
+ * where it comes from.
  */
 export function NotesSheet(props: {
   state: NotesState;

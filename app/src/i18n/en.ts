@@ -867,7 +867,7 @@ export const en = {
   markAllRead: "Mark all as read",
   noteNew: "New",
   notesSince: (date: string) =>
-    `These start from ${date}, when this phone first ran notifications. NivPay builds them from what it reads while the app is open: no server, no push messages.`,
+    `These start from ${date}, when this phone first ran notifications. NivPay builds them from what it reads while the app is open, and from requests sent to you. Notifications on the phone are a separate switch, in Profile.`,
   noteReceived: (amount: string, from: string) => `${amount} came in from ${from}.`,
   noteChippedIn: (amount: string, pot: string) => `Someone put ${amount} into ${pot}.`,
   noteAskYes: (amount: string, pot: string) => `A payment of ${amount} from ${pot} is waiting for your yes.`,

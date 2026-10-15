@@ -834,7 +834,7 @@ export const es: Dictionary = {
   markAllRead: "Marcar todo como leído",
   noteNew: "Nuevo",
   notesSince: (date: string) =>
-    `Empiezan el ${date}, cuando este teléfono activó los avisos por primera vez. NivPay los crea a partir de lo que lee mientras la app está abierta: sin servidor y sin notificaciones push.`,
+    `Empiezan el ${date}, cuando este teléfono activó los avisos por primera vez. NivPay los crea a partir de lo que lee mientras la app está abierta y de las solicitudes que te envían. Las notificaciones en el teléfono se activan aparte, en Perfil.`,
   noteReceived: (amount: string, from: string) => `Llegaron ${amount} de ${from}.`,
   noteChippedIn: (amount: string, pot: string) => `Alguien puso ${amount} en ${pot}.`,
   noteAskYes: (amount: string, pot: string) => `Un pago de ${amount} desde ${pot} espera tu sí.`,
