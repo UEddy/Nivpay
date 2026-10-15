@@ -611,7 +611,7 @@ None is needed to run the app locally or the tests.
 | `RAMP_DESK_ADDRESS` | Vercel, server | only if the desk is enabled | The address of that key; the desk refuses to sign unless the key derives exactly this address. It needs testnet MON for its own gas (it stops under 0.2 MON) and claims test AUSD from Agora's faucet for itself when low. |
 | `ALLOWED_ORIGINS` | Vercel, server | no | Comma separated extra origins allowed to call `/api/fund`, `/api/ramp` and `/api/report`, for example `http://localhost:5173`. The deployment's own origin is always allowed. |
 | `VITE_PRODUCTION_HOSTNAME` | Vercel, build time | yes in production | The only hostname besides `localhost` where passkeys can be made or used. For this deployment, `nivpay.vercel.app`, and it must never change. |
-| `BLOB_READ_WRITE_TOKEN` | Vercel, server, Sensitive | no | Set by connecting a Vercel Blob store to the project. Profile photos stay hidden until it is set. |
+| `BLOB_READ_WRITE_TOKEN` | Vercel, server, Sensitive | no | Set by connecting a Vercel Blob store to the project. Profile photos and shared cities stay hidden until it is set. |
 | `VITE_SUPPORT_EMAIL` | Vercel, build time | no | The address Help and support's Email support writes to. Its button is hidden while this is missing or malformed. |
 | `VITE_SUPPORT_WHATSAPP` | Vercel, build time | no | The WhatsApp number Chat on WhatsApp opens (wa.me), country code first. Hidden while missing or malformed. |
 | `VITE_NIVPAY_POTS` | build time | no | `testusd` builds the app on the TESTUSD instance. Anything else, or unset, is AUSD. |
@@ -1034,6 +1034,39 @@ and notifications; without one, initials. Someone else's photo can be tapped
 and reported (`/api/report`, the same reasons as a pot); a reported photo
 shows as initials on that phone from then on. **The feature stays hidden
 until a Blob store is connected** (`BLOB_READ_WRITE_TOKEN`).
+
+## Where people in a pot are
+
+City only, opt in, for the people in the same pot only. When someone chips
+in, or the first time someone in a pot opens it with its link, the pot screen
+offers "Show where you're chipping in from". The phone asks for its position
+once, at low accuracy, and turns it into a city on the phone, from a world
+cities list bundled with the app and loaded only when needed (GeoNames, cities
+of 15,000 people or more, `app/src/data/cities.json`; `app/src/lib/cities.ts`).
+No outside service is asked anything, and the position is forgotten at once.
+The person can change the city, or pick one by hand without sharing their
+position at all. It shows like "Houston, United States", the country in the
+reader's language.
+
+* **Never live, never exact, never on the chain.** No tracking in the
+  background; no coordinates are stored or sent anywhere; nothing is written
+  to the chain, which is permanent and public.
+* **Only people with the pot's link can read the cities.** Each city is
+  encrypted on the phone with a key derived from the pot link's fragment
+  (`app/src/lib/cityShare.ts`), the part after `#`, which never reaches any
+  server. `/api/city` stores only ciphertext it can't read. Someone who sees
+  a pot on Home with no link has no key and sees no cities. This builds on
+  how the pot map already got its cities: typed by the pot's maker into the
+  signed link; a city shared this way takes the typed one's place.
+* **Proved and removable.** Each share and removal is signed by the account's
+  passkey, one fingerprint, like a photo; nobody can share or remove a city
+  for someone else, and anyone can remove theirs from a pot at any time.
+* The screen says: "Only people in this pot see your city. NivPay never
+  tracks where you are." `Permissions-Policy` allows `geolocation=(self)` and
+  nothing wider.
+* Someone who answers an invite before the pot exists gets the offer when
+  they first open the pot's link: before that there is no pot and no key.
+* **Hidden until a Blob store is connected**, like photos.
 
 ## Languages
 
@@ -2076,10 +2109,16 @@ each installed package's `package.json`.
 | [`react`](https://github.com/facebook/react), `react-dom` | 19.3.0 | MIT | the interface |
 | [`@fontsource/besley`](https://fontsource.org/fonts/besley) | 5.3.0 | OFL-1.1 | self hosted Besley font |
 | [`@fontsource/work-sans`](https://fontsource.org/fonts/work-sans) | 5.3.0 | OFL-1.1 | self hosted Work Sans font |
-| [`@vercel/blob`](https://github.com/vercel/storage) | 2.8.2 | Apache-2.0 | storing profile photos, private, in the `/api/photo` functions only; never in the page |
+| [`@vercel/blob`](https://github.com/vercel/storage) | 2.8.2 | Apache-2.0 | storing profile photos and shared cities, private, in the `/api/photo` and `/api/city` functions only; never in the page |
 | `typescript` (dev) | 7.0.2 | Apache-2.0 | type-checking |
 | `vite` (dev) | 8.3.1 | MIT | dev server and build |
 | `@types/node`, `@types/react`, `@types/react-dom` (dev) | 24.19.0, 19.3.0, 19.3.0 | MIT | type definitions |
+
+### Data
+
+| Data | Source | License | Used for |
+| --- | --- | --- | --- |
+| World cities (`app/src/data/cities.json`, made by `app/scripts/make_cities.py`) | [GeoNames](https://www.geonames.org/), `cities15000`, downloaded 15 Oct 2026 | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | turning a phone's position, or a typed name, into a city, on the phone only |
 
 ### App, indirect dependencies
 

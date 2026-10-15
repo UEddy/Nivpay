@@ -233,6 +233,17 @@ chain. Hidden until a Vercel Blob store is connected.
 | 45 | The photo, or its removal, didn't reach `/api/photo`, or it refused it: photos not set up (503), wrong origin (403), a proof that didn't check out or was over 5 minutes old (401), not a JPEG (415), too large (413), or too many changes in a minute on that server instance (429). | The request's status in the browser; Vercel function log for `/api/photo` |
 | 46 | The picture chosen couldn't be read by the phone (`createImageBitmap`), or couldn't be made small enough. Nothing was sent. | The file's type; HEIC needs a phone that can decode it |
 
+## Where people in a pot are
+
+A city, opt in, shared with one pot: encrypted on the phone with a key from
+the pot link's fragment, so `/api/city` holds only ciphertext it can't read.
+Hidden until a Vercel Blob store is connected, and for a pot opened with no
+link.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 47 | Sharing or removing a city didn't reach `/api/city`, or it refused it: not set up (503), wrong origin (403), a proof that didn't check out or was over 5 minutes old (401), more than a sealed city (413), or too many changes in a minute on that server instance (429). Nothing else changed. | The request's status in the browser; Vercel function log for `/api/city` |
+
 ## Usernames
 
 Usernames live in NivPayNames, a registry separate from the pots (README,

@@ -40,6 +40,11 @@ test("it can't be framed or post a form anywhere, and passkeys stay allowed", ()
   const perms = header("Permissions-Policy");
   assert.match(perms, /publickey-credentials-create=\(self\)/);
   assert.match(perms, /publickey-credentials-get=\(self\)/);
+  // Where people in a pot are: this site may ask for the phone's position, once, and nothing wider.
+  assert.match(perms, /(^|, )geolocation=\(self\)(,|$)/);
+  // Photos come from a file input, never the camera directly.
+  assert.match(perms, /(^|, )camera=\(\)(,|$)/);
+  assert.match(perms, /(^|, )microphone=\(\)(,|$)/);
 });
 
 test("Trusted Types are required, with one policy, the one the app uses for its service worker", () => {

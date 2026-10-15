@@ -222,4 +222,6 @@ export const SAMPLES: Record<string, unknown[]> = {
   noteClosedShare: ["Birthday"],
   noteLimitRaised: ["$5,000.00"],
   photoOf: ["Idara"],
+  shareCityAction: ["Houston, United States"],
+  yourCityHere: ["Houston, United States"],
 };

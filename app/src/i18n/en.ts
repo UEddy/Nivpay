@@ -896,6 +896,26 @@ export const en = {
   errPhotoSave: "Couldn't save your photo. Try again.",
   errPhotoUnreadable: "That picture couldn't be read. Try another one.",
 
+  // Where people in a pot are (lib/cities.ts, lib/cityShare.ts): a city, opt in, this pot only
+  showWhereFrom: "Show where you're chipping in from",
+  cityOnlyThisPot: "Only people in this pot see your city. NivPay never tracks where you are.",
+  useMyLocation: "Use my location",
+  findingCity: "Finding your city…",
+  pickACity: "Pick a city",
+  cityField: "City",
+  cityPlaceholder2: "Type a city",
+  cityNoResults: "No city by that name in the list.",
+  locationRefused: "Your phone didn't share its location. Pick a city instead.",
+  shareCityAction: (place: string) => `Share ${place} with this pot`,
+  sharingCity: "Sharing…",
+  yourCityHere: (place: string) => `Your city here: ${place}`,
+  changeCity: "Change",
+  removeCity: "Remove",
+  cityShared: "Shared with this pot.",
+  cityRemovedNote: "Your city is removed from this pot.",
+  notNow: "Not now",
+  errCitySave: "Couldn't share your city. Try again.",
+
   // Language (lib/locale.ts), in Account details
   language: "Language",
   languagePhone: "Phone's language",
