@@ -612,7 +612,8 @@ None is needed to run the app locally or the tests.
 | `RAMP_DESK_ADDRESS` | Vercel, server | only if the desk is enabled | The address of that key; the desk refuses to sign unless the key derives exactly this address. It needs testnet MON for its own gas (it stops under 0.2 MON) and claims test AUSD from Agora's faucet for itself when low. |
 | `ALLOWED_ORIGINS` | Vercel, server | no | Comma separated extra origins allowed to call `/api/fund`, `/api/ramp` and `/api/report`, for example `http://localhost:5173`. The deployment's own origin is always allowed. |
 | `VITE_PRODUCTION_HOSTNAME` | Vercel, build time | yes in production | The only hostname besides `localhost` where passkeys can be made or used. For this deployment, `nivpay.vercel.app`, and it must never change. |
-| `BLOB_READ_WRITE_TOKEN` | Vercel, server, Sensitive | no | Set by connecting a Vercel Blob store to the project. Profile photos and shared cities stay hidden until it is set. |
+| `BLOB_STORE_ID` | Vercel, server | no | Set by connecting a Vercel Blob store to the project. `@vercel/blob` pairs it with the OIDC token Vercel issues and rotates for each function, so no token is stored. Profile photos and shared cities stay hidden until a store is connected. |
+| `BLOB_READ_WRITE_TOKEN` | Vercel, server, Sensitive | no | Only for a store connected the older way, with a token; used instead of `BLOB_STORE_ID` when set. |
 | `VITE_SUPPORT_EMAIL` | Vercel, build time | no | The address Help and support's Email support writes to. Its button is hidden while this is missing or malformed. |
 | `VITE_SUPPORT_WHATSAPP` | Vercel, build time | no | The WhatsApp number Chat on WhatsApp opens (wa.me), country code first. Hidden while missing or malformed. |
 | `VITE_NIVPAY_POTS` | build time | no | `testusd` builds the app on the TESTUSD instance. Anything else, or unset, is AUSD. |
@@ -1034,7 +1035,7 @@ Photos show in Account details, Send, Receive, a pot's members, the pot map
 and notifications; without one, initials. Someone else's photo can be tapped
 and reported (`/api/report`, the same reasons as a pot); a reported photo
 shows as initials on that phone from then on. **The feature stays hidden
-until a Blob store is connected** (`BLOB_READ_WRITE_TOKEN`).
+until a Blob store is connected** (`BLOB_STORE_ID`, or `BLOB_READ_WRITE_TOKEN`).
 
 ## Where people in a pot are
 

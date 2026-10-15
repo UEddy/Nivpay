@@ -79,6 +79,7 @@ test("hidden until a Blob store is connected, same origin, small, and a few chan
   assert.deepEqual((await run(getPot(), store, {})).body, { enabled: false, entries: [] });
   const sealed = new Uint8Array(40).fill(7);
   assert.equal((await run(post(await proof("share", sealed)), store, {})).status, 503);
+  assert.deepEqual((await run(getPot(), store, { BLOB_STORE_ID: "store_test" })).body, { enabled: true, entries: [] }, "a store connected by id, signed in with OIDC");
   assert.equal((await run(post(await proof("share", sealed), "https://evil.example"), store)).status, 403);
   assert.equal((await run(post(await proof("share", new Uint8Array(MAX_DATA_BYTES + 1).fill(1))), store)).status, 413);
   assert.equal((await run(getPot("not-a-pot"), store)).status, 400);

@@ -57,7 +57,9 @@ test("hidden until a Blob store is connected", async () => {
   const { store } = memoryStore();
   assert.deepEqual((await run(req(null, SITE, "GET"), store, {})).body, { enabled: false });
   assert.deepEqual((await run(req(null, SITE, "GET"), store)).body, { enabled: true });
+  assert.deepEqual((await run(req(null, SITE, "GET"), store, { BLOB_STORE_ID: "store_test" })).body, { enabled: true }, "a store connected by id, signed in with OIDC");
   assert.equal((await run(req(await proof("upload", jpeg())), store, {})).status, 503);
+  assert.equal((await run(req(await proof("upload", jpeg())), store, { BLOB_STORE_ID: "store_test" })).status, 200);
 });
 
 test("an account uploads and removes its own photo, each proved with one signature", async () => {
@@ -116,4 +118,5 @@ test("photos are served from this site, and only JPEGs that exist", async () => 
   assert.equal((await servePhoto(new Request(`${SITE}/api/photo/${someoneElse.address}`), ENV, read)).status, 404);
   assert.equal((await servePhoto(new Request(`${SITE}/api/photo/not-an-account`), ENV, read)).status, 404);
   assert.equal((await servePhoto(new Request(`${SITE}/api/photo/${me.address}`), {}, read)).status, 404, "nothing while photos aren't set up");
+  assert.equal((await servePhoto(new Request(`${SITE}/api/photo/${me.address}`), { BLOB_STORE_ID: "store_test" }, read)).status, 200, "served with a store connected by id");
 });

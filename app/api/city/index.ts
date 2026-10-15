@@ -17,7 +17,7 @@
 // cities over MAX_DATA_BYTES refused, at most WRITES_PER_MINUTE writes a minute
 // on one instance and PER_ACCOUNT_PER_MINUTE for one account, at most
 // MAX_ENTRIES cities read back for a pot. Stored private in Vercel Blob;
-// hidden until BLOB_READ_WRITE_TOKEN is set. Logs carry the action, the pot
+// hidden until a Blob store is connected (BLOB_STORE_ID, or BLOB_READ_WRITE_TOKEN). Logs carry the action, the pot
 // and the account, never the data.
 //
 // proofMessage is a copy of app/src/lib/proof.ts; app/src/api-tests/city.test.ts
@@ -35,7 +35,11 @@ export const PER_ACCOUNT_PER_MINUTE = 6;
 export const MAX_ENTRIES = 50;
 const DEPLOYMENTS = ["ausd", "testusd"];
 
-export type CityEnv = { BLOB_READ_WRITE_TOKEN?: string; ALLOWED_ORIGINS?: string };
+// A Blob store connected to the project sets BLOB_STORE_ID, and @vercel/blob
+// then signs in with the OIDC token Vercel issues and rotates for each
+// function; no token is passed, so it is never one that has expired. A
+// BLOB_READ_WRITE_TOKEN, if set, is used instead.
+export type CityEnv = { BLOB_STORE_ID?: string; BLOB_READ_WRITE_TOKEN?: string; ALLOWED_ORIGINS?: string };
 
 /** Where sealed cities live. Vercel Blob in production; a map in tests. */
 export interface CityStore {
@@ -96,7 +100,7 @@ export async function handleCity(
   log: Logger = (e) => console.log(JSON.stringify(e)),
   now: () => number = Date.now,
 ): Promise<Response> {
-  const enabled = Boolean(env.BLOB_READ_WRITE_TOKEN);
+  const enabled = Boolean(env.BLOB_STORE_ID || env.BLOB_READ_WRITE_TOKEN);
   const url = new URL(request.url);
   if (request.method === "GET") {
     const deployment = url.searchParams.get("deployment");

@@ -1,7 +1,8 @@
 // /api/photo: profile photos, stored in Vercel Blob.
 //
-// GET returns { enabled }: false until BLOB_READ_WRITE_TOKEN is set, and the
-// app shows no photos at all until then.
+// GET returns { enabled }: false until a Blob store is connected
+// (BLOB_STORE_ID, or BLOB_READ_WRITE_TOKEN), and the app shows no photos at
+// all until then.
 // POST { action: "upload", account, time, signature, image } stores a JPEG
 //   as this account's photo. POST { action: "remove", account, time,
 //   signature } removes it. Each is proved by the account itself: its passkey
@@ -36,7 +37,11 @@ export const PROOF_WINDOW_S = 300;
 export const UPLOADS_PER_MINUTE = 30;
 export const PER_ACCOUNT_PER_MINUTE = 4;
 
-export type PhotoEnv = { BLOB_READ_WRITE_TOKEN?: string; ALLOWED_ORIGINS?: string };
+// A Blob store connected to the project sets BLOB_STORE_ID, and @vercel/blob
+// then signs in with the OIDC token Vercel issues and rotates for each
+// function; no token is passed, so it is never one that has expired. A
+// BLOB_READ_WRITE_TOKEN, if set, is used instead.
+export type PhotoEnv = { BLOB_STORE_ID?: string; BLOB_READ_WRITE_TOKEN?: string; ALLOWED_ORIGINS?: string };
 
 /** Where photos live. Vercel Blob in production; a map in tests. */
 export interface PhotoStore {
@@ -106,7 +111,7 @@ export async function handlePhoto(
   log: Logger = (e) => console.log(JSON.stringify(e)),
   now: () => number = Date.now,
 ): Promise<Response> {
-  const enabled = Boolean(env.BLOB_READ_WRITE_TOKEN);
+  const enabled = Boolean(env.BLOB_STORE_ID || env.BLOB_READ_WRITE_TOKEN);
   if (request.method === "GET") return json(200, { enabled });
   if (request.method !== "POST") return json(405, { error: "use GET or POST" });
   if (!enabled) return json(503, { error: "photos are not set up" });
