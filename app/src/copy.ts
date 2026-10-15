@@ -793,6 +793,13 @@ const words = {
   errNameNotFound: (name: string) => `No account has the username @${name}.`,
   errNameChanged: (name: string) => `@${name} belongs to a different account than the one you paid before. Nothing was sent.`,
 
+  // Deleting a draft (lib/draft.ts deleteRefusal)
+  deleteDraft: "Delete draft",
+  deleteDraftTitle: "Delete this draft?",
+  deleteDraftLede: "Anyone you invited won't be able to join it. This can't be undone.",
+  deleteDraftBeingMade: "This pot is being made right now, so its draft can't be deleted. Wait until it's made or the attempt ends.",
+  draftDeleted: "Draft deleted.",
+
   // Installing the app (lib/install.ts)
   installNivPay: "Install NivPay",
   installHint: "Open it from your home screen, like any other app.",

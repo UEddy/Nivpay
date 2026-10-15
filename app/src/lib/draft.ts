@@ -417,3 +417,17 @@ export class DraftStore {
     this.kv.setItem(DRAFTS, JSON.stringify(this.all().filter((d) => d.id !== id)));
   }
 }
+
+/**
+ * Whether a draft may be deleted. A made pot lives on the chain and can't be,
+ * so Delete isn't offered for it. A draft whose pot is being made (a create
+ * request signed and in flight, or one still being checked on) is refused
+ * until that ends, so a pot can never land with no draft behind it.
+ */
+export type DeleteRefusal = "made" | "beingMade";
+
+export function deleteRefusal(draft: Pick<Draft, "made" | "sending">, createInFlight: boolean): DeleteRefusal | null {
+  if (draft.made) return "made";
+  if (draft.sending || createInFlight) return "beingMade";
+  return null;
+}

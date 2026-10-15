@@ -311,6 +311,7 @@ function Screens() {
         notice={notice}
         onBack={() => go({ kind: "home" })}
         onOpenPot={(pot) => go({ kind: "pot", pot })}
+        onDeleted={() => go({ kind: "home" }, { tone: "ok", text: copy.draftDeleted })}
       />
     );
   }

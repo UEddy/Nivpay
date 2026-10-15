@@ -1751,3 +1751,8 @@
   margin: 0;
   font-size: 14px;
 }
+
+.delete-draft {
+  align-self: center;
+  margin-top: 8px;
+}

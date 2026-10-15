@@ -17,6 +17,7 @@ import {
   normalizeSending,
   withAttempt,
   deciderShare,
+  deleteRefusal,
   newSlot,
   parseAccountId,
   namedPeople,
@@ -45,7 +46,7 @@ import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { PotMap, type Coin, type MapPerson } from "./PotMap.tsx";
 import { andList, copyLink, CopyLinkButton, formatDay, Icon, NoticeLine, phoneTimeZone, shareLink, Sheet, type Notice, type ShareResult } from "./ui.tsx";
 
-type SheetKind = "name" | "deciders" | "payees" | "closes" | "leftover" | "confirm";
+type SheetKind = "name" | "deciders" | "payees" | "closes" | "leftover" | "confirm" | "delete";
 
 const MISSING_LABEL: Record<Missing, string> = {
   name: copy.missingName,
@@ -72,6 +73,8 @@ export function CreateScreen(props: {
   notice: Notice | null;
   onBack: () => void;
   onOpenPot: (pot: StoredPot) => void;
+  /** After a draft is deleted. */
+  onDeleted: () => void;
 }) {
   const { account, drafts, draftId } = props;
   const [draft, setDraft] = useState<Draft | undefined>(() => drafts.get(draftId));
@@ -332,6 +335,28 @@ export function CreateScreen(props: {
     return accepted.text;
   };
 
+  /** Delete is refused while the pot is being made (lib/draft.ts deleteRefusal), checked again on confirm. */
+  const refusedNow = async (): Promise<boolean> => {
+    const d = drafts.get(draftId);
+    if (!d) return true;
+    const w = await idbWriteStore.get(account.address).catch(() => undefined);
+    const why = deleteRefusal(d, Boolean(w && w.label === writeLabel(d)) || step !== null);
+    if (why === "beingMade") setResult({ tone: "bad", text: copy.deleteDraftBeingMade });
+    return why !== null;
+  };
+  const askToDelete = async () => {
+    setResult(null);
+    if (!(await refusedNow())) setSheet("delete");
+  };
+  const deleteIt = async () => {
+    if (await refusedNow()) {
+      setSheet(null);
+      return;
+    }
+    drafts.delete(draftId);
+    props.onDeleted();
+  };
+
   /** Signs the names again over the transaction that made the pot, when this phone had no signature for it. */
   const signNames = async () => {
     const unsigned = made?.unsigned;
@@ -461,6 +486,12 @@ export function CreateScreen(props: {
           <span>{made ? copy.lockAfter : copy.lockBefore}</span>
         </div>
 
+        {!made && (
+          <button type="button" className="text-btn delete-draft" onClick={askToDelete}>
+            {copy.deleteDraft}
+          </button>
+        )}
+
         {made && !made.unsigned && named.length > 0 && (
           <section className="send-out enter" aria-labelledby="send-out-title">
             <h2 id="send-out-title">{copy.namedSeeItTitle}</h2>
@@ -526,6 +557,17 @@ export function CreateScreen(props: {
         )}
       </div>
 
+      {sheet === "delete" && (
+        <Sheet title={copy.deleteDraftTitle} onClose={() => setSheet(null)}>
+          <p className="lede">{copy.deleteDraftLede}</p>
+          <button type="button" className="pill-btn" onClick={() => void deleteIt()}>
+            {copy.deleteDraft}
+          </button>
+          <button type="button" className="btn ghost" onClick={() => setSheet(null)}>
+            {copy.back}
+          </button>
+        </Sheet>
+      )}
       {sheet === "name" && (
         <NameSheet draft={draft} onSave={(name) => update((d) => ({ ...d, name }))} onClose={() => setSheet(null)} />
       )}

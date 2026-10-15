@@ -271,3 +271,11 @@ test("reply progress names who has replied and who the draft is waiting for", ()
   d = withPayeeAccount(d, "0x0101010101010101", CATERER, "pasted");
   assert.deepEqual(replyProgress(d), { replied: ["Ubong", "Caterer"], waiting: [] });
 });
+
+test("a draft can be deleted until its pot is being made, and a made pot never", async () => {
+  const { deleteRefusal } = await import("./draft.ts");
+  assert.equal(deleteRefusal({ made: undefined, sending: undefined }, false), null);
+  assert.equal(deleteRefusal({ made: undefined, sending: undefined }, true), "beingMade", "a create request in flight");
+  assert.equal(deleteRefusal({ made: undefined, sending: { attempts: [] } as never }, false), "beingMade", "an attempt still being checked on");
+  assert.equal(deleteRefusal({ made: { potId: "1", block: "2", fragment: "" }, sending: undefined }, false), "made");
+});
