@@ -8,8 +8,16 @@ import "@fontsource/work-sans/500.css";
 import "@fontsource/work-sans/600.css";
 import "./styles.css";
 import "./pot.css";
-import { App } from "./App.tsx";
+import { startLanguage } from "./i18n/start.ts";
+// Listens for the browser's install offer from the very start: it can come
+// before the language and the screens have loaded (lib/install.ts).
+import "./lib/install.ts";
 import { serviceWorkerUrl, type TrustedTypesLike } from "./lib/trusted.ts";
+
+// The language first, then the app: every screen reads the words and the
+// number and date formats of the language chosen here (i18n/start.ts).
+await startLanguage();
+const { App } = await import("./App.tsx");
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");

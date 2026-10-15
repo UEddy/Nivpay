@@ -54,7 +54,8 @@ import { balanceNote } from "./lib/connection.ts";
 import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/balanceRead.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
 import { namesOn, USERNAME_LABEL, usernameOf } from "./lib/names.ts";
-import { dateLocale } from "./lib/locale.ts";
+import { dateLocale, LANGS, LANGUAGE_NAMES, language, readPick, type Lang } from "./lib/locale.ts";
+import { pickLanguage } from "./i18n/start.ts";
 
 const accounts = new AccountStore(localStorage);
 const credentials = new CredentialStore(localStorage);
@@ -625,6 +626,7 @@ function AccountSheet(props: {
         <button type="button" className="btn" onClick={() => openHelp()}>
           {copy.helpAndSupport}
         </button>
+        <LanguagePicker />
         {installWay && (
           <section aria-labelledby="install-app">
             <p className="eyebrow" id="install-app">
@@ -1615,5 +1617,37 @@ function ReportSheet(props: { potId: string; onClose: () => void; onReported: ()
         {copy.back}
       </button>
     </Sheet>
+  );
+}
+
+/**
+ * Language, in Account details: the phone's language, or one picked by hand.
+ * Picking reloads the app into it (i18n/start.ts). Each language is named in
+ * its own words.
+ */
+function LanguagePicker() {
+  const [pick] = useState(() => {
+    try {
+      return readPick(localStorage);
+    } catch {
+      return null;
+    }
+  });
+  return (
+    <section aria-labelledby="language">
+      <label className="field">
+        <span id="language">{copy.language}</span>
+        <select value={pick ?? ""} onChange={(e) => pickLanguage((e.target.value || null) as Lang | null)}>
+          <option value="">{copy.languagePhone}</option>
+          {LANGS.map((l) => (
+            <option key={l} value={l} lang={l}>
+              {LANGUAGE_NAMES[l]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="hint">{copy.languageHint}</p>
+      {language() !== "en" && <p className="hint">{copy.translationNote}</p>}
+    </section>
   );
 }

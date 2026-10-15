@@ -937,6 +937,40 @@ pays, a payment can go out the moment it is asked, before anyone sees it. A cont
 helps only if the person saved the right account in the first place, and a
 report is read by a person, later; nothing acts on it automatically.
 
+## Languages
+
+NivPay speaks English, French, Spanish and Portuguese. It uses the first
+language in the phone's list that it has, or English, and follows the phone
+when that list changes, unless the person picks one under Account details
+("Language: phone's language", then the list). `<html lang>` follows too.
+Every word lives in one dictionary per language under `app/src/i18n`, all
+with the same keys; English is the source. Only the language in use is
+downloaded.
+
+**The translations were written by AI and have not been reviewed by native
+speakers.** They need that review before anyone relies on them, above all the
+texts about money (amounts, fees, what was sent and what wasn't) and about
+closing a pot and taking a share out, where a wrong word can mislead someone
+about their money. The app says so in Account details when a language other
+than English is in use.
+
+Tests fail if a language is missing a key, if a message takes different
+values from the English one or drops one of them, or if any language uses a
+banned word, in English or in its own words (`portefeuille`, `cartera`,
+`carteira` for wallet, and so on: `app/src/i18n/banned.ts`).
+
+**Amounts follow the reader, money safety first.** Before, an amount field
+stripped commas, so in French "10,50" would have been read as $1,050. Now
+every amount field reads the way the phone's region writes numbers
+(`app/src/lib/locale.ts`): "10,50" is $10.50 in French, in Spain and in
+Brazil, and 10.50 is how a Mexican phone writes it. Dollar fields take at most
+2 decimals, groups must be groups of three, and anything ambiguous is refused,
+never guessed: "1,000" in French is refused instead of read as $1, and
+"10,50" in English is refused instead of read as $1,050. Under every amount
+field the app shows what it understood ("That's $10.50."), before any confirm.
+Amounts are shown the reader's way too ("1 050,00 $US" in French). Dates,
+times and lists follow the language.
+
 ## Usernames for accounts
 
 An account is a 42 character Account ID, and the names people see ("Idara",
@@ -1790,6 +1824,12 @@ Sources:
 * https://docs.monad.xyz/tooling-and-infra/onramps
 
 ## Future work
+
+**More languages, with native speakers.** Yoruba, Igbo, Hausa and Nigerian
+Pidgin, for the people NivPay was first built for, and Arabic, which reads
+right to left and needs the layout mirrored, not only the words. Each should
+be written or at least reviewed by native speakers, starting with the texts
+about money and closing pots, before it ships.
 
 **Inviting people to a pot by username.** Today a decider or a payee joins a
 pot by answering an invite link, which proves the account is theirs. With
