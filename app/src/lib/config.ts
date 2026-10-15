@@ -63,5 +63,14 @@ export const DEPLOY_BLOCK = {
   [POTS_TESTUSD]: 66096818n,
 } as const;
 
+/**
+ * NivPayNames, the username registry (README, "Usernames for accounts"), one
+ * for both deployments. Null until it is deployed, and while it is null
+ * every username feature is hidden and the app works as it did without them.
+ */
+export const NAMES: Address | null = null;
+/** The block NivPayNames was deployed in, from its receipt. Null with NAMES. */
+export const NAMES_DEPLOY_BLOCK: bigint | null = null;
+
 /** eth_getLogs on the public RPC allows toBlock - fromBlock <= 100 (measured). */
 export const LOG_PAGE_BLOCKS = 101n;

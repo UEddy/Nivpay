@@ -197,3 +197,37 @@ export const ERC20_ALLOWANCE_ABI = [
     outputs: [{ type: "uint256" }],
   },
 ] as const;
+
+/** NivPayNames, the username registry (src/NivPayNames.sol). Everything the app calls or reads. */
+export const NAMES_ABI = [
+  { type: "function", name: "claim", stateMutability: "nonpayable", inputs: [{ name: "name", type: "string" }], outputs: [] },
+  { type: "function", name: "release", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { type: "function", name: "accountOf", stateMutability: "view", inputs: [{ name: "name", type: "string" }], outputs: [{ name: "", type: "address" }] },
+  { type: "function", name: "nameOf", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "string" }] },
+  { type: "function", name: "availableAt", stateMutability: "view", inputs: [{ name: "name", type: "string" }], outputs: [{ name: "", type: "uint64" }] },
+  { type: "function", name: "releasedBy", stateMutability: "view", inputs: [{ name: "name", type: "string" }], outputs: [{ name: "", type: "address" }] },
+  { type: "function", name: "HOLD_PERIOD", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint64" }] },
+  {
+    type: "event",
+    name: "NameClaimed",
+    inputs: [
+      { name: "account", type: "address", indexed: true },
+      { name: "name", type: "string", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "NameReleased",
+    inputs: [
+      { name: "account", type: "address", indexed: true },
+      { name: "name", type: "string", indexed: false },
+      { name: "availableAt", type: "uint64", indexed: false },
+    ],
+  },
+  { type: "error", name: "NameNotAllowed", inputs: [] },
+  { type: "error", name: "NameReserved", inputs: [] },
+  { type: "error", name: "NameTaken", inputs: [] },
+  { type: "error", name: "NameHeld", inputs: [{ name: "availableAt", type: "uint64" }] },
+  { type: "error", name: "AlreadyYours", inputs: [] },
+  { type: "error", name: "NoName", inputs: [] },
+] as const;

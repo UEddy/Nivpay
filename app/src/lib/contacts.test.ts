@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { getAddress } from "viem";
-import { ContactStore, nameKey, PaidStore, sendWarnings, type Contact } from "./contacts.ts";
+import { ContactStore, NamePairStore, nameKey, namePairCheck, PaidStore, sendWarnings, type Contact } from "./contacts.ts";
 
 const ME = getAddress("0x1A9A136f1cf59899C6b8cfE84ac4df388620467d");
 const IDARA = getAddress("0x725C9A4Bb4c3dE2F11aC0e7C9b1E8f0D3a2B7bC1");
@@ -72,4 +72,23 @@ test("a contact's account under another name on the link shows the saved name fi
   assert.deepEqual(w.savedAs, contacts[0]);
   assert.equal(w.clash, null);
   assert.equal(sendWarnings(IDARA, "IDARA", contacts, true).savedAs, null, "same name, nothing to say");
+});
+
+test("a username paid before is remembered with its account, per account and deployment", () => {
+  const kv = memory();
+  const pairs = new NamePairStore(kv, "ausd", ME);
+  assert.equal(pairs.get("idara"), undefined);
+  pairs.remember("idara", IDARA.toLowerCase() as typeof IDARA);
+  assert.equal(pairs.get("idara"), IDARA);
+  assert.equal(new NamePairStore(kv, "testusd", ME).get("idara"), undefined);
+  assert.equal(new NamePairStore(kv, "ausd", FAKE).get("idara"), undefined);
+  kv.setItem(`nivpay.namepairs.v1.ausd.${ME}`, JSON.stringify({ idara: "nope", "Bad Name": IDARA, ubong: FAKE }));
+  assert.deepEqual([pairs.get("idara"), pairs.get("ubong")], [undefined, FAKE], "damaged rows are dropped");
+});
+
+test("a username is asked about the first time, passes when unchanged, and stops when it points elsewhere", () => {
+  assert.equal(namePairCheck(IDARA, undefined), "first");
+  assert.equal(namePairCheck(IDARA, IDARA.toLowerCase() as typeof IDARA), "same");
+  // The stop that can't happen live for 90 days: the name was let go, held, and claimed by someone else.
+  assert.equal(namePairCheck(FAKE, IDARA), "changed");
 });

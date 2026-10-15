@@ -127,3 +127,53 @@ export function sendWarnings(to: Address, linkName: string | null, contacts: Con
     savedAs: saved && key && nameKey(saved.name) !== key ? saved : null,
   };
 }
+
+/**
+ * Usernames this account has paid, and the account each pointed at then, on
+ * this phone. Kept beside contacts but apart from them: a username is the
+ * other person's choice, not a name this person gave them.
+ *
+ * The first payment to a username asks for the last 4 characters of the
+ * Account ID, like a pasted one; once a payment to it is final, the pair is
+ * remembered and not asked again. If the name later points somewhere else,
+ * the payment stops before anything is signed (namePairCheck).
+ */
+export class NamePairStore {
+  private readonly kv: KeyValue;
+  private readonly key: string;
+
+  constructor(kv: KeyValue, deployment: string, owner: Address) {
+    if (!isAddress(owner)) throw new Error("not an account");
+    this.kv = kv;
+    this.key = `nivpay.namepairs.v1.${deployment}.${getAddress(owner)}`;
+  }
+
+  private read(): Record<string, Address> {
+    try {
+      const raw = JSON.parse(this.kv.getItem(this.key) ?? "{}") as unknown;
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+      return Object.fromEntries(
+        Object.entries(raw as Record<string, unknown>).flatMap(([n, a]) => (/^[a-z0-9_]{1,20}$/.test(n) && typeof a === "string" && isAddress(a) ? [[n, getAddress(a)]] : [])),
+      );
+    } catch {
+      return {};
+    }
+  }
+
+  get(name: string): Address | undefined {
+    return this.read()[name];
+  }
+
+  /** Remembers the account a username pointed at when a payment to it was final. A later payment replaces it only through remember again. */
+  remember(name: string, account: Address): void {
+    this.kv.setItem(this.key, JSON.stringify({ ...this.read(), [name]: getAddress(account) }));
+  }
+}
+
+export type NamePairCheck = "first" | "same" | "changed";
+
+/** A username's account now, against the one remembered from paying it before. */
+export function namePairCheck(now: Address, remembered: Address | undefined): NamePairCheck {
+  if (!remembered) return "first";
+  return isAddressEqual(now, remembered) ? "same" : "changed";
+}
