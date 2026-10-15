@@ -375,7 +375,9 @@ function Screens() {
     );
   }
   if (active && !switching && screen.kind === "send") {
-    return <SendScreen key={active.address} account={active} request={screen.request} banner={banner} onClose={() => go({ kind: "home" })} />;
+    // Keyed by the link too: a second pay link opened over this screen starts afresh, never keeping the first one's recipient.
+    const linkKey = screen.request ? `${screen.request.account}:${screen.request.amount}:${screen.request.name}` : "";
+    return <SendScreen key={active.address + ":" + linkKey} account={active} request={screen.request} banner={banner} onClose={() => go({ kind: "home" })} />;
   }
   if (active && !switching && screen.kind === "money") {
     return <MoneyScreen key={active.address + screen.mode} account={active} mode={screen.mode} banner={banner} onClose={() => go({ kind: "home" })} />;
