@@ -84,7 +84,8 @@ export function fromPoll(s: NotesState, i: PollInputs): NotesState {
   if (s.startedAt === null) return s;
   const fresh: Note[] = [];
   const names = Object.fromEntries(i.found.map((p) => [p.potId, p.name]));
-  const totals: Record<string, string> = {};
+  // Pots missing from one poll (still loading, or hidden for now) keep the total last seen.
+  const totals: Record<string, string> = { ...s.totals };
   const poursSeen = new Set(s.poursSeen);
   for (const p of i.found) {
     totals[p.potId] = p.totalAssets;

@@ -105,3 +105,11 @@ test("a note says which pot by the name it has", () => {
   s = fromPoll(s, poll({ found: [pot("1", 150)] }));
   assert.equal(s.notes[0]!.name, "Birthday");
 });
+
+test("a poll that comes back empty doesn't forget what each pot held", () => {
+  let s = fromPoll(start(EMPTY_NOTES, T, 1n), poll({ found: [pot("1", 100)] }));
+  s = fromPoll(s, poll({ found: [] }));
+  s = fromPoll(s, poll({ found: [pot("1", 130)] }));
+  assert.deepEqual(kinds(s), ["chippedIn"]);
+  assert.equal(s.notes[0]!.amount, usd(30));
+});
