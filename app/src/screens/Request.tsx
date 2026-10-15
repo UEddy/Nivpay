@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useUsernames, withUsernameOf } from "./Username.tsx";
 import { isAddressEqual, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
@@ -78,6 +79,8 @@ export function RequestScreen(props: {
 
   const [info, setInfo] = useState<PotInfo | null>(null);
   const [state, setState] = useState<PotState | null>(null);
+  // Usernames beside the deciders' names, never in their place.
+  const usernames = useUsernames(state?.deciders ?? []);
   const [req, setReq] = useState<ReadRequest | null>(null);
   const [terms, setTerms] = useState<FeeTerms | null>(null);
   const [failure, setFailure] = useState<Notice | null>(link ? null : { tone: "bad", text: copy.errLinkDamaged, code: ERROR_CODES.LINK_DAMAGED });
@@ -340,7 +343,7 @@ export function RequestScreen(props: {
   const payee = state.payees[request.payee];
   const payeeLabel = payeeName(state, req);
   const asker = people.find((p) => isAddressEqual(p.account, request.asker));
-  const askerName = asker?.me ? copy.youCap : (asker?.name ?? copy.accountEnding(request.asker));
+  const askerName = asker?.me ? copy.youCap : withUsernameOf(usernames, request.asker, asker?.name ?? copy.accountEnding(request.asker));
   const askerZone = asker?.timeZone || phoneTimeZone();
   const busy = step !== null;
   const myFinalYes = acting === "yes" && view.paysOnMyYes && step === "landing";

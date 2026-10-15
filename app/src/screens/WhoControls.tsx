@@ -4,6 +4,7 @@ import { cleanName } from "../lib/accounts.ts";
 import type { Contact } from "../lib/contacts.ts";
 import { formatAmount } from "../lib/money.ts";
 import { potRisks } from "../lib/potRisks.ts";
+import { useUsernames, withUsernameOf } from "./Username.tsx";
 import type { PotState } from "../lib/potview.ts";
 
 const whenFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -26,6 +27,7 @@ export function WhoControls(props: {
 }) {
   const { state, me } = props;
   const fmt = (v: bigint) => formatAmount(v, state.decimals, "auto");
+  const usernames = useUsernames([...state.deciders, ...state.payees.map((p) => p.to)]);
   const payeeLabel = (a: Address) => state.payees.find((p) => isAddressEqual(p.to, a))?.name;
   /** A contact's name, else the pot's label for them (signed link, then payee label), else their account ending. */
   const nameOf = (a: Address, label?: string): string => {
@@ -37,7 +39,8 @@ export function WhoControls(props: {
   /** "Idara · account ending 7bC1", or the ending alone when there is no name. */
   const who = (a: Address, label?: string) => {
     const name = nameOf(a, label);
-    return name === copy.accountEnding(a) ? name : `${name} · ${copy.accountEnding(a)}`;
+    const shown = name === copy.accountEnding(a) ? name : `${name} · ${copy.accountEnding(a)}`;
+    return withUsernameOf(usernames, a, shown);
   };
   const risks = potRisks({ deciders: state.deciders, threshold: state.threshold, payees: state.payees, maker: props.maker });
   // Lines about the person reading are left out: they know what they can do.

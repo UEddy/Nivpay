@@ -66,7 +66,7 @@ export function useAvailability(typed: string, me: Address): Availability | "che
 
 /** Each listed account's username, by lowercase account, read once at a finalized block. */
 const known = new Map<string, string>();
-export function useUsernames(accounts: Account[]): Record<string, string> {
+export function useUsernames(accounts: readonly string[]): Record<string, string> {
   const key = [...new Set(accounts.map((a) => a.toLowerCase()))].sort().join(",");
   const [names, setNames] = useState<Record<string, string>>(() => {
     const wanted = new Set(key.split(","));
@@ -90,6 +90,16 @@ export function useUsernames(accounts: Account[]): Record<string, string> {
     };
   }, [key]);
   return names;
+}
+
+/**
+ * "Idara (@idara)": a name with the account's username beside it, never in
+ * its place. The name is still the one signed in the link, or the account
+ * ending; the username only helps tell people apart.
+ */
+export function withUsernameOf(usernames: Record<string, string>, account: Account, name: string): string {
+  const u = usernames[account.toLowerCase()];
+  return u ? copy.withUsername(name, u) : name;
 }
 
 const PROBLEM_TEXT: Record<UsernameProblem, string> = {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useUsernames, withUsernameOf } from "./Username.tsx";
 import { prefersReducedMotion } from "../lib/reduced.ts";
 import { isAddressEqual, type Address } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
@@ -11,7 +12,7 @@ import type { PotLink } from "../lib/invites.ts";
 import { formatAmount } from "../lib/money.ts";
 import { PERSON_COLORS } from "../lib/potmap.ts";
 import { linkFor, type StoredPot } from "../lib/potstore.ts";
-import { openPot, potFeed, readPotState, type PotInfo, type PotState } from "../lib/potview.ts";
+import { openPot, potFeed, putIn, readPotState, type PotInfo, type PotState } from "../lib/potview.ts";
 import { receiptUrl } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
 import { ordered, replayStepMs, replaySteps, storyRows, type Order, type ReplayStep } from "../lib/story.ts";
@@ -52,6 +53,11 @@ export function TimelineScreen(props: {
   const [info, setInfo] = useState<PotInfo | null>(null);
   const [state, setState] = useState<PotState | null>(null);
   const [events, setEvents] = useState<PotEvent[] | null>(null);
+  // Usernames beside names in the story, never in their place: deciders, and anyone who put money in.
+  const usernames = useUsernames([
+    ...(state?.deciders ?? []),
+    ...Object.keys(putIn(events ?? [])),
+  ]);
   // False while older pages of history are still arriving, newest first.
   const [complete, setComplete] = useState(false);
   const [times, setTimes] = useState<Map<bigint, bigint>>(() => blockTimes.all());
@@ -166,13 +172,13 @@ export function TimelineScreen(props: {
     const find = (a: Address) => ps.find((p) => isAddressEqual(p.account, a));
     return storyRows(events, {
       me,
-      nameOf: (a) => find(a)?.name ?? copy.accountEnding(a),
+      nameOf: (a) => withUsernameOf(usernames, a, find(a)?.name ?? copy.accountEnding(a)),
       cityOf: (a) => find(a)?.city ?? "",
       payeeName: (i) => state.payees[i]?.name ?? "",
       money: (v) => formatAmount(v, state.decimals, "cents"),
       now: state.now,
     });
-  }, [events, info, state, me]);
+  }, [events, info, state, me, usernames]);
   const byOrder = useMemo(() => ({ newest: ordered(rows, "newest"), oldest: ordered(rows, "oldest") }), [rows]);
   const replay = () => {
     if (!steps.length || replayAt !== null) return;

@@ -15,6 +15,7 @@ import { readClient } from "../lib/rpc.ts";
 import { incomingFrom, incomingSource, RECEIVE_BACKLOG_BLOCKS, senderKind, withFloor, type Incoming } from "../lib/transfer.ts";
 import { copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, useOnline } from "./ui.tsx";
 import { balanceNote } from "../lib/connection.ts";
+import { useUsernames, withUsernameOf } from "./Username.tsx";
 
 const finalized = async () => (await readClient.getBlock({ blockTag: "finalized" })).number;
 
@@ -38,9 +39,9 @@ function show(currencies: Record<string, Currency>, p: Arrival): string {
 }
 
 /** A payment from a pot, or in another currency from Agora's settlement, is not from a person's account. */
-function fromText(from: Address): string {
+function fromText(from: Address, usernames: Record<string, string> = {}): string {
   const kind = senderKind(from, [POTS_AUSD, POTS_TESTUSD], SETTLEMENT_PAIR);
-  return kind === "pot" ? copy.fromAPot : kind === "settlement" ? copy.fromAgoraSettlement : copy.accountEnding(from);
+  return kind === "pot" ? copy.fromAPot : kind === "settlement" ? copy.fromAgoraSettlement : withUsernameOf(usernames, from, copy.accountEnding(from));
 }
 
 export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode; onClose: () => void }) {
@@ -58,6 +59,8 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
   const [note, setNote] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const alive = useRef(true);
+  const usernames = useUsernames([me, ...payments.map((p) => p.from)]);
+  const myUsername = usernames[me.toLowerCase()];
 
   useEffect(() => {
     alive.current = true;
@@ -180,6 +183,7 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
           <button type="button" className="btn ghost small" onClick={copyId}>
             {copied ? copy.copied : copy.orShareAccountId}
           </button>
+          {myUsername && <p className="hint">{copy.yourUsername(myUsername)}</p>}
         </div>
 
         <section className="card enter" style={{ animationDelay: "80ms" }} aria-labelledby="payments-in">
@@ -198,7 +202,7 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
                 <div className={`list-row${isNew ? " arrived" : ""}`} key={keyOf(p)}>
                   <div className="grow">
                     <span className="name">+{show(currencies, p)}</span>
-                    <span className="meta">{copy.paymentFrom(fromText(p.from))}</span>
+                    <span className="meta">{copy.paymentFrom(fromText(p.from, usernames))}</span>
                     {isNew && <span className="meta">{copy.justArrived}</span>}
                   </div>
                   <a className="receipt-link small" href={receiptUrl(p.tx)} target="_blank" rel="noopener noreferrer">
