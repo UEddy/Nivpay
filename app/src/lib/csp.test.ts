@@ -44,7 +44,8 @@ test("it can't be framed or post a form anywhere, and passkeys stay allowed", ()
   assert.match(perms, /(^|, )geolocation=\(self\)(,|$)/);
   // Photos come from a file input, never the camera directly.
   assert.match(perms, /(^|, )camera=\(\)(,|$)/);
-  assert.match(perms, /(^|, )microphone=\(\)(,|$)/);
+  // Voice commands: this site may use the microphone, after a tap, and nothing wider.
+  assert.match(perms, /(^|, )microphone=\(self\)(,|$)/);
 });
 
 test("Trusted Types are required, with one policy, the one the app uses for its service worker", () => {

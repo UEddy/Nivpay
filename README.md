@@ -1097,6 +1097,37 @@ worker (`app/api/push`, `app/api/notify`, `app/public/sw.js`).
 * **Hidden until `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` and a
   Blob store are set.** The private key lives only in Vercel's settings.
 
+## Voice commands
+
+A microphone on Send and on a pot's screen (`app/src/lib/voice.ts`,
+`app/src/screens/Voice.tsx`). No wake word and nothing listening in the
+background: it listens only after a tap, for one sentence, then stops.
+
+* **The browser's speech recognition**, where the browser has it; elsewhere
+  the button is hidden. Before the first use the app says plainly that the
+  phone's speech service (Google on Android, Apple on iPhone) turns the words
+  into text; NivPay gets only the text. `Permissions-Policy` allows
+  `microphone=(self)` and nothing wider.
+* **Two commands, in English**, from a pure, tested parser: "send 100 dollars
+  to Mum" (or "100 USD", "$100", "a hundred and fifty") and "put 50 into
+  Mama's 60th". Anything else is "I didn't catch that", with examples. The
+  button is hidden in French, Spanish and Portuguese until their parsers are
+  tested.
+* **Who voice can pay**: only contacts marked "Trusted for voice" in
+  Profile, Voice, and only ones this phone has paid at least once; only pots
+  the person is already in. The spoken name is matched against those
+  contacts only; when two names are close, both are shown to pick from.
+* **Off until it has been seen working**: voice can be turned on only after
+  10 final transfers, sent or received, on this phone. Until then the switch
+  shows "x of 10" and says why.
+* **Safety.** Voice only fills in the screen. Send's confirm sheet reads back
+  the words heard, the amount and the person, and the fingerprint is still
+  needed every time; on a pot, the same read-back sits above the button, and
+  the fingerprint follows it. The daily limit applies, and each voice payment
+  is at most $200 (Code 68), even if the amount is changed afterwards. Voice
+  has no command to change settings or limits, add contacts or mark them
+  trusted, or say yes to a pot's payment.
+
 ## Profile photos
 
 An account can add a photo in Account details: from the camera or the

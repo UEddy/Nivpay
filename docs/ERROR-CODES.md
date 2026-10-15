@@ -269,6 +269,17 @@ Vercel Blob store are set. Nothing here moves money.
 | 58 | The phone's push subscription couldn't be made, or didn't reach `/api/push`, or it refused it: not set up (503), wrong origin (403), a proof that didn't check out or was over 5 minutes old (401), or too many changes in a minute on that server instance (429). Nothing changed. | The browser's push support; the request's status; Vercel function log for `/api/push` |
 | 59 | The phone or browser said no to notifications for NivPay, now or earlier. Nothing was asked of the server. Allow notifications for the site in the browser's or phone's settings, then try again. | `Notification.permission` is `denied` |
 
+## Voice commands
+
+The microphone on Send and on a pot's screen (README, "Voice commands"). Voice
+only fills in the screen; nothing is sent until the person confirms with a
+fingerprint.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 68 | The amount voice filled in is over $200, the most one voice payment can be, or was changed to more than that before Review. Nothing was sent. Type the amount instead. | `VOICE_CAP` in `app/src/lib/voice.ts` |
+| 69 | The phone's speech service heard nothing, or the microphone was refused for NivPay. Nothing was filled in. | The browser's microphone permission for the site |
+
 ## Usernames
 
 Usernames live in NivPayNames, a registry separate from the pots (README,

@@ -24,6 +24,9 @@ import { usePayMotion } from "./payMotion.ts";
 import { PotMap, type Coin, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { WhoControls } from "./WhoControls.tsx";
 import { ContactStore } from "../lib/contacts.ts";
+import { ScanStore } from "../lib/discover.ts";
+import { matchName, VOICE_CAP, VoiceStore, withinVoiceCap, type VoiceCommand } from "../lib/voice.ts";
+import { VoiceButton } from "./Voice.tsx";
 import { mapLines } from "./mapNames.ts";
 import { factsOf } from "./Request.tsx";
 import { AmountUnderstood, andList, copyLink, CopyLinkButton, Icon, type Notice, NoticeLine, shareLink, Sheet, STOPPED, useCancellable, useSlowStepLine } from "./ui.tsx";
@@ -102,6 +105,9 @@ export function ChipInScreen(props: {
   const [exact, setExact] = useState(false);
   const [shareNote, setShareNote] = useState<string | null>(null);
   const [askOpen, setAskOpen] = useState(false);
+  // What voice filled in (screens/Voice.tsx): never more than $200, and the fingerprint still follows.
+  const [voice, setVoice] = useState<{ heard: string; amount: bigint } | null>(null);
+  const [voiceNote, setVoiceNote] = useState<Notice | null>(null);
   const alive = useRef(true);
   const running = useCancellable();
   const myTx = useRef<Hex | null>(null);
@@ -291,6 +297,7 @@ export function ChipInScreen(props: {
         spendEnded(me, write, outcome.kind);
         if (outcome.kind === "final") {
           rememberReceipt(write.address, write.hash);
+          new VoiceStore(localStorage, DEPLOYMENT, me).saw(write.hash);
           const next = await read();
           if (!alive.current) return;
           setMyCoin("end");
@@ -339,6 +346,8 @@ export function ChipInScreen(props: {
     if (!retry) {
       try {
         checkDailyLimit(me, amount);
+        // An amount voice filled in is at most $200, even if changed afterwards (lib/voice.ts).
+        if (voice && amount > VOICE_CAP) throw new AppError(copy.errVoiceCap, ERROR_CODES.VOICE_OVER_CAP);
       } catch (e) {
         setResult({ tone: "bad", ...(e instanceof AppError ? { text: e.message, code: e.code } : describeFailure(e)) });
         return;
@@ -557,6 +566,28 @@ export function ChipInScreen(props: {
           </p>
         </div>
 
+        {!busy && !done && !blocked && (
+          <VoiceButton
+            account={me}
+            mode="put"
+            onCommand={(cmd: VoiceCommand, heard: string) => {
+              if (cmd.kind !== "put") return;
+              setVoiceNote(null);
+              // Only pots this account is already in: this one if it is in it, the others from Home's list.
+              const amIn = iDecide || state.payees.some((p) => isAddressEqual(p.to, me)) || (state.held[me.toLowerCase()] ?? 0n) > 0n;
+              const others = new ScanStore(localStorage, DEPLOYMENT, me).load().found.filter((p) => p.potId !== potId.toString());
+              const options = [...(amIn ? [{ name: state.name, potId: potId.toString() }] : []), ...others.map((p) => ({ name: p.name, potId: p.potId }))];
+              const found = matchName(cmd.pot, options);
+              if (!found.length) return setVoiceNote({ tone: "bad", text: copy.voiceNoSuchPot(cmd.pot) });
+              if (found[0]!.potId !== potId.toString()) return setVoiceNote({ tone: "bad", text: copy.voiceOtherPot(found[0]!.name) });
+              if (!withinVoiceCap(cmd.amount)) return setVoiceNote({ tone: "bad", text: copy.errVoiceCap, code: ERROR_CODES.VOICE_OVER_CAP });
+              setAmount(cmd.amount);
+              setVoice({ heard, amount: cmd.amount });
+            }}
+          />
+        )}
+        {voiceNote && <NoticeLine notice={voiceNote} />}
+        {voice && amount !== null && !done && <p className="hint voice-heard">{copy.voiceReadBackPot(fmt(amount), state.name, voice.heard)}</p>}
         <div className="stepper-card enter" style={{ animationDelay: "220ms" }}>
           <button type="button" className="step-btn" aria-label={copy.less} disabled={busy || done || amount <= unit}
             onClick={() => setAmount((a) => (a === null ? a : a - stepSize >= unit ? a - stepSize : unit))}>

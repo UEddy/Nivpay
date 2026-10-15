@@ -36,6 +36,7 @@ import { idbFeedStore } from "./lib/idb.ts";
 import { LimitStore, settle } from "./lib/limits.ts";
 import { dismiss, fromArrivals, fromPoll, fromRequests, markAllRead, markRead, NotesStore, start as startNotes, unread, withoutRequestsFrom, type Funding, type Note, type NotesState, type PollInputs } from "./lib/notes.ts";
 import { MutedStore } from "./lib/inbox.ts";
+import { VoiceStore } from "./lib/voice.ts";
 import { readInbox } from "./lib/inboxLive.ts";
 import { parseGo, type Go } from "./lib/push.ts";
 import { syncPush } from "./lib/pushLive.ts";
@@ -58,6 +59,7 @@ const PhotoSection = lazy(() => reloadOnce(() => import("./screens/Photo.tsx")).
 const NotesSheet = lazy(() => reloadOnce(() => import("./screens/Notes.tsx")).then((m) => ({ default: m.NotesSheet })));
 const DevicesSection = lazy(() => reloadOnce(() => import("./screens/Devices.tsx")).then((m) => ({ default: m.DevicesSection })));
 const DailyLimitSection = lazy(() => reloadOnce(() => import("./screens/Limits.tsx")).then((m) => ({ default: m.DailyLimitSection })));
+const VoiceSection = lazy(() => reloadOnce(() => import("./screens/Voice.tsx")).then((m) => ({ default: m.VoiceSection })));
 const NotificationsSection = lazy(() => reloadOnce(() => import("./screens/Notify.tsx")).then((m) => ({ default: m.NotificationsSection })));
 const UsernameSection = lazy(() => reloadOnce(() => import("./screens/Username.tsx")).then((m) => ({ default: m.UsernameSection })));
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
@@ -955,7 +957,11 @@ function Home(props: {
           feeds.push(feed);
           feed.start((_all, added) => {
             const arrivals = incomingFrom(added, owner).map((a) => ({ ...a, decimals: w.decimals, symbol: w.symbol }));
-            if (live && arrivals.length) setNotes(notesStore.update((s) => fromArrivals(s, arrivals, Date.now())));
+            if (!live || !arrivals.length) return;
+            // Each one counts towards turning voice on (lib/voice.ts).
+            const voice = new VoiceStore(localStorage, DEPLOYMENT, owner);
+            for (const a of arrivals) voice.saw(`${a.tx}:${a.logIndex}`);
+            setNotes(notesStore.update((s) => fromArrivals(s, arrivals, Date.now())));
           });
         }
       } catch {
@@ -1401,6 +1407,7 @@ function Home(props: {
           notifications={
             <Suspense fallback={null}>
               <NotificationsSection account={account.address} names={(who) => nameOf(who) ?? copy.accountEnding(who)} onMuted={() => setNotes(notesStore.get())} />
+              <VoiceSection account={account.address} />
             </Suspense>
           }
           username={

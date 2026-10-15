@@ -27,6 +27,8 @@ import { AmountUnderstood, Icon, type Notice, NoticeLine, Sheet, STOPPED, useCan
 import { beforePasskey } from "../lib/cancel.ts";
 import { checkDailyLimit, spendEnded, spendSent } from "../lib/spending.ts";
 import { fromSent, NotesStore } from "../lib/notes.ts";
+import { matchName, payableByVoice, VOICE_CAP, VOICE_DECIMALS, VoiceStore, withinVoiceCap, type VoiceCommand } from "../lib/voice.ts";
+import { VoiceButton } from "./Voice.tsx";
 import { balanceNote } from "../lib/connection.ts";
 import { Avatar } from "./Avatar.tsx";
 
@@ -55,8 +57,12 @@ const STEP_TEXT: Record<Step | "landing", string> = {
   landing: copy.stepSettling,
 };
 
-/** This account's own payment, once final, in its notifications (lib/notes.ts). Amounts are in dollars. */
+/**
+ * This account's own payment, once final, in its notifications (lib/notes.ts),
+ * and counted towards turning voice on (lib/voice.ts). Amounts are in dollars.
+ */
 function noteSent(me: Address, tx: string, to: Recipient, amount: bigint): void {
+  new VoiceStore(localStorage, DEPLOYMENT, me).saw(tx);
   try {
     new NotesStore(localStorage, DEPLOYMENT, me).update((s) => fromSent(s, { tx, to: to.account, toName: to.name, amount, decimals: 6, symbol: "$" }, Date.now()));
   } catch {
@@ -87,6 +93,9 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
     setContacts(contactStore.list());
     return ok;
   };
+  // What voice filled in (screens/Voice.tsx), and close names to pick from: never more than $200, still confirmed with a fingerprint.
+  const [voice, setVoice] = useState<{ heard: string; account: Address; amount: bigint } | null>(null);
+  const [voicePick, setVoicePick] = useState<{ options: Contact[]; amount: bigint; heard: string } | null>(null);
   const [idText, setIdText] = useState("");
   const [last4, setLast4] = useState("");
   const [amountText, setAmountText] = useState("");
@@ -294,6 +303,27 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
     }
   };
 
+  /** A heard "send": only to a contact trusted for voice and paid before, and only up to $200. */
+  const onVoice = (cmd: VoiceCommand, heard: string) => {
+    if (cmd.kind !== "send") return;
+    setResult(null);
+    setVoicePick(null);
+    if (!withinVoiceCap(cmd.amount)) return setResult({ tone: "bad", text: copy.errVoiceCap, code: ERROR_CODES.VOICE_OVER_CAP });
+    const can = payableByVoice(contacts, new VoiceStore(localStorage, DEPLOYMENT, me).get().trusted, paid.all());
+    const found = matchName(cmd.name, can);
+    if (found.length === 0) return setResult({ tone: "bad", text: copy.voiceNoSuchContact(cmd.name) });
+    if (found.length > 1) return setVoicePick({ options: found, amount: cmd.amount, heard });
+    fillFromVoice(found[0]!, cmd.amount, heard);
+  };
+  const fillFromVoice = (c: Contact, amount: bigint, heard: string) => {
+    setVoicePick(null);
+    setTo({ account: c.account, name: c.name });
+    setAmountText(amountForField(amount, VOICE_DECIMALS));
+    setVoice({ heard, account: c.account, amount });
+  };
+  const voiceRead = (shownName: string, amount: bigint) =>
+    voice && to && isAddressEqual(voice.account, to.account) ? <p className="hint voice-heard">{copy.voiceReadBack(money(amount), shownName, voice.heard)}</p> : null;
+
   /** Every check that needs no signature, then the confirm sheet. */
   const review = async () => {
     if (!to || !holding) return;
@@ -307,6 +337,8 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
       if (problem) throw problem;
       // The daily limit, before the confirm sheet (lib/limits.ts).
       checkDailyLimit(me, amount!);
+      // A payment voice filled in is at most $200, even if the amount was changed afterwards (lib/voice.ts).
+      if (voice && isAddressEqual(voice.account, to.account) && amount! > VOICE_CAP) throw new AppError(copy.errVoiceCap, ERROR_CODES.VOICE_OVER_CAP);
       if (currency === "other") {
         // The dollars go to Agora's pair, so that is the transfer that must be allowed.
         if (await transferRefused(readClient, DOLLAR, me, SETTLEMENT_PAIR, amount!)) throw new AppError(copy.errSendRefused, ERROR_CODES.SEND_REFUSED);
@@ -464,6 +496,20 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
               <SaveContact already={Boolean(savedFor(request.account))} suggested={linkName} onSave={(name) => saveContact(request.account, name)} />
             )}
             <div className="card enter" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {!step && !stuck && <VoiceButton account={me} mode="send" onCommand={onVoice} />}
+              {voicePick && (
+                <div className="list" aria-label={copy.voiceWhichOne}>
+                  <p className="hint">{copy.voiceWhichOne}</p>
+                  {voicePick.options.map((c) => (
+                    <button type="button" className="home-pot" key={`voice-${c.account}`} onClick={() => fillFromVoice(c, voicePick.amount, voicePick.heard)}>
+                      <span className="grow">
+                        <span className="name">{c.name}</span>
+                        <span className="meta">{copy.accountEnding(c.account)}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
               {to ? (
                 <div className="list-row">
                   <Avatar account={to.account} name={shownTo(to).name} reportable />
@@ -596,6 +642,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
       </div>
       {confirming && to && amount !== null && currency === "other" && shown && (
         <Sheet title={copy.confirmSendTitle} onClose={() => (beforePasskey(step) ? stop(setSheetNotice) : step === null && setConfirming(false))}>
+          {voiceRead(shownTo(to).name, amount)}
           <div className="list">
             {toRow}
             <div className="list-row">
@@ -646,6 +693,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
       )}
       {confirming && to && amount !== null && currency === "dollars" && (
         <Sheet title={copy.confirmSendTitle} onClose={() => setConfirming(false)}>
+          {voiceRead(shownTo(to).name, amount)}
           <div className="list">
             {toRow}
             <div className="list-row">

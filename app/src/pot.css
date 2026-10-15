@@ -2056,3 +2056,39 @@ button.avatar {
   accent-color: var(--primary);
   flex: none;
 }
+
+/* Voice: the microphone on Send and on a pot, and the words heard. */
+.voice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.voice-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.voice-btn.listening {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .voice-btn.listening .ico {
+    animation: voice-pulse 1.2s ease-in-out infinite;
+  }
+}
+@keyframes voice-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+.voice-heard {
+  font-style: italic;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Listening, without the pulse: dimmed and in the accent colour. */
+  .voice-btn.listening .ico {
+    opacity: 0.6;
+  }
+}
