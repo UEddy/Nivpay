@@ -611,6 +611,7 @@ None is needed to run the app locally or the tests.
 | `RAMP_DESK_ADDRESS` | Vercel, server | only if the desk is enabled | The address of that key; the desk refuses to sign unless the key derives exactly this address. It needs testnet MON for its own gas (it stops under 0.2 MON) and claims test AUSD from Agora's faucet for itself when low. |
 | `ALLOWED_ORIGINS` | Vercel, server | no | Comma separated extra origins allowed to call `/api/fund`, `/api/ramp` and `/api/report`, for example `http://localhost:5173`. The deployment's own origin is always allowed. |
 | `VITE_PRODUCTION_HOSTNAME` | Vercel, build time | yes in production | The only hostname besides `localhost` where passkeys can be made or used. For this deployment, `nivpay.vercel.app`, and it must never change. |
+| `BLOB_READ_WRITE_TOKEN` | Vercel, server, Sensitive | no | Set by connecting a Vercel Blob store to the project. Profile photos stay hidden until it is set. |
 | `VITE_SUPPORT_EMAIL` | Vercel, build time | no | The address Help and support's Email support writes to. Its button is hidden while this is missing or malformed. |
 | `VITE_SUPPORT_WHATSAPP` | Vercel, build time | no | The WhatsApp number Chat on WhatsApp opens (wa.me), country code first. Hidden while missing or malformed. |
 | `VITE_NIVPAY_POTS` | build time | no | `testusd` builds the app on the TESTUSD instance. Anything else, or unset, is AUSD. |
@@ -1006,6 +1007,33 @@ appear only while the app is open. Said honestly:
   account's own pours; two things in the same few seconds can show as one.
 * **Pots new to the account, or hidden, never notify** (see Protecting
   people from bad actors).
+
+## Profile photos
+
+An account can add a photo in Account details: from the camera or the
+gallery, through a file input, so the `camera=()` header stays. On the phone
+the picture is read with `createImageBitmap`, cropped to a square, drawn at
+256 by 256 on a canvas and saved as a JPEG of about 100 KB or less
+(`app/src/lib/photo.ts`). Redrawing it drops everything hidden in the
+original, such as where it was taken, and the preview is the canvas itself,
+so `img-src` needs no `blob:`. Before the first upload the screen says:
+"Anyone with your Account ID or username can see this photo."
+
+Each upload and removal is proved by the account itself: its passkey signs a
+short message naming the account, the image's SHA-256, the time and the site,
+with one fingerprint (`app/src/lib/proof.ts`, through `withSigner`,
+unchanged). `/api/photo` checks the signature belongs to that account, the
+time is within 5 minutes and the hash matches the image; nobody can set or
+remove another account's photo. It takes JPEG only, refuses bodies over
+200 KB, checks the origin like `/api/fund`, and limits changes per minute.
+Photos are stored private in Vercel Blob and served only through
+`GET /api/photo/<account>`, so `img-src` stays `'self'`.
+
+Photos show in Account details, Send, Receive, a pot's members, the pot map
+and notifications; without one, initials. Someone else's photo can be tapped
+and reported (`/api/report`, the same reasons as a pot); a reported photo
+shows as initials on that phone from then on. **The feature stays hidden
+until a Blob store is connected** (`BLOB_READ_WRITE_TOKEN`).
 
 ## Languages
 
@@ -2048,6 +2076,7 @@ each installed package's `package.json`.
 | [`react`](https://github.com/facebook/react), `react-dom` | 19.3.0 | MIT | the interface |
 | [`@fontsource/besley`](https://fontsource.org/fonts/besley) | 5.3.0 | OFL-1.1 | self hosted Besley font |
 | [`@fontsource/work-sans`](https://fontsource.org/fonts/work-sans) | 5.3.0 | OFL-1.1 | self hosted Work Sans font |
+| [`@vercel/blob`](https://github.com/vercel/storage) | 2.8.2 | Apache-2.0 | storing profile photos, private, in the `/api/photo` functions only; never in the page |
 | `typescript` (dev) | 7.0.2 | Apache-2.0 | type-checking |
 | `vite` (dev) | 8.3.1 | MIT | dev server and build |
 | `@types/node`, `@types/react`, `@types/react-dom` (dev) | 24.19.0, 19.3.0, 19.3.0 | MIT | type definitions |

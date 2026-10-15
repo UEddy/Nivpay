@@ -221,6 +221,18 @@ again right before signing.
 | --- | --- | --- |
 | 44 | This payment would take the account past its daily limit, counting what this phone sent in the last 24 hours, final or in flight. The screen says how much is left today. Nothing was sent. | Account details, Daily limit; `nivpay.limit.v1.*` in the phone's localStorage |
 
+## Profile photos
+
+Photos are made on the phone (`app/src/lib/photo.ts`) and stored through
+`/api/photo`, which checks a signature from the account's own passkey over
+the photo's SHA-256 and the time. Nothing moves and nothing is written to the
+chain. Hidden until a Vercel Blob store is connected.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 45 | The photo, or its removal, didn't reach `/api/photo`, or it refused it: photos not set up (503), wrong origin (403), a proof that didn't check out or was over 5 minutes old (401), not a JPEG (415), too large (413), or too many changes in a minute on that server instance (429). | The request's status in the browser; Vercel function log for `/api/photo` |
+| 46 | The picture chosen couldn't be read by the phone (`createImageBitmap`), or couldn't be made small enough. Nothing was sent. | The file's type; HEIC needs a phone that can decode it |
+
 ## Usernames
 
 Usernames live in NivPayNames, a registry separate from the pots (README,

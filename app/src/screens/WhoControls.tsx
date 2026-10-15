@@ -7,6 +7,7 @@ import { potRisks } from "../lib/potRisks.ts";
 import { useUsernames, withUsernameOf } from "./Username.tsx";
 import type { PotState } from "../lib/potview.ts";
 import { dateLocale } from "../lib/locale.ts";
+import { Avatar } from "./Avatar.tsx";
 
 const whenFormat = new Intl.DateTimeFormat(dateLocale(), { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
@@ -65,7 +66,8 @@ export function WhoControls(props: {
           <span className="meta">{copy.controlDecides}</span>
           <span className="name">{copy.ruleLine(state.threshold, state.deciders.length)}</span>
           {state.deciders.map((d) => (
-            <span className="meta" key={`d-${d}`}>
+            <span className="meta with-avatar" key={`d-${d}`}>
+              <Avatar account={d} name={nameOf(d)} size={24} reportable={d !== me} />
               {who(d)}
             </span>
           ))}
@@ -73,7 +75,8 @@ export function WhoControls(props: {
         <div className="list-row stacked">
           <span className="meta">{copy.controlCanBePaid}</span>
           {state.payees.map((p, i) => (
-            <span className="meta" key={`p-${i}`}>
+            <span className="meta with-avatar" key={`p-${i}`}>
+              <Avatar account={p.to} name={nameOf(p.to, p.name)} size={24} reportable={p.to !== me} />
               {who(p.to, p.name)} · {copy.upTo(fmt(p.cap))}
             </span>
           ))}

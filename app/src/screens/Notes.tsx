@@ -5,6 +5,7 @@ import { formatAmount, formatCurrency } from "../lib/money.ts";
 import type { Note, NotesState } from "../lib/notes.ts";
 import { senderKind } from "../lib/transfer.ts";
 import { Sheet } from "./ui.tsx";
+import { Avatar } from "./Avatar.tsx";
 
 const dayFormat = new Intl.DateTimeFormat(dateLocale(), { day: "numeric", month: "short", year: "numeric" });
 const timeFormat = new Intl.DateTimeFormat(dateLocale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -59,6 +60,7 @@ export function NotesSheet(props: { state: NotesState; onOpen: (n: Note) => void
         <div className="list" role="list">
           {state.notes.map((n) => (
             <button type="button" role="listitem" className={`home-pot note${n.read ? "" : " unread"}`} key={n.id} onClick={() => props.onOpen(n)}>
+              {n.kind === "received" && n.from && senderKind(n.from, [POTS_AUSD, POTS_TESTUSD], SETTLEMENT_PAIR) === "account" && <Avatar account={n.from} name={copy.accountEnding(n.from)} size={32} />}
               <span className="grow">
                 <span className="name">{noteText(n)}</span>
                 <span className="meta">{timeFormat.format(new Date(n.at))}</span>

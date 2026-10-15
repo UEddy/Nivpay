@@ -22,6 +22,8 @@ import { PERSON_COLORS, payeeSpots, personSpots, reverseRoute, VIEW } from "../l
 
 export type MapPerson = {
   name: string;
+  /** With photos set up: the photo to draw in the ring, and the initials under it if there is none. */
+  face?: { photo: string | null; initials: string };
   city: string;
   sub: string;
   /** "You": the sub line in the person's colour, bold. */
@@ -358,7 +360,20 @@ export function PotMap(props: {
                 className={`city-ring${p.ring === "solid" ? "" : " dashed"}`}
                 style={{ stroke: p.ring === "pencil" ? "var(--route-empty)" : color.route }}
               />
-              <circle cx={s.x} cy={s.y} r="5" className={`city-dot${p.dim ? " dim" : ""}`} />
+              {p.face ? (
+                <g className={`map-face${p.dim ? " dim" : ""}`}>
+                  <clipPath id={`face-${i}`}>
+                    <circle cx={s.x} cy={s.y} r="9.5" />
+                  </clipPath>
+                  <circle cx={s.x} cy={s.y} r="9.5" className="map-face-bg" />
+                  <text x={s.x} y={s.y + 3} textAnchor="middle" className="map-initials">
+                    {p.face.initials}
+                  </text>
+                  {p.face.photo && <image href={p.face.photo} x={s.x - 9.5} y={s.y - 9.5} width="19" height="19" clipPath={`url(#face-${i})`} preserveAspectRatio="xMidYMid slice" />}
+                </g>
+              ) : (
+                <circle cx={s.x} cy={s.y} r="5" className={`city-dot${p.dim ? " dim" : ""}`} />
+              )}
               <g className={`city-check${p.check ? " on" : ""}`}>
                 <circle cx={s.x + 9} cy={s.y - 9} r="6.5" style={{ fill: color.route }} />
                 <path d={`M${s.x + 6} ${s.y - 9} l2 2 l3.5 -4`} />

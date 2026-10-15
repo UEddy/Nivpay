@@ -877,6 +877,25 @@ export const en = {
   noteClosedShare: (pot: string) => `${pot} has closed. Your share is ready to take.`,
   noteLimitRaised: (limit: string) => `Your daily limit of ${limit} is now in effect.`,
 
+  // Profile photos (lib/photo.ts, api/photo). Hidden until photos are set up.
+  photo: "Photo",
+  addPhoto: "Add a photo",
+  changePhoto: "Change photo",
+  removePhoto: "Remove photo",
+  photoPublic: "Anyone with your Account ID or username can see this photo.",
+  photoHint: "It's cropped to a square and made small on this phone. Where it was taken is never sent.",
+  usePhoto: "Use this photo",
+  savingPhoto: "Saving…",
+  photoSaved: "Your photo is saved.",
+  photoRemoved: "Your photo is removed.",
+  removePhotoTitle: "Remove your photo?",
+  removePhotoLede: "People will see your initials instead.",
+  photoOf: (name: string) => `Photo of ${name}`,
+  reportPhoto: "Report this photo",
+  photoReported: "Reported. You won't see this photo on this phone again.",
+  errPhotoSave: "Couldn't save your photo. Try again.",
+  errPhotoUnreadable: "That picture couldn't be read. Try another one.",
+
   // Language (lib/locale.ts), in Account details
   language: "Language",
   languagePhone: "Phone's language",

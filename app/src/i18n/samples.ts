@@ -221,4 +221,5 @@ export const SAMPLES: Record<string, unknown[]> = {
   noteClosingSoon: ["Birthday"],
   noteClosedShare: ["Birthday"],
   noteLimitRaised: ["$5,000.00"],
+  photoOf: ["Idara"],
 };

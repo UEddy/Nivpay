@@ -1837,3 +1837,76 @@
 .note.unread .name {
   font-weight: 700;
 }
+
+/* Profile photos: a round photo, or initials on the person's colour. */
+.avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1px solid var(--card-border);
+  background: var(--chip);
+  color: var(--primary-text);
+  padding: 0;
+  font-weight: 600;
+  line-height: 1;
+}
+
+button.avatar {
+  cursor: pointer;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.photo-preview {
+  display: none;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+}
+
+.photo-preview.on {
+  display: block;
+}
+
+.photo-large {
+  display: block;
+  width: 192px;
+  height: 192px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.with-avatar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* The pot map, with photos set up: a face in each ring, or initials. */
+.map-face-bg {
+  fill: var(--chip);
+}
+
+.map-initials {
+  font: 600 8px var(--font-body);
+  fill: var(--primary-text);
+}
+
+.map-face.dim {
+  opacity: 0.55;
+}

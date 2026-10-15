@@ -49,6 +49,7 @@ const TimelineScreen = lazy(() => reloadOnce(() => import("./screens/Timeline.ts
 const CloseScreen = lazy(() => reloadOnce(() => import("./screens/Close.tsx")).then((m) => ({ default: m.CloseScreen })));
 const MoneyScreen = lazy(() => reloadOnce(() => import("./screens/Money.tsx")).then((m) => ({ default: m.MoneyScreen })));
 const HelpSheet = lazy(() => reloadOnce(() => import("./screens/Help.tsx")).then((m) => ({ default: m.HelpSheet })));
+const PhotoSection = lazy(() => reloadOnce(() => import("./screens/Photo.tsx")).then((m) => ({ default: m.PhotoSection })));
 const NotesSheet = lazy(() => reloadOnce(() => import("./screens/Notes.tsx")).then((m) => ({ default: m.NotesSheet })));
 const DevicesSection = lazy(() => reloadOnce(() => import("./screens/Devices.tsx")).then((m) => ({ default: m.DevicesSection })));
 const DailyLimitSection = lazy(() => reloadOnce(() => import("./screens/Limits.tsx")).then((m) => ({ default: m.DailyLimitSection })));
@@ -619,6 +620,9 @@ function AccountSheet(props: {
       <section className="sheet" role="dialog" aria-modal="true" aria-label={copy.accountDetails} onClick={(e) => e.stopPropagation()}>
         <p className="eyebrow">{copy.accountDetails}</p>
         <h2>{shownName(props.account)}</h2>
+        <Suspense fallback={null}>
+          <PhotoSection account={props.account.address} name={shownName(props.account)} />
+        </Suspense>
         {editing ? (
           <NameForm
             initial={props.account.name}

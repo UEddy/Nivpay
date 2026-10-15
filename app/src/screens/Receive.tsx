@@ -16,6 +16,7 @@ import { incomingFrom, incomingSource, RECEIVE_BACKLOG_BLOCKS, senderKind, withF
 import { AmountUnderstood, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, useOnline } from "./ui.tsx";
 import { balanceNote } from "../lib/connection.ts";
 import { useUsernames, withUsernameOf } from "./Username.tsx";
+import { Avatar } from "./Avatar.tsx";
 
 const finalized = async () => (await readClient.getBlock({ blockTag: "finalized" })).number;
 
@@ -201,6 +202,7 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
               const isNew = fresh.has(keyOf(p));
               return (
                 <div className={`list-row${isNew ? " arrived" : ""}`} key={keyOf(p)}>
+                  {senderKind(p.from, [POTS_AUSD, POTS_TESTUSD], SETTLEMENT_PAIR) === "account" && <Avatar account={p.from} name={copy.accountEnding(p.from)} size={32} reportable />}
                   <div className="grow">
                     <span className="name">+{show(currencies, p)}</span>
                     <span className="meta">{copy.paymentFrom(fromText(p.from, usernames))}</span>

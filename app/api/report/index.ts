@@ -1,7 +1,8 @@
 // POST /api/report: someone reports a pot that named them. Vercel function,
 // Web API signature.
 //
-// It takes { deployment, potId, reason }, with the reason from REASONS only,
+// It takes { deployment, potId, reason } for a pot, or { deployment, photo,
+// reason } for an account's profile photo, with the reason from REASONS only,
 // writes one log line and stores nothing. Reports reach the server logs and
 // nowhere else, and are read by hand (README, "Protecting people from bad
 // actors"). Nothing about the person reporting is sent or logged: no account,
@@ -76,9 +77,11 @@ export async function handleReport(
   } catch {
     return json(400, { error: "send JSON with a deployment, potId and reason" });
   }
-  const { deployment, potId, reason } = (body ?? {}) as Record<string, unknown>;
+  const { deployment, potId, photo, reason } = (body ?? {}) as Record<string, unknown>;
   if (typeof deployment !== "string" || !(DEPLOYMENTS as readonly string[]).includes(deployment)) return json(400, { error: "unknown deployment" });
-  if (typeof potId !== "string" || !/^\d{1,20}$/.test(potId)) return json(400, { error: "not a pot number" });
+  const aboutPot = typeof potId === "string" && /^\d{1,20}$/.test(potId);
+  const aboutPhoto = typeof photo === "string" && /^0x[0-9a-fA-F]{40}$/.test(photo);
+  if (aboutPot === aboutPhoto) return json(400, { error: "report a pot number or a photo's account, one of them" });
   if (typeof reason !== "string" || !(REASONS as readonly string[]).includes(reason)) return json(400, { error: "unknown reason" });
 
   const t = now();
@@ -86,7 +89,7 @@ export async function handleReport(
   if (recent.length >= REPORTS_PER_MINUTE) return json(429, { error: "too many reports, try again in a minute" });
   recent.push(t);
 
-  log({ event: "report", deployment, potId, reason });
+  log(aboutPot ? { event: "report", deployment, potId: potId as string, reason } : { event: "report", deployment, photo: (photo as string).toLowerCase(), reason });
   return json(200, { ok: true });
 }
 

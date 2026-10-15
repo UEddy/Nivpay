@@ -83,3 +83,12 @@ test("the phone sends only the deployment, the pot and the reason, and throws wh
   assert.deepEqual(JSON.parse(String(sent!.init.body)), { deployment: "ausd", potId: "42", reason: "spam" });
   await assert.rejects(phone.sendReport({ deployment: "ausd", potId: "42", reason: "spam" }, (async () => new Response("{}", { status: 429 })) as typeof fetch));
 });
+
+test("a photo can be reported by its account, and it is logged as a photo; never a pot and a photo at once", async () => {
+  const account = "0x725C9A4Bb4c3dE2F11aC0e7C9b1E8f0D3a2B7bC1";
+  const r = await run(req({ deployment: "ausd", photo: account, reason: "impersonation" }));
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.lines, [{ event: "report", deployment: "ausd", photo: account.toLowerCase(), reason: "impersonation" }]);
+  assert.equal((await run(req({ deployment: "ausd", photo: account, potId: "1", reason: "spam" }))).status, 400);
+  assert.equal((await run(req({ deployment: "ausd", photo: "nope", reason: "spam" }))).status, 400);
+});

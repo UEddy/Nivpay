@@ -30,6 +30,8 @@ import { AmountUnderstood, andList, copyLink, CopyLinkButton, Icon, type Notice,
 import { beforePasskey } from "../lib/cancel.ts";
 import { checkDailyLimit, spendEnded, spendSent } from "../lib/spending.ts";
 import { dateLocale } from "../lib/locale.ts";
+import { photoKnownMissing, photoVersion, usePhotosOn } from "./Avatar.tsx";
+import { initialsFor, photoUrl } from "../lib/photo.ts";
 
 const orList = new Intl.ListFormat(dateLocale(), { style: "long", type: "disjunction" });
 const FLIGHT_MS = 900;
@@ -106,6 +108,7 @@ export function ChipInScreen(props: {
   const stateRef = useRef<PotState | null>(null);
   stateRef.current = state;
   const askFlow = useAskFlow(me, potId, props.onOpenRequest);
+  const photosOn = usePhotosOn();
   const contacts = useMemo(() => new ContactStore(localStorage, DEPLOYMENT, me).list(), [me]);
   // An ask that was in flight when the app was closed opens its sheet again.
   useEffect(() => {
@@ -424,6 +427,8 @@ export function ChipInScreen(props: {
   const layers: Layer[] = people.map((_, i) => ({ person: i < MAX_DRAWN_PEOPLE ? i : null, fraction: fraction(known[i]!) }));
   if (state.totalAssets > knownSum) layers.push({ person: null, fraction: fraction(state.totalAssets - knownSum) });
 
+  const face = (p: Who) =>
+    photosOn ? { face: { photo: photoKnownMissing(p.account) ? null : photoUrl(p.account, photoVersion(p.account)), initials: initialsFor(p.name, p.account) } } : {};
   const mapPeople: MapPerson[] = people.map((p, i) => {
     // Until the whole history is read, whether someone is in comes from what they hold now, and no total is shown.
     const holds = (state.held[p.account.toLowerCase()] ?? 0n) > 0n;
@@ -433,6 +438,7 @@ export function ChipInScreen(props: {
       const poured = inPot || done;
       return {
         name: p.name,
+        ...face(p),
         ...mapLines(p, named, copy.youCap, ""),
         subStrong: true,
         ring: poured ? "solid" : "dashed",
@@ -444,6 +450,7 @@ export function ChipInScreen(props: {
     const put = fmt(totals[p.account.toLowerCase()] ?? 0n);
     return {
       name: p.name,
+      ...face(p),
       ...mapLines(
         p,
         named,

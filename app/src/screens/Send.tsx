@@ -27,6 +27,7 @@ import { AmountUnderstood, Icon, type Notice, NoticeLine, Sheet, STOPPED, useCan
 import { beforePasskey } from "../lib/cancel.ts";
 import { checkDailyLimit, spendEnded, spendSent } from "../lib/spending.ts";
 import { balanceNote } from "../lib/connection.ts";
+import { Avatar } from "./Avatar.tsx";
 
 /** A username is set when the recipient was found by one, so it is checked again before signing. */
 type Recipient = { account: Address; name: string; username?: string };
@@ -388,6 +389,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
   const warnings = to ? sendWarnings(to.account, fromLink, contacts, paid.has(to.account)) : null;
   const toRow = to && (
     <div className="list-row">
+      <Avatar account={to.account} name={shownTo(to).name} reportable />
       <div className="grow">
         <span className="meta">{copy.confirmTo}</span>
         <span className="name">{shownTo(to).name}</span>
@@ -452,6 +454,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
             <div className="card enter" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {to ? (
                 <div className="list-row">
+                  <Avatar account={to.account} name={shownTo(to).name} reportable />
                   <div className="grow">
                     <span className="name">{copy.sendingTo(shownTo(to).name)}</span>
                     {recipientDetail(shownTo(to)) && <span className="meta">{recipientDetail(shownTo(to))}</span>}
