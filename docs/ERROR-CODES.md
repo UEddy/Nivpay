@@ -209,6 +209,17 @@ fell below the minimum after the quote, nothing moved but its gas: also 52.
 | 91 | The quote taken right before signing differs from the one on the confirm sheet: amount out, minimum or fee. The sheet shows the new one. Nothing was sent. | `getPrice()`, `token0PurchaseFee()`, `getAmountsOut` on the pair |
 | 92 | The pair holds less CTK than this payment would deliver (`reserve0()`). Nothing was sent. | `reserve0()` on the pair |
 
+## Reporting a pot
+
+Report, on a row under "New pots that name you" on Home, sends the
+deployment, the pot number and one of four fixed reasons to `/api/report`.
+The service writes one log line and stores nothing. Nothing moves, and the
+pot itself is untouched.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 87 | The report didn't reach `/api/report`, or it refused it: wrong origin, a body over 512 bytes, a reason or pot number it doesn't accept, or more than 30 reports in a minute on that server instance (`429`). The pot is not hidden, so the person can try again or choose Hide. | Vercel function log for `/api/report`; the request's status in the browser |
+
 ## Other
 
 | Code | What happened | Where to look |

@@ -243,6 +243,13 @@ function allCopy(): [string, string][] {
     bankLine: ["Test Bank", "6789"],
     cashOutAction: ["$50"],
     cashOutOnItsWay: ["₦76,725.00"],
+    riskDeciderIsPayee: ["Ubong"],
+    riskMakerIsPayee: ["account ending 7bC1"],
+    newPotMadeBy: ["account ending 7bC1"],
+    contactSaved: ["Idara"],
+    warnFirstTime: ["account ending 7bC1"],
+    warnNameClash: ["Idara"],
+    linkCallsThem: ["Event hall"],
   };
   return Object.entries(copy).map(([key, value]) => {
     if (typeof value === "string") return [key, value];
@@ -434,4 +441,15 @@ test("name, payee and amount placeholders are neutral: no cast names, no sample 
     assert.doesNotMatch(text, cast, key);
     assert.doesNotMatch(text, /\d|\$/, key);
   }
+});
+
+test("warnings about who controls a pot, and who you're paying, say what the rules allow in calm words", () => {
+  assert.equal(copy.cantCheckWho, "NivPay makes sure money only goes to the people named here. It can't check who they are.");
+  assert.equal(copy.riskDeciderIsPayee("Ubong"), "Ubong decides and can also be paid.");
+  assert.equal(copy.riskOneCanPay, "One yes is enough to pay out.");
+  assert.equal(copy.riskMakerIsPayee("account ending 7bC1"), "Account ending 7bC1 made this pot and can be paid from it.");
+  assert.equal(copy.warnFirstTime("account ending 7bC1"), "First time paying account ending 7bC1. If you're not sure it's them, check by phone first.");
+  assert.equal(copy.warnNameClash("Idara"), "You have a contact called Idara with a different account. This may not be them.");
+  assert.equal(copy.newPotsThatNameYou, "New pots that name you");
+  for (const key of ["reasonScam", "reasonImpersonation", "reasonSpam", "reasonNotForMe"] as const) assert.ok(copy[key]);
 });

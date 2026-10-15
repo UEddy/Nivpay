@@ -1648,3 +1648,49 @@
     transform: scale(1.3);
   }
 }
+
+/* Who controls this pot: each thing the rules allow, as a calm line. */
+.who-controls .list-row.stacked {
+  gap: 2px;
+}
+
+.risk-line {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--chip);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* Send's confirm sheet: a contact's name on someone else's account is said strongly. */
+.risk-line.strong {
+  border: 1.5px solid var(--primary-text);
+  color: var(--primary-text);
+  font-weight: 600;
+}
+
+/* New pots that name you: Keep, Hide and Report under each row. */
+.new-pot-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+
+.new-pots-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-body);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.new-pots-toggle .eyebrow {
+  margin: 0;
+}

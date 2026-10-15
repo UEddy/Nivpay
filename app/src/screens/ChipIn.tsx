@@ -22,6 +22,8 @@ import { requestsFrom, waitingRequests } from "../lib/payout.ts";
 import { AskSheet, useAskFlow, WaitingRequests } from "./Ask.tsx";
 import { usePayMotion } from "./payMotion.ts";
 import { PotMap, type Coin, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
+import { WhoControls } from "./WhoControls.tsx";
+import { ContactStore } from "../lib/contacts.ts";
 import { mapLines } from "./mapNames.ts";
 import { factsOf } from "./Request.tsx";
 import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, Sheet, STOPPED, useCancellable, useSlowStepLine, type Notice } from "./ui.tsx";
@@ -100,6 +102,7 @@ export function ChipInScreen(props: {
   const stateRef = useRef<PotState | null>(null);
   stateRef.current = state;
   const askFlow = useAskFlow(me, potId, props.onOpenRequest);
+  const contacts = useMemo(() => new ContactStore(localStorage, DEPLOYMENT, me).list(), [me]);
   // An ask that was in flight when the app was closed opens its sheet again.
   useEffect(() => {
     if (askFlow.resumable) setAskOpen(true);
@@ -526,6 +529,7 @@ export function ChipInScreen(props: {
           <span className="chip">{copy.chipRule(state.threshold, state.deciders.length)}</span>
           <span className="chip">{copy.chipLeftover}</span>
         </div>
+        <WhoControls state={state} maker={info.creator} me={me} labels={info.labelsOk ? info.people : []} contacts={contacts} />
         <WaitingRequests requests={waiting} facts={facts} nameOf={nameOf} me={me} onOpen={props.onOpenRequest} />
         {iDecide && !blocked && (
           <button type="button" className="pill-btn outline enter" style={{ animationDelay: "340ms" }} onClick={() => setAskOpen(true)}>
