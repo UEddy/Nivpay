@@ -825,6 +825,23 @@ export const en = {
   installIos: "Tap Share, then Add to Home Screen.",
   installTheApp: "Install the app",
 
+  // Daily limit (lib/limits.ts), in Account details
+  dailyLimit: "Daily limit",
+  dailyLimitLine: (limit: string) => `Up to ${limit} can leave this account in any 24 hours.`,
+  dailyUsed: (used: string, left: string) => `Used in the last 24 hours: ${used}. Left: ${left}.`,
+  dailyLimitThisPhone: "This counts payments made from this phone. A payment made on another phone counts only there.",
+  dailyLimitCounts: "It counts Send, Send in another currency, chipping in and Cash out. Taking your share out and money coming in don't count.",
+  changeLimit: "Change limit",
+  newLimit: "New daily limit",
+  limitLowerNow: "Lowering it takes effect at once.",
+  limitRaiseLater: "Raising it takes effect after 24 hours, so nobody can rush you into it.",
+  limitRaiseStarts: (limit: string, when: string) => `Your new limit of ${limit} starts ${when}.`,
+  saveLimit: "Save limit",
+  limitSaved: "Saved.",
+  limitAppOnly: (fallback: string) =>
+    `The limit lives in this app. It guards against mistakes and pressure, not against someone with your passkey using other software. Clearing this site's data resets it to ${fallback}.`,
+  errDailyLimit: (left: string) => `That's more than your daily limit allows. You can still send ${left} today. Nothing was sent.`,
+
   // Language (lib/locale.ts), in Account details
   language: "Language",
   languagePhone: "Phone's language",

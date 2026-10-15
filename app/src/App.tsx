@@ -45,6 +45,7 @@ const TimelineScreen = lazy(() => reloadOnce(() => import("./screens/Timeline.ts
 const CloseScreen = lazy(() => reloadOnce(() => import("./screens/Close.tsx")).then((m) => ({ default: m.CloseScreen })));
 const MoneyScreen = lazy(() => reloadOnce(() => import("./screens/Money.tsx")).then((m) => ({ default: m.MoneyScreen })));
 const HelpSheet = lazy(() => reloadOnce(() => import("./screens/Help.tsx")).then((m) => ({ default: m.HelpSheet })));
+const DailyLimitSection = lazy(() => reloadOnce(() => import("./screens/Limits.tsx")).then((m) => ({ default: m.DailyLimitSection })));
 const UsernameSection = lazy(() => reloadOnce(() => import("./screens/Username.tsx")).then((m) => ({ default: m.UsernameSection })));
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
@@ -623,6 +624,9 @@ function AccountSheet(props: {
             {copy.viewReceiptHint}
           </p>
         )}
+        <Suspense fallback={null}>
+          <DailyLimitSection account={props.account.address} />
+        </Suspense>
         <button type="button" className="btn" onClick={() => openHelp()}>
           {copy.helpAndSupport}
         </button>

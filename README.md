@@ -937,6 +937,32 @@ pays, a payment can go out the moment it is asked, before anyone sees it. A cont
 helps only if the person saved the right account in the first place, and a
 report is read by a person, later; nothing acts on it automatically.
 
+## Daily limit
+
+Money leaving an account is limited to $1,000 in any 24 hours, unless the
+person sets another limit under Account details, which shows the limit, how
+much was used and how much is left (`app/src/lib/limits.ts`). It counts Send,
+Send in another currency, chipping in and Cash out, from the moment each is
+sent, so requests still in flight count. Taking your share out of a pot and
+money coming in never count. Over the limit, the app stops before the confirm
+sheet, says how much is left today and that nothing was sent (Code 44), and
+checks again right before signing. A test fails if a money screen doesn't
+call the rule.
+
+Lowering the limit takes effect at once. Raising it takes effect after 24
+hours, and the screen says when, so nobody can pressure someone into raising
+it on the spot.
+
+Said honestly:
+
+* **It counts this phone's payments.** The public RPC can't read a day of an
+  account's history cheaply, so the limit counts the payments this phone made.
+  A payment made from another phone counts only there. The screen says so.
+* **The limit lives in the app.** It protects against mistakes and pressure,
+  not against someone who has the passkey and uses other software: the
+  contracts know nothing of it.
+* **Clearing the site's data resets it** to the default, $1,000.
+
 ## Languages
 
 NivPay speaks English, French, Spanish and Portuguese. It uses the first

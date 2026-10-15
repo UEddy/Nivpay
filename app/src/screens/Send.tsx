@@ -25,6 +25,7 @@ import { checkSend, SEND_LABEL, transferData, transferRefused } from "../lib/tra
 import { followSequence, followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { AmountUnderstood, Icon, type Notice, NoticeLine, Sheet, STOPPED, useCancellable, useOnline } from "./ui.tsx";
 import { beforePasskey } from "../lib/cancel.ts";
+import { checkDailyLimit, spendEnded, spendSent } from "../lib/spending.ts";
 import { balanceNote } from "../lib/connection.ts";
 
 /** A username is set when the recipient was found by one, so it is checked again before signing. */
@@ -134,6 +135,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
       setStep("landing");
       try {
         const outcome = await followToFinality(idbWriteStore, liveWriteChain, write);
+        spendEnded(me, write, outcome.kind);
         if (!alive.current) return;
         setStep(null);
         if (outcome.kind === "final") {
@@ -169,6 +171,8 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
           const kind = stepOf(labels[i] ?? "");
           if (alive.current) setProgress(n > 1 ? copy.progressOf(i + 1, n, kind ? PROGRESS[kind] : copy.stepSettling) : null);
         });
+        // Only the last step moves the dollars to them: a final setup alone doesn't settle the spend.
+        spendEnded(me, write, outcome.kind === "final" && step !== steps - 1 ? "stuck" : outcome.kind);
         if (!alive.current) return;
         setStep(null);
         setProgress(null);
@@ -288,6 +292,8 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
       const code = await readClient.getCode({ address: to.account });
       const problem = checkSend({ me, to: to.account, amount: amount ?? 0n, balance: holding.balance, decimals, recipientHasCode: (code?.length ?? 0) > 2 });
       if (problem) throw problem;
+      // The daily limit, before the confirm sheet (lib/limits.ts).
+      checkDailyLimit(me, amount!);
       if (currency === "other") {
         // The dollars go to Agora's pair, so that is the transfer that must be allowed.
         if (await transferRefused(readClient, DOLLAR, me, SETTLEMENT_PAIR, amount!)) throw new AppError(copy.errSendRefused, ERROR_CODES.SEND_REFUSED);
@@ -323,9 +329,11 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
       onStep: run.track((s: Step) => setStep(s)),
     };
     try {
-      // Right before signing: the username still points where it did.
+      // Right before signing: the username still points where it did, and the limit still allows it.
       await assertNameStill(to);
+      if (!retry) checkDailyLimit(me, amount);
       const write = retry ? await retryStuckWrite(call) : await sendWrite(call);
+      spendSent(me, write, "send", amount);
       await land(write, to, amount);
     } catch (e) {
       if (run.signal.aborted) return;
@@ -362,7 +370,9 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
     setConfirming(false);
     setResult(null);
     try {
+      if (!retry) checkDailyLimit(me, amount);
       const write = await sendSequence(me, settlementCalls(SETTLEMENT, fresh, me, to.account), run.track((st: Step) => setStep(st)), retry, run.signal);
+      spendSent(me, write, "currency", amount);
       await landSequence(write, to, amount, fresh.needsSetup);
     } catch (e) {
       if (run.signal.aborted) return;

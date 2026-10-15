@@ -14,6 +14,7 @@ import { askStatement, askToBuy, cashOutLabel, fromCashOutLabel, readDesk, type 
 import { receiptUrl, rememberReceipt } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
+import { checkDailyLimit, spendEnded, spendSent } from "../lib/spending.ts";
 import { transferData, transferRefused } from "../lib/transfer.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { AmountUnderstood, Icon, type Notice, NoticeLine, phoneTimeZone, Sheet, STOPPED, useCancellable } from "./ui.tsx";
@@ -345,6 +346,7 @@ function CashOut(props: Props) {
       setStep("landing");
       try {
         const outcome = await followToFinality(idbWriteStore, liveWriteChain, write);
+        spendEnded(me, write, outcome.kind);
         if (!alive.current) return;
         setStep(null);
         if (outcome.kind === "final") {
@@ -409,6 +411,8 @@ function CashOut(props: Props) {
     setStep("preparing");
     const run = running.start();
     try {
+      // The daily limit counts cashing out (lib/limits.ts), before the confirm sheet.
+      checkDailyLimit(me, amount);
       if (await transferRefused(readClient, DOLLAR, me, deskAccount, amount)) throw new AppError(copy.errSendRefused, ERROR_CODES.SEND_REFUSED);
       if (alive.current && !run.signal.aborted) setConfirming(true);
     } catch (e) {
@@ -432,12 +436,14 @@ function CashOut(props: Props) {
       onStep: run.track((s: Step) => setStep(s)),
     };
     try {
+      if (!retry) checkDailyLimit(me, amount);
       const write = retry ? await retryStuckWrite(call) : await sendWrite(call);
+      spendSent(me, write, "cashout", amount);
       await land(write, currency.code);
     } catch (e) {
       if (run.signal.aborted) return;
       setStep(null);
-      setResult({ tone: "bad", ...describeFailure(e) });
+      setResult({ tone: "bad", ...(e instanceof AppError ? { text: e.message, code: e.code } : describeFailure(e)) });
     }
   };
 

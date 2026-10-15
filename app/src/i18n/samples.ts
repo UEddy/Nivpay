@@ -203,4 +203,9 @@ export const SAMPLES: Record<string, unknown[]> = {
   supportVersionLine: ["abc1234"],
   supportCodeLine: [52],
   supportAccountLine: ["the Account ID, as data"],
+  dailyLimitLine: ["$1,000.00"],
+  dailyUsed: ["$600.00", "$400.00"],
+  limitRaiseStarts: ["$5,000.00", "Fri 16 Oct 2026, 14:02"],
+  limitAppOnly: ["$1,000.00"],
+  errDailyLimit: ["$400.00"],
 };

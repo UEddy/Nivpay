@@ -209,6 +209,18 @@ fell below the minimum after the quote, nothing moved but its gas: also 52.
 | 91 | The quote taken right before signing differs from the one on the confirm sheet: amount out, minimum or fee. The sheet shows the new one. Nothing was sent. | `getPrice()`, `token0PurchaseFee()`, `getAmountsOut` on the pair |
 | 92 | The pair holds less CTK than this payment would deliver (`reserve0()`). Nothing was sent. | `reserve0()` on the pair |
 
+## Daily limit
+
+A limit on money leaving the account in any 24 hours, $1,000 unless the
+person sets another in Account details (`app/src/lib/limits.ts`). It counts
+Send, Send in another currency, chipping in and Cash out, from the moment
+each is sent, on this phone only. It is checked before the confirm sheet and
+again right before signing.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 44 | This payment would take the account past its daily limit, counting what this phone sent in the last 24 hours, final or in flight. The screen says how much is left today. Nothing was sent. | Account details, Daily limit; `nivpay.limit.v1.*` in the phone's localStorage |
+
 ## Usernames
 
 Usernames live in NivPayNames, a registry separate from the pots (README,

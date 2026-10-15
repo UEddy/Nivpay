@@ -28,6 +28,7 @@ import { mapLines } from "./mapNames.ts";
 import { factsOf } from "./Request.tsx";
 import { AmountUnderstood, andList, copyLink, CopyLinkButton, Icon, type Notice, NoticeLine, shareLink, Sheet, STOPPED, useCancellable, useSlowStepLine } from "./ui.tsx";
 import { beforePasskey } from "../lib/cancel.ts";
+import { checkDailyLimit, spendEnded, spendSent } from "../lib/spending.ts";
 import { dateLocale } from "../lib/locale.ts";
 
 const orList = new Intl.ListFormat(dateLocale(), { style: "long", type: "disjunction" });
@@ -260,6 +261,7 @@ export function ChipInScreen(props: {
       };
       try {
         const outcome = await followToFinality(idbWriteStore, liveWriteChain, write);
+        spendEnded(me, write, outcome.kind);
         if (outcome.kind === "final") {
           rememberReceipt(write.address, write.hash);
           const next = await read();
@@ -306,6 +308,15 @@ export function ChipInScreen(props: {
     if (!state || amount === null) return;
     setResult(null);
     setShareNote(null);
+    // The daily limit counts chipping in (lib/limits.ts). Nothing is signed if it would pass it.
+    if (!retry) {
+      try {
+        checkDailyLimit(me, amount);
+      } catch (e) {
+        setResult({ tone: "bad", ...(e instanceof AppError ? { text: e.message, code: e.code } : describeFailure(e)) });
+        return;
+      }
+    }
     const run = running.start();
     // Read with the nonce and fees (sendCore.ts), and used inside the passkey session.
     let terms: PermitTerms | undefined;
@@ -334,6 +345,7 @@ export function ChipInScreen(props: {
         },
       };
       const write = retry ? await retryStuckWrite(call) : await sendWrite(call);
+      spendSent(me, write, "pour", amount, potId);
       await land(write);
     } catch (e) {
       // Stopped by X: the screen already says so.

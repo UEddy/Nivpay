@@ -795,6 +795,22 @@ export const pt: Dictionary = {
   installIos: "Toque em Compartilhar e depois em Adicionar à Tela de Início.",
   installTheApp: "Instalar o app",
 
+  dailyLimit: "Limite diário",
+  dailyLimitLine: (limit: string) => `Até ${limit} podem sair desta conta em quaisquer 24 horas.`,
+  dailyUsed: (used: string, left: string) => `Usado nas últimas 24 horas: ${used}. Restam: ${left}.`,
+  dailyLimitThisPhone: "Conta os pagamentos feitos deste celular. Um pagamento feito em outro celular só conta lá.",
+  dailyLimitCounts: "Conta Enviar, Enviar em outra moeda, as contribuições a vaquinhas e Sacar. Pegar sua parte e o dinheiro recebido não contam.",
+  changeLimit: "Mudar o limite",
+  newLimit: "Novo limite diário",
+  limitLowerNow: "Diminuir vale na hora.",
+  limitRaiseLater: "Aumentar vale depois de 24 horas, para ninguém poder apressar você.",
+  limitRaiseStarts: (limit: string, when: string) => `Seu novo limite de ${limit} começa em ${when}.`,
+  saveLimit: "Salvar limite",
+  limitSaved: "Salvo.",
+  limitAppOnly: (fallback: string) =>
+    `O limite fica neste app. Ele protege contra erros e pressão, não contra alguém que tenha sua chave de acesso e use outro programa. Apagar os dados deste site volta o limite para ${fallback}.`,
+  errDailyLimit: (left: string) => `Isso é mais do que seu limite diário permite. Você ainda pode enviar ${left} hoje. Nada foi enviado.`,
+
   language: "Idioma",
   languagePhone: "Idioma do celular",
   languageHint: "Ao mudar, o app recarrega.",
