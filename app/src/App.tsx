@@ -10,7 +10,10 @@ import { AUSD, AUSD_FAUCET, TESTUSD } from "./lib/config.ts";
 import { DEPLOYMENT, POTS, POTS_DEPLOY_BLOCK } from "./lib/deployment.ts";
 import { DraftStore, newDraft } from "./lib/draft.ts";
 import { findPots, ScanStore, type FoundPot, type Role, type ScanState } from "./lib/discover.ts";
-import { askReader, creatorReader, potsReader } from "./lib/discoverLive.ts";
+import { askReader, creatorReader, makerReader, potsReader } from "./lib/discoverLive.ts";
+import { ContactStore } from "./lib/contacts.ts";
+import { learnPotMakers, PotChoiceStore, PotMakers, sortFound, type HiddenPot, type SortFacts } from "./lib/potSort.ts";
+import { REASONS, sendReport, type Reason } from "./lib/report.ts";
 import { AskScanStore, findOpenRequests, learnPotBlocks, needingMyYes, PotBlocks, type AskScan } from "./lib/waiting.ts";
 import { AppError, describeFailure, SendFailure } from "./lib/errors.ts";
 import { openedPotMeta, ROLE_TEXT } from "./lib/potRow.ts";
@@ -44,7 +47,7 @@ const MoneyScreen = lazy(() => reloadOnce(() => import("./screens/Money.tsx")).t
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
 const sending = () => reloadOnce(() => import("./lib/send.ts"));
-import { formatDay, NoticeLine, phoneTimeZone, useOnline, type Notice } from "./screens/ui.tsx";
+import { formatDay, Icon, NoticeLine, phoneTimeZone, Sheet, useOnline, type Notice } from "./screens/ui.tsx";
 import { balanceNote } from "./lib/connection.ts";
 import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/balanceRead.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
@@ -55,6 +58,7 @@ const drafts = new DraftStore(localStorage);
 const pots = new PotStore(localStorage);
 const invited = new InvitedStore(localStorage);
 const potBlocks = new PotBlocks(localStorage, DEPLOYMENT);
+const potMakers = new PotMakers(localStorage, DEPLOYMENT);
 const lastBalances = new LastBalanceStore(localStorage);
 
 type Screen =
@@ -520,7 +524,14 @@ function Welcome(props: {
 }
 
 /** Account details: the only place the Account ID appears, for support. */
-function AccountSheet(props: { account: StoredAccount; onSwitch: () => void; onClose: () => void; onRename: (name: string) => void }) {
+function AccountSheet(props: {
+  account: StoredAccount;
+  hidden: HiddenPot[];
+  onUnhide: (potId: string) => void;
+  onSwitch: () => void;
+  onClose: () => void;
+  onRename: (name: string) => void;
+}) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const receipt = latestReceipt(props.account.address);
@@ -567,6 +578,28 @@ function AccountSheet(props: { account: StoredAccount; onSwitch: () => void; onC
             {copy.viewReceiptHint}
           </p>
         )}
+        <section aria-labelledby="hidden-pots">
+          <p className="eyebrow" id="hidden-pots">
+            {copy.hiddenPots}
+          </p>
+          <p className="hint">{copy.hiddenPotsHint}</p>
+          {props.hidden.length === 0 ? (
+            <p className="hint">{copy.noHiddenPots}</p>
+          ) : (
+            <div className="list">
+              {props.hidden.map((h) => (
+                <div className="list-row" key={`hidden-${h.potId}`}>
+                  <div className="grow">
+                    <span className="name">{h.name || copy.unnamedPot}</span>
+                  </div>
+                  <button type="button" className="btn ghost small" onClick={() => props.onUnhide(h.potId)}>
+                    {copy.showAgain}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
         <button className="btn" onClick={props.onSwitch}>
           {copy.switchAccount}
         </button>
@@ -694,6 +727,10 @@ function Home(props: {
   const [result, setResult] = useState<Notice | null>(null);
   const [stuck, setStuck] = useState(false);
   const [details, setDetails] = useState(false);
+  // Keep and Hide for pots that name this account (lib/potSort.ts). The tick re-reads them after a change.
+  const choices = useMemo(() => new PotChoiceStore(localStorage, DEPLOYMENT, account.address), [account.address]);
+  const [, setChoiceTick] = useState(0);
+  const choiceChanged = useCallback(() => setChoiceTick((n) => n + 1), []);
   // The faucet's shared cooldown: when, on this phone's clock, a claim is
   // allowed again. Nothing is claimed when it ends; the person taps again.
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
@@ -956,7 +993,15 @@ function Home(props: {
         </section>
       )}
 
-      <YourPots account={account} connection={props.connection} onOpen={props.onOpenDraft} onOpenPot={props.onOpenPot} onOpenRequest={props.onOpenRequest} />
+      <YourPots
+        account={account}
+        connection={props.connection}
+        choices={choices}
+        onChoice={choiceChanged}
+        onOpen={props.onOpenDraft}
+        onOpenPot={props.onOpenPot}
+        onOpenRequest={props.onOpenRequest}
+      />
 
       <section className="card">
         <p className="eyebrow">{copy.addTestDollars}</p>
@@ -1005,6 +1050,11 @@ function Home(props: {
       {details && (
         <AccountSheet
           account={account}
+          hidden={choices.hidden()}
+          onUnhide={(potId) => {
+            choices.unhide(potId);
+            choiceChanged();
+          }}
           onRename={props.onRename}
           onClose={() => setDetails(false)}
           onSwitch={() => {
@@ -1023,6 +1073,7 @@ const answerByFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", day:
 const livePots = potsReader(readClient, POTS);
 const liveCreators = creatorReader(readClient, POTS);
 const liveAsks = askReader(readClient, POTS);
+const liveMakers = makerReader(readClient, POTS);
 
 /**
  * Pots this account is named on, found from the chain (lib/discover.ts), so
@@ -1040,6 +1091,7 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
   const askStore = useMemo(() => new AskScanStore(localStorage, DEPLOYMENT, account), [account]);
   const [asks, setAsks] = useState<AskScan>(() => askStore.load());
   const [starts, setStarts] = useState<Record<string, string>>(() => potBlocks.all());
+  const [makers, setMakers] = useState<Record<string, Address>>(() => potMakers.all());
   const { track } = connection;
   useEffect(() => {
     let live = true;
@@ -1073,7 +1125,12 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
         setAsks(nextAsks);
         // So every pot found opens with no link: its creation block, found once.
         await learnPotBlocks(potBlocks, next.found.map((p) => p.potId), liveCreators, POTS_DEPLOY_BLOCK).catch(() => {});
-        if (live) setStarts(potBlocks.all());
+        // Who made each, from its creation event, so Home can tell pots from people you know (lib/potSort.ts).
+        await learnPotMakers(potMakers, potBlocks.all(), next.found.map((p) => p.potId), liveMakers).catch(() => {});
+        if (live) {
+          setStarts(potBlocks.all());
+          setMakers(potMakers.all());
+        }
       } catch {
         if (live) setFailed(true);
       } finally {
@@ -1091,7 +1148,7 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [account, store, askStore, track]);
-  return { scan, failed, answered: answeredInvites, asks, starts };
+  return { scan, failed, answered: answeredInvites, asks, starts, makers };
 }
 
 
@@ -1178,11 +1235,17 @@ function MatchedRow(props: { row: AnsweredInvite; pot: FoundPot | undefined; dec
 function YourPots(props: {
   account: StoredAccount;
   connection: ReturnType<typeof useConnection>;
+  choices: PotChoiceStore;
+  onChoice: () => void;
   onOpen: (draftId: Hex) => void;
   onOpenPot: (pot: StoredPot) => void;
   onOpenRequest: (pot: StoredPot, proposalId: bigint) => void;
 }) {
-  const { scan, failed, answered, asks, starts } = useFoundPots(props.account.address, props.connection);
+  const { scan, failed, answered, asks, starts, makers } = useFoundPots(props.account.address, props.connection);
+  const owner = props.account.address;
+  const contacts = useMemo(() => new ContactStore(localStorage, DEPLOYMENT, owner).list(), [owner]);
+  const [reporting, setReporting] = useState<{ potId: string; name: string } | null>(null);
+  const [reportNote, setReportNote] = useState<string | null>(null);
   const mine = drafts.forOwner(props.account.address).filter((d) => !d.made?.fragment);
   // Pots made before the pot list existed are added to it once.
   for (const d of drafts.forOwner(props.account.address)) {
@@ -1196,7 +1259,20 @@ function YourPots(props: {
   const waiting = answered.filter((r) => !r.match);
   const matched = answered.filter((r) => r.match && !linked.has(r.match.potId));
   const matchedIds = new Set(matched.map((r) => r.match!.potId));
-  const found = scan.found.filter((p) => !linked.has(p.potId) && !matchedIds.has(p.potId));
+  // Pots from people you may not know go in their own list, not here (lib/potSort.ts).
+  const phoneAccounts = accounts.list().map((a) => a.address);
+  const facts: SortFacts = {
+    madeHere: new Set(phoneAccounts.flatMap((a) => drafts.forOwner(a)).flatMap((d) => (d.made ? [d.made.potId] : []))),
+    opened: linked,
+    answered: new Set(answered.flatMap((r) => (r.match ? [r.match.potId] : []))),
+    kept: props.choices.kept(),
+    hidden: new Set(props.choices.hidden().map((h) => h.potId)),
+    trusted: [...phoneAccounts, ...contacts.map((c) => c.account)],
+    makers,
+  };
+  const sorted = sortFound(scan.found, facts);
+  const notYours = new Set([...sorted.fresh, ...sorted.hidden].map((p) => p.potId));
+  const found = sorted.yours.filter((p) => !linked.has(p.potId) && !matchedIds.has(p.potId));
   /** The pot to open for a pot number: its link on this phone, else its matched invite, else its creation block alone. */
   const storedFor = (potId: string): StoredPot | null => {
     const known = pots.get(DEPLOYMENT, potId);
@@ -1204,7 +1280,8 @@ function YourPots(props: {
     const block = answered.find((r) => r.match?.potId === potId)?.match?.block ?? starts[potId];
     return block ? { deployment: DEPLOYMENT, potId, block, fragment: "", name: "", addedAt: 0 } : null;
   };
-  const waitingMine = needingMyYes(asks, props.account.address);
+  // A pot that is new to you, or hidden, never asks for your yes on Home.
+  const waitingMine = needingMyYes(asks, props.account.address).filter((r) => !notYours.has(r.potId));
   const start = () => {
     const draft = newDraft(props.account.address, phoneTimeZone(), Date.now(), (n) => crypto.getRandomValues(new Uint8Array(n)));
     drafts.put(draft);
@@ -1293,6 +1370,158 @@ function YourPots(props: {
         {copy.makeAPot}
       </button>
     </section>
+    {sorted.fresh.length > 0 && (
+      <NewPots
+        pots={sorted.fresh}
+        decimals={scan.decimals}
+        makers={makers}
+        onKeep={(potId) => {
+          props.choices.keep(potId);
+          setReportNote(null);
+          props.onChoice();
+        }}
+        onHide={(potId, name) => {
+          props.choices.hide(potId, name, Date.now());
+          setReportNote(null);
+          props.onChoice();
+        }}
+        onReport={(potId, name) => {
+          setReportNote(null);
+          setReporting({ potId, name });
+        }}
+      />
+    )}
+    {reportNote && (
+      <p className="success" role="status">
+        {reportNote}
+      </p>
+    )}
+    {reporting && (
+      <ReportSheet
+        potId={reporting.potId}
+        onClose={() => setReporting(null)}
+        onReported={() => {
+          props.choices.hide(reporting.potId, reporting.name, Date.now());
+          setReporting(null);
+          setReportNote(copy.reportSent);
+          props.onChoice();
+        }}
+        onHide={() => {
+          props.choices.hide(reporting.potId, reporting.name, Date.now());
+          setReporting(null);
+          props.onChoice();
+        }}
+      />
+    )}
     </>
+  );
+}
+
+/**
+ * Pots that name this account, made by someone this phone doesn't know
+ * (lib/potSort.ts). Collapsed, with no badge and no announcement: a stranger
+ * naming you shouldn't get your attention for free. Each row says who made it
+ * and what you'd do in it, and offers Keep, Hide and Report.
+ */
+function NewPots(props: {
+  pots: FoundPot[];
+  decimals: number | null;
+  makers: Record<string, Address>;
+  onKeep: (potId: string) => void;
+  onHide: (potId: string, name: string) => void;
+  onReport: (potId: string, name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="card" aria-labelledby="new-pots">
+      <button type="button" className="new-pots-toggle" aria-expanded={open} aria-controls="new-pots-list" onClick={() => setOpen((o) => !o)}>
+        <span className="eyebrow" id="new-pots">
+          {copy.newPotsThatNameYou}
+        </span>
+        <Icon name="chevron" size={18} />
+      </button>
+      {open && (
+        <div id="new-pots-list">
+          <p className="hint">{copy.newPotsHint}</p>
+          {props.pots.map((p) => {
+            const name = cleanName(p.name);
+            const maker = props.makers[p.potId];
+            const holds = props.decimals === null ? "…" : formatAmount(BigInt(p.totalAssets), props.decimals, "auto");
+            return (
+              <div key={`new-${p.potId}`}>
+                <div className="home-pot">
+                  <span className="grow">
+                    <span className="name">{name || copy.unnamedPot}</span>
+                    <span className="meta">{maker ? copy.newPotMadeBy(copy.accountEnding(maker)) : copy.newPotMakerUnknown}</span>
+                    <span className="meta">{copy.foundMeta(p.roles.map((r) => ROLE_TEXT[r]), holds)}</span>
+                  </span>
+                </div>
+                <div className="new-pot-actions">
+                  <button type="button" className="btn small" onClick={() => props.onKeep(p.potId)}>
+                    {copy.keepPot}
+                  </button>
+                  <button type="button" className="btn ghost small" onClick={() => props.onHide(p.potId, name)}>
+                    {copy.hidePot}
+                  </button>
+                  <button type="button" className="btn ghost small" onClick={() => props.onReport(p.potId, name)}>
+                    {copy.reportPot}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+const REASON_TEXT: Record<Reason, string> = {
+  scam: copy.reasonScam,
+  impersonation: copy.reasonImpersonation,
+  spam: copy.reasonSpam,
+  "not-for-me": copy.reasonNotForMe,
+};
+
+/** Asks why, sends only the pot and the reason to /api/report, then the pot is hidden. */
+function ReportSheet(props: { potId: string; onClose: () => void; onReported: () => void; onHide: () => void }) {
+  const [reason, setReason] = useState<Reason | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<Notice | null>(null);
+  const send = async () => {
+    if (!reason) return;
+    setBusy(true);
+    setFailure(null);
+    try {
+      await sendReport({ deployment: DEPLOYMENT, potId: props.potId, reason });
+      props.onReported();
+    } catch {
+      setFailure({ tone: "bad", text: copy.errReportFailed, code: ERROR_CODES.REPORT_FAILED });
+      setBusy(false);
+    }
+  };
+  return (
+    <Sheet title={copy.reportTitle} onClose={() => !busy && props.onClose()}>
+      <p className="hint">{copy.reportLede}</p>
+      <div className="report-reasons" role="radiogroup" aria-label={copy.reportTitle}>
+        {REASONS.map((r) => (
+          <button key={r} type="button" role="radio" aria-checked={reason === r} className={`btn${reason === r ? " primary" : ""}`} disabled={busy} onClick={() => setReason(r)}>
+            {REASON_TEXT[r]}
+          </button>
+        ))}
+      </div>
+      {failure && <NoticeLine notice={failure} />}
+      <button type="button" className={`pill-btn${busy ? " busy" : ""}`} disabled={!reason || busy} aria-busy={busy} onClick={send}>
+        {busy ? copy.sendingReport : copy.sendReport}
+      </button>
+      {failure && (
+        <button type="button" className="btn ghost" onClick={props.onHide}>
+          {copy.hidePot}
+        </button>
+      )}
+      <button type="button" className="btn ghost" disabled={busy} onClick={props.onClose}>
+        {copy.back}
+      </button>
+    </Sheet>
   );
 }

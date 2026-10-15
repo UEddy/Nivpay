@@ -2,6 +2,7 @@ import { getAddress, numberToHex, pad, parseEventLogs, toEventSelector, type Add
 import { ERC20_READ_ABI, POTS_ABI, POTS_READ_ABI } from "./abi.ts";
 import type { PotsReader } from "./discover.ts";
 import type { CreatorReader } from "./invited.ts";
+import type { MakerReader } from "./potSort.ts";
 import type { AskReader } from "./waiting.ts";
 import { shownText32 } from "./text32.ts";
 
@@ -102,6 +103,20 @@ export function creatorReader(readClient: Pick<PublicClient, "getBlock" | "readC
     },
 
     members: async (potId, at) => (await members([Number(potId)], at))[0]!,
+  };
+}
+
+/** A pot's maker, from its PotCreated event in the block it was made in (potSort.ts). */
+export function makerReader(readClient: Pick<PublicClient, "request">, pots: Address): MakerReader {
+  return {
+    async makerAt(potId, block) {
+      const raw = (await readClient.request({
+        method: "eth_getLogs",
+        params: [{ address: pots, fromBlock: numberToHex(block), toBlock: numberToHex(block), topics: [POT_CREATED, pad(numberToHex(potId), { size: 32 })] }],
+      })) as Log[];
+      const [made] = parseEventLogs({ abi: POTS_ABI, eventName: "PotCreated", logs: raw }).filter((l) => l.args.potId === potId);
+      return made ? getAddress(made.args.creator) : null;
+    },
   };
 }
 

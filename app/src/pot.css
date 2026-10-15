@@ -1694,3 +1694,17 @@
 .new-pots-toggle .eyebrow {
   margin: 0;
 }
+
+.new-pots-toggle svg {
+  transition: transform 0.2s ease;
+}
+
+.new-pots-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+.report-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
