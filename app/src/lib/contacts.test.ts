@@ -92,3 +92,15 @@ test("a username is asked about the first time, passes when unchanged, and stops
   // The stop that can't happen live for 90 days: the name was let go, held, and claimed by someone else.
   assert.equal(namePairCheck(FAKE, IDARA), "changed");
 });
+
+test("a name on this phone: a contact's first, then one of this phone's accounts, else none", async () => {
+  const { nameOnPhone } = await import("./contacts.ts");
+  const a = "0x1111111111111111111111111111111111111111" as const;
+  const b = "0x2222222222222222222222222222222222222222" as const;
+  const c = "0x3333333333333333333333333333333333333333" as const;
+  const contacts = [{ account: a, name: "Idara", addedAt: 1 }];
+  const mine = [{ address: a, name: "Not this" }, { address: b, name: "  Eddy  " }];
+  assert.equal(nameOnPhone(a, contacts, mine), "Idara");
+  assert.equal(nameOnPhone(b, contacts, mine), "Eddy");
+  assert.equal(nameOnPhone(c, contacts, mine), null);
+});

@@ -2,6 +2,7 @@ import { copy } from "../copy.ts";
 import { POTS_AUSD, POTS_TESTUSD, SETTLEMENT_PAIR } from "../lib/config.ts";
 import { dateLocale } from "../lib/locale.ts";
 import { formatAmount, formatCurrency } from "../lib/money.ts";
+import type { Address } from "viem";
 import type { Note, NotesState } from "../lib/notes.ts";
 import { senderKind } from "../lib/transfer.ts";
 import { Sheet } from "./ui.tsx";
@@ -22,8 +23,12 @@ function fromOf(n: Note): string {
   return kind === "pot" ? copy.fromAPot : kind === "settlement" ? copy.fromAgoraSettlement : copy.accountEnding(n.from);
 }
 
+/** Someone's name for a note: a contact's, or an account's on this phone, else the end of their account. */
+export type NameOf = (who: Address) => string | null;
+const whoOf = (who: Address | undefined, nameOf?: NameOf) => (who ? (nameOf?.(who) ?? copy.accountEnding(who)) : copy.someoneElse);
+
 /** What a note says, in the language in use. */
-export function noteText(n: Note): string {
+export function noteText(n: Note, nameOf?: NameOf): string {
   const pot = n.name || copy.unnamedPot;
   switch (n.kind) {
     case "received":
@@ -42,6 +47,12 @@ export function noteText(n: Note): string {
       return copy.noteClosedShare(pot);
     case "limitRaised":
       return copy.noteLimitRaised(amountOf(n));
+    case "sent":
+      return copy.noteSent(amountOf(n), n.toName || whoOf(n.to, nameOf));
+    case "potNamesYou":
+      return copy.notePotNamesYou(whoOf(n.from, nameOf), pot);
+    case "memberChippedIn":
+      return copy.noteMemberChippedIn(whoOf(n.from, nameOf), amountOf(n), pot);
   }
 }
 
@@ -50,7 +61,7 @@ export function noteText(n: Note): string {
  * screen it is about and marks it read. It says when the list started and
  * where it comes from: no server, no push messages.
  */
-export function NotesSheet(props: { state: NotesState; onOpen: (n: Note) => void; onReadAll: () => void; onClose: () => void }) {
+export function NotesSheet(props: { state: NotesState; nameOf?: NameOf; onOpen: (n: Note) => void; onReadAll: () => void; onClose: () => void }) {
   const { state } = props;
   return (
     <Sheet title={copy.notifications} onClose={props.onClose}>
@@ -62,7 +73,7 @@ export function NotesSheet(props: { state: NotesState; onOpen: (n: Note) => void
             <button type="button" role="listitem" className={`home-pot note${n.read ? "" : " unread"}`} key={n.id} onClick={() => props.onOpen(n)}>
               {n.kind === "received" && n.from && senderKind(n.from, [POTS_AUSD, POTS_TESTUSD], SETTLEMENT_PAIR) === "account" && <Avatar account={n.from} name={copy.accountEnding(n.from)} size={32} />}
               <span className="grow">
-                <span className="name">{noteText(n)}</span>
+                <span className="name">{noteText(n, props.nameOf)}</span>
                 <span className="meta">{timeFormat.format(new Date(n.at))}</span>
               </span>
               {!n.read && <span className="tag live">{copy.noteNew}</span>}

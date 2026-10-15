@@ -113,3 +113,46 @@ test("a poll that comes back empty doesn't forget what each pot held", () => {
   assert.deepEqual(kinds(s), ["chippedIn"]);
   assert.equal(s.notes[0]!.amount, usd(30));
 });
+
+const MAKER = getAddress("0x2222222222222222222222222222222222222222");
+const STRANGER = getAddress("0x3333333333333333333333333333333333333333");
+const ME = getAddress("0x4444444444444444444444444444444444444444");
+const IDARA = getAddress("0x5555555555555555555555555555555555555555");
+
+test("a pot that names you is news only when a contact or one of your accounts made it, and never on the first look", () => {
+  let s = fromPoll(start(EMPTY_NOTES, T, 1n), poll({ found: [pot("1", 0)], makers: { "1": MAKER }, trusted: [MAKER], me: ME }));
+  assert.deepEqual(s.notes, [], "pots there on the first look are not news");
+  const rows = [pot("1", 0), pot("2", 0), pot("3", 0), pot("4", 0, { roles: ["putIn"] }), pot("5", 0)];
+  s = fromPoll(s, poll({ now: T + 1, found: rows, makers: { "1": MAKER, "2": MAKER, "3": STRANGER, "4": MAKER }, trusted: [MAKER], me: ME }));
+  assert.deepEqual(s.notes.map((n) => [n.kind, n.potId, n.from]), [["potNamesYou", "2", MAKER]], "the stranger's pot and the one you only put money in say nothing");
+  assert.ok(!s.potsSeen!.includes("5"), "a pot whose maker isn't known yet is looked at again");
+  s = fromPoll(s, poll({ now: T + 2, found: rows, makers: { "1": MAKER, "2": MAKER, "3": STRANGER, "4": MAKER, "5": ME }, trusted: [MAKER, ME], me: ME }));
+  assert.equal(s.notes.length, 1, "your own pot is not news to you, and nothing is said twice");
+});
+
+test("money put in by someone in your pot is named, and not said again as someone", () => {
+  let s = fromPoll(start(EMPTY_NOTES, T, 1n), poll({ found: [pot("1", 100)] }));
+  const f = { id: "0xabc:3", potId: "1", from: IDARA, amount: usd(50) };
+  s = fromPoll(s, poll({ now: T + 1, found: [pot("1", 170)], fundings: [f] }));
+  assert.deepEqual(s.notes.map((n) => [n.kind, n.amount]).sort(), [["chippedIn", usd(20)], ["memberChippedIn", usd(50)]]);
+  assert.equal(s.notes.find((n) => n.kind === "memberChippedIn")!.from, IDARA);
+  s = fromPoll(s, poll({ now: T + 2, found: [pot("1", 170)], fundings: [f] }));
+  assert.equal(s.notes.length, 2, "the same funding is said once");
+});
+
+test("your own payment, once final, is in the list and already read", async () => {
+  const { fromSent } = await import("./notes.ts");
+  assert.deepEqual(fromSent(EMPTY_NOTES, { tx: "0x1", to: IDARA, toName: "Idara", amount: 5_000_000n, decimals: 6, symbol: "$" }, T), EMPTY_NOTES, "not before the list starts");
+  const s = fromSent(start(EMPTY_NOTES, T, 1n), { tx: "0x1", to: IDARA, toName: "Idara", amount: 5_000_000n, decimals: 6, symbol: "$" }, T);
+  assert.deepEqual(s.notes.map((n) => [n.kind, n.to, n.toName, n.read]), [["sent", IDARA, "Idara", true]]);
+  assert.equal(unread(s), 0);
+});
+
+test("stored notes of the new kinds read back", () => {
+  const kv = new Map<string, string>();
+  const store = new NotesStore({ getItem: (k) => kv.get(k) ?? null, setItem: (k, v) => void kv.set(k, v) }, "ausd", ME);
+  let s = fromPoll(start(EMPTY_NOTES, T, 1n), poll({ found: [pot("1", 100)] }));
+  s = fromPoll(s, poll({ now: T + 1, found: [pot("1", 150)], fundings: [{ id: "x:1", potId: "1", from: IDARA, amount: usd(50) }] }));
+  store.set(s);
+  assert.deepEqual(store.get(), s);
+});

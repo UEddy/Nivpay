@@ -10,8 +10,9 @@ import { AUSD, AUSD_FAUCET, CTK, LOG_PAGE_BLOCKS, TESTUSD } from "./lib/config.t
 import { DEPLOYMENT, POTS, POTS_DEPLOY_BLOCK } from "./lib/deployment.ts";
 import { DraftStore, newDraft } from "./lib/draft.ts";
 import { findPots, ScanStore, type FoundPot, type Role, type ScanState } from "./lib/discover.ts";
-import { askReader, creatorReader, makerReader, potsReader } from "./lib/discoverLive.ts";
-import { ContactStore } from "./lib/contacts.ts";
+import { askReader, creatorReader, fundingsReader, makerReader, potsReader } from "./lib/discoverLive.ts";
+import { FundingsCursor, memberCache, readFundings } from "./lib/fundings.ts";
+import { ContactStore, nameOnPhone } from "./lib/contacts.ts";
 import { learnPotMakers, PotChoiceStore, PotMakers, sortFound, type HiddenPot, type SortFacts } from "./lib/potSort.ts";
 import { REASONS, sendReport, type Reason } from "./lib/report.ts";
 import { AskScanStore, findOpenRequests, learnPotBlocks, needingMyYes, PotBlocks, type AskScan } from "./lib/waiting.ts";
@@ -33,7 +34,7 @@ import { incomingFrom, incomingSource, SEND_LABEL, withFloor } from "./lib/trans
 import { PotFeed } from "./lib/feed.ts";
 import { idbFeedStore } from "./lib/idb.ts";
 import { LimitStore, settle } from "./lib/limits.ts";
-import { fromArrivals, fromPoll, markAllRead, markRead, NotesStore, start as startNotes, unread, type Note, type NotesState, type PollInputs } from "./lib/notes.ts";
+import { fromArrivals, fromPoll, markAllRead, markRead, NotesStore, start as startNotes, unread, type Funding, type Note, type NotesState, type PollInputs } from "./lib/notes.ts";
 import { CASHOUT_LABEL } from "./lib/rampDesk.ts";
 import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
 // Every screen but Home loads when it is first opened, and so does the code
@@ -911,6 +912,8 @@ function Home(props: {
       for (const f of feeds) f.stop();
     };
   }, [owner, notesStore]);
+  /** A contact's name, or an account's on this phone, for notes about them. */
+  const nameOf = (who: Address): string | null => nameOnPhone(who, new ContactStore(localStorage, DEPLOYMENT, owner).list(), accounts.list());
   const openNote = (n: Note) => {
     setNotes(notesStore.update((s) => markRead(s, n.id)));
     setNotesOpen(false);
@@ -1295,7 +1298,7 @@ function Home(props: {
 
       {notesOpen && (
         <Suspense fallback={null}>
-          <NotesSheet state={notes} onOpen={openNote} onReadAll={() => setNotes(notesStore.update(markAllRead))} onClose={() => setNotesOpen(false)} />
+          <NotesSheet state={notes} nameOf={nameOf} onOpen={openNote} onReadAll={() => setNotes(notesStore.update(markAllRead))} onClose={() => setNotesOpen(false)} />
         </Suspense>
       )}
       {details && (
@@ -1404,6 +1407,9 @@ const livePots = potsReader(readClient, POTS);
 const liveCreators = creatorReader(readClient, POTS);
 const liveAsks = askReader(readClient, POTS);
 const liveMakers = makerReader(readClient, POTS);
+const liveFundings = fundingsReader(readClient, POTS);
+/** Each of this account's pots' deciders and payees, read once: they never change. */
+const potMembers = memberCache();
 
 /**
  * Pots this account is named on, found from the chain (lib/discover.ts), so
@@ -1422,6 +1428,9 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
   const [asks, setAsks] = useState<AskScan>(() => askStore.load());
   const [starts, setStarts] = useState<Record<string, string>>(() => potBlocks.all());
   const [makers, setMakers] = useState<Record<string, Address>>(() => potMakers.all());
+  // Money put into this account's own pots by the people in them, since the poll before (lib/fundings.ts).
+  const [fundings, setFundings] = useState<Funding[]>([]);
+  const cursor = useMemo(() => new FundingsCursor(localStorage, DEPLOYMENT, account), [account]);
   const { track } = connection;
   useEffect(() => {
     let live = true;
@@ -1436,6 +1445,17 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
       try {
         const next = await track(findPots(livePots, state, account));
         if (!live) return;
+        // Read up to the same block as the totals, so a rise and who caused it arrive together.
+        if (next.at) {
+          const made = potMakers.all();
+          const mine = next.found.filter((p) => made[p.potId]?.toLowerCase() === account.toLowerCase() && !p.closed).map((p) => p.potId);
+          const read = await readFundings(liveFundings, account, mine, cursor.get(), BigInt(next.at), LOG_PAGE_BLOCKS, potMembers).catch(() => null);
+          if (!live) return;
+          if (read) {
+            cursor.set(read.readTo);
+            setFundings(read.fundings);
+          }
+        }
         state = next;
         store.save(next);
         setScan(next);
@@ -1477,8 +1497,8 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
       clearInterval(t);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [account, store, askStore, track]);
-  return { scan, failed, answered: answeredInvites, asks, starts, makers };
+  }, [account, store, askStore, track, cursor]);
+  return { scan, failed, answered: answeredInvites, asks, starts, makers, fundings };
 }
 
 
@@ -1575,7 +1595,7 @@ function YourPots(props: {
   onOpenPot: (pot: StoredPot) => void;
   onOpenRequest: (pot: StoredPot, proposalId: bigint) => void;
 }) {
-  const { scan, failed, answered, asks, starts, makers } = useFoundPots(props.account.address, props.connection);
+  const { scan, failed, answered, asks, starts, makers, fundings } = useFoundPots(props.account.address, props.connection);
   const owner = props.account.address;
   const contacts = useMemo(() => new ContactStore(localStorage, DEPLOYMENT, owner).list(), [owner]);
   const [reporting, setReporting] = useState<{ potId: string; name: string } | null>(null);
@@ -1621,7 +1641,15 @@ function YourPots(props: {
   const { onPoll, onWaiting } = props;
   useEffect(() => onWaiting(waitingMine.length), [onWaiting, waitingMine.length]);
   useEffect(() => {
-    onPoll({ found: scan.found.filter((p) => !notYours.has(p.potId)), waiting: waitingMine, ended: (asks.ended ?? []).filter((e) => !notYours.has(e.potId)) });
+    onPoll({
+      found: scan.found.filter((p) => !notYours.has(p.potId)),
+      waiting: waitingMine,
+      ended: (asks.ended ?? []).filter((e) => !notYours.has(e.potId)),
+      me: owner,
+      makers,
+      trusted: facts.trusted,
+      fundings,
+    });
     // Once per poll: scan and asks are new objects after each one.
   }, [scan, asks]);
   const start = () => {

@@ -876,6 +876,9 @@ export const en = {
   noteClosingSoon: (pot: string) => `${pot} closes within a day.`,
   noteClosedShare: (pot: string) => `${pot} has closed. Your share is ready to take.`,
   noteLimitRaised: (limit: string) => `Your daily limit of ${limit} is now in effect.`,
+  noteSent: (amount: string, to: string) => `You sent ${amount} to ${to}.`,
+  notePotNamesYou: (who: string, pot: string) => `${who} made ${pot}, with you in it.`,
+  noteMemberChippedIn: (who: string, amount: string, pot: string) => `${who} put ${amount} into ${pot}.`,
 
   // Profile photos (lib/photo.ts, api/photo). Hidden until photos are set up.
   photo: "Photo",

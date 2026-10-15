@@ -1,6 +1,7 @@
 import { getAddress, numberToHex, pad, parseEventLogs, toEventSelector, type Address, type Log, type PublicClient } from "viem";
 import { ERC20_READ_ABI, POTS_ABI, POTS_READ_ABI } from "./abi.ts";
 import type { PotsReader } from "./discover.ts";
+import type { FundingsReader } from "./fundings.ts";
 import type { CreatorReader } from "./invited.ts";
 import type { MakerReader } from "./potSort.ts";
 import type { AskReader } from "./waiting.ts";
@@ -102,6 +103,29 @@ export function creatorReader(readClient: Pick<PublicClient, "getBlock" | "readC
         .map((l) => ({ potId: l.args.potId, block: l.blockNumber }));
     },
 
+    members: async (potId, at) => (await members([Number(potId)], at))[0]!,
+  };
+}
+
+const FUNDED = toEventSelector(POTS_ABI.find((x) => x.type === "event" && x.name === "Funded")!);
+
+/** Money put into some pots (fundings.ts): their Funded events, one page of blocks, and the pots' members. */
+export function fundingsReader(readClient: Pick<PublicClient, "getBlock" | "readContract" | "multicall" | "request">, pots: Address): FundingsReader {
+  const members = potsReader(readClient, pots).members;
+  return {
+    async funded(potIds, from, to) {
+      const raw = (await readClient.request({
+        method: "eth_getLogs",
+        params: [{ address: pots, fromBlock: numberToHex(from), toBlock: numberToHex(to), topics: [FUNDED, potIds.map((id) => pad(numberToHex(id), { size: 32 }))] }],
+      })) as Log[];
+      return parseEventLogs({ abi: POTS_ABI, eventName: "Funded", logs: raw }).map((l) => ({
+        tx: l.transactionHash,
+        logIndex: l.logIndex,
+        potId: l.args.potId,
+        funder: getAddress(l.args.funder),
+        assets: l.args.assets,
+      }));
+    },
     members: async (potId, at) => (await members([Number(potId)], at))[0]!,
   };
 }

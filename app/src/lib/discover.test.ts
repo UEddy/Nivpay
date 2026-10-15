@@ -104,7 +104,9 @@ test("money put in is checked only for the most recent pots, and a pot once foun
 test("no pots on the chain at all is not an error", async () => {
   const { reader, calls } = fakeChain([]);
   const scan = await findPots(reader, EMPTY_SCAN, UBONG);
-  assert.deepEqual(scan, { checkedUpTo: 0, named: {}, found: [], decimals: 6 });
+  const { at, ...rest } = scan;
+  assert.deepEqual(rest, { checkedUpTo: 0, named: {}, found: [], decimals: 6 });
+  assert.match(at ?? "", /^\d+$/, "the block it was read at, for reads that must match it (fundings.ts)");
   assert.deepEqual([calls.members, calls.shares, calls.views], [[], [], []]);
 });
 

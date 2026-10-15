@@ -843,6 +843,9 @@ export const es: Dictionary = {
   noteClosingSoon: (pot: string) => `${pot} cierra en menos de un día.`,
   noteClosedShare: (pot: string) => `${pot} se cerró. Tu parte está lista para recuperarla.`,
   noteLimitRaised: (limit: string) => `Tu límite diario de ${limit} ya está en vigor.`,
+  noteSent: (amount: string, to: string) => `Enviaste ${amount} a ${to}.`,
+  notePotNamesYou: (who: string, pot: string) => `${who} creó ${pot}, y formas parte.`,
+  noteMemberChippedIn: (who: string, amount: string, pot: string) => `${who} puso ${amount} en ${pot}.`,
 
   photo: "Foto",
   addPhoto: "Añadir una foto",

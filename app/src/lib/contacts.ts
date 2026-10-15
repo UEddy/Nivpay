@@ -37,6 +37,14 @@ function readList<T>(kv: KeyValue, key: string, keep: (row: unknown) => T | null
   }
 }
 
+/** Someone's name on this phone: a contact's, else one of this phone's accounts', else null. */
+export function nameOnPhone(who: Address, contacts: readonly Contact[], accounts: readonly { address: Address; name: string }[]): string | null {
+  const contact = contacts.find((c) => isAddressEqual(c.account, who));
+  if (contact) return contact.name;
+  const mine = accounts.find((a) => isAddressEqual(a.address, who));
+  return mine ? cleanName(mine.name) || null : null;
+}
+
 export class ContactStore {
   private readonly kv: KeyValue;
   private readonly key: string;

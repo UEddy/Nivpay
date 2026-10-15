@@ -26,6 +26,7 @@ import { followSequence, followToFinality, type PendingWrite } from "../lib/writ
 import { AmountUnderstood, Icon, type Notice, NoticeLine, Sheet, STOPPED, useCancellable, useOnline } from "./ui.tsx";
 import { beforePasskey } from "../lib/cancel.ts";
 import { checkDailyLimit, spendEnded, spendSent } from "../lib/spending.ts";
+import { fromSent, NotesStore } from "../lib/notes.ts";
 import { balanceNote } from "../lib/connection.ts";
 import { Avatar } from "./Avatar.tsx";
 
@@ -53,6 +54,15 @@ const STEP_TEXT: Record<Step | "landing", string> = {
   sending: copy.stepSendingPayment,
   landing: copy.stepSettling,
 };
+
+/** This account's own payment, once final, in its notifications (lib/notes.ts). Amounts are in dollars. */
+function noteSent(me: Address, tx: string, to: Recipient, amount: bigint): void {
+  try {
+    new NotesStore(localStorage, DEPLOYMENT, me).update((s) => fromSent(s, { tx, to: to.account, toName: to.name, amount, decimals: 6, symbol: "$" }, Date.now()));
+  } catch {
+    // Storage refused: the payment itself is unaffected.
+  }
+}
 
 /**
  * Sending dollars to another person: by their request link, or by an Account
@@ -141,6 +151,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         setStep(null);
         if (outcome.kind === "final") {
           rememberReceipt(write.address, write.hash);
+          noteSent(me, write.hash, recipient, amount);
           paid.add(recipient.account);
           if (recipient.username) pairs.remember(recipient.username, recipient.account);
           setStuck(false);
@@ -180,6 +191,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
         const setupDone = setupIncluded && (step > 0 || outcome.kind === "final");
         if (outcome.kind === "final" && step === steps - 1) {
           rememberReceipt(last.address, last.hash);
+          noteSent(me, last.hash, recipient, amountIn);
           paid.add(recipient.account);
           if (recipient.username) pairs.remember(recipient.username, recipient.account);
           setStuck(false);

@@ -33,6 +33,8 @@ export type ScanState = {
   named: Record<string, Role[]>;
   found: FoundPot[];
   decimals: number | null;
+  /** The finalized block the last read was made at. */
+  at?: string;
 };
 
 export const EMPTY_SCAN: ScanState = { checkedUpTo: 0, named: {}, found: [], decimals: null };
@@ -93,6 +95,7 @@ export async function findPots(reader: PotsReader, previous: ScanState, account:
     checkedUpTo: to,
     named,
     decimals,
+    at: at.toString(),
     found: ids.map((id, i) => ({
       potId: id.toString(),
       roles: roles.get(id)!,
@@ -125,7 +128,13 @@ export class ScanStore {
     try {
       const raw = JSON.parse(this.kv.getItem(this.key) ?? "null") as Partial<ScanState> | null;
       if (!raw || typeof raw.checkedUpTo !== "number" || !Array.isArray(raw.found) || typeof raw.named !== "object" || !raw.named) return EMPTY_SCAN;
-      return { checkedUpTo: raw.checkedUpTo, named: raw.named, found: raw.found, decimals: typeof raw.decimals === "number" ? raw.decimals : null };
+      return {
+        checkedUpTo: raw.checkedUpTo,
+        named: raw.named,
+        found: raw.found,
+        decimals: typeof raw.decimals === "number" ? raw.decimals : null,
+        ...(typeof raw.at === "string" && /^\d+$/.test(raw.at) ? { at: raw.at } : {}),
+      };
     } catch {
       return EMPTY_SCAN;
     }
