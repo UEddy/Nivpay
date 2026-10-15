@@ -793,6 +793,12 @@ const words = {
   errNameNotFound: (name: string) => `No account has the username @${name}.`,
   errNameChanged: (name: string) => `@${name} belongs to a different account than the one you paid before. Nothing was sent.`,
 
+  // Installing the app (lib/install.ts)
+  installNivPay: "Install NivPay",
+  installHint: "Open it from your home screen, like any other app.",
+  installIos: "Tap Share, then Add to Home Screen.",
+  installTheApp: "Install the app",
+
   /** How a vendor or person is shown when a name alone isn't enough. */
   accountEnding: (id: string) => `account ending ${id.slice(-4)}`,
 } as const;

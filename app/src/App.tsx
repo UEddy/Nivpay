@@ -48,7 +48,7 @@ const UsernameSection = lazy(() => reloadOnce(() => import("./screens/Username.t
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
 const sending = () => reloadOnce(() => import("./lib/send.ts"));
-import { formatDay, Icon, NoticeLine, phoneTimeZone, Sheet, useOnline, type Notice } from "./screens/ui.tsx";
+import { formatDay, Icon, InstallBanner, InstallHow, NoticeLine, phoneTimeZone, Sheet, useInstallWay, useOnline, type Notice } from "./screens/ui.tsx";
 import { balanceNote } from "./lib/connection.ts";
 import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/balanceRead.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
@@ -395,6 +395,7 @@ function Screens() {
 
   return (
     <div className="page">
+      <InstallBanner />
       {banner}
       {active && !switching ? (
         <Home
@@ -540,6 +541,7 @@ function AccountSheet(props: {
 }) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
+  const installWay = useInstallWay();
   const receipt = latestReceipt(props.account.address);
   const copyId = () => {
     navigator.clipboard
@@ -584,6 +586,14 @@ function AccountSheet(props: {
             <br />
             {copy.viewReceiptHint}
           </p>
+        )}
+        {installWay && (
+          <section aria-labelledby="install-app">
+            <p className="eyebrow" id="install-app">
+              {copy.installTheApp}
+            </p>
+            <InstallHow way={installWay} />
+          </section>
         )}
         <section aria-labelledby="hidden-pots">
           <p className="eyebrow" id="hidden-pots">
