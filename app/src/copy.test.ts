@@ -250,6 +250,22 @@ function allCopy(): [string, string][] {
     warnFirstTime: ["account ending 7bC1"],
     warnNameClash: ["Idara"],
     linkCallsThem: ["Event hall"],
+    yourUsername: ["idara"],
+    usernameAvailable: ["idara"],
+    usernameTaken: ["idara"],
+    usernameFreeOn: ["idara", "Thu 14 Jan 2027"],
+    usernameTakeBack: ["idara"],
+    claimUsername: ["idara"],
+    changeTo: ["idara_e"],
+    letGoOf: ["idara"],
+    usernameClaimed: ["idara"],
+    usernameLetGoDone: ["idara"],
+    usernameLine: ["idara", "account ending 7bC1"],
+    confirmUsernameLast4: ["idara"],
+    withUsername: ["Idara", "idara"],
+    errNameHeld: ["Thu 14 Jan 2027"],
+    errNameNotFound: ["idara"],
+    errNameChanged: ["idara"],
   };
   return Object.entries(copy).map(([key, value]) => {
     if (typeof value === "string") return [key, value];
@@ -452,4 +468,14 @@ test("warnings about who controls a pot, and who you're paying, say what the rul
   assert.equal(copy.warnNameClash("Idara"), "You have a contact called Idara with a different account. This may not be them.");
   assert.equal(copy.newPotsThatNameYou, "New pots that name you");
   for (const key of ["reasonScam", "reasonImpersonation", "reasonSpam", "reasonNotForMe"] as const) assert.ok(copy[key]);
+});
+
+test("usernames read as usernames and Account IDs, and the stop says nothing was sent", () => {
+  assert.equal(copy.usernameLine("idara", copy.accountEnding("0x725C9A4Bb4c3dE2F11aC0e7C9b1E8f0D3a2B7bC1")), "@idara, account ending 7bC1");
+  assert.equal(copy.errNameChanged("idara"), "@idara belongs to a different account than the one you paid before. Nothing was sent.");
+  assert.equal(copy.yourUsername("eddy"), "Your username: @eddy");
+  assert.equal(copy.withUsername("account ending 7bC1", "idara"), "account ending 7bC1 (@idara)", "a name, used mid-sentence too");
+  assert.equal(copy.storyAdded(copy.withUsername("account ending 7bC1", "idara"), "$5.00"), "Account ending 7bC1 (@idara) added $5.00");
+  for (const key of ["usernamePublic", "usernameLetGoNote", "usernameHoldNote"] as const) assert.doesNotMatch(copy[key], /registry|address|contract/i);
+  assert.match(copy.usernameHoldNote, /90 days/);
 });

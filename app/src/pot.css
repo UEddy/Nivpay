@@ -1708,3 +1708,13 @@
   flex-direction: column;
   gap: 8px;
 }
+
+/* Account details: the username, beside the Account ID. */
+.username-section {
+  margin: 4px 0;
+}
+
+.username-section .name {
+  font-weight: 600;
+  margin: 0 0 8px;
+}

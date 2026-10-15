@@ -44,6 +44,7 @@ const RequestScreen = lazy(() => reloadOnce(() => import("./screens/Request.tsx"
 const TimelineScreen = lazy(() => reloadOnce(() => import("./screens/Timeline.tsx")).then((m) => ({ default: m.TimelineScreen })));
 const CloseScreen = lazy(() => reloadOnce(() => import("./screens/Close.tsx")).then((m) => ({ default: m.CloseScreen })));
 const MoneyScreen = lazy(() => reloadOnce(() => import("./screens/Money.tsx")).then((m) => ({ default: m.MoneyScreen })));
+const UsernameSection = lazy(() => reloadOnce(() => import("./screens/Username.tsx")).then((m) => ({ default: m.UsernameSection })));
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
 const sending = () => reloadOnce(() => import("./lib/send.ts"));
@@ -51,6 +52,7 @@ import { formatDay, Icon, NoticeLine, phoneTimeZone, Sheet, useOnline, type Noti
 import { balanceNote } from "./lib/connection.ts";
 import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/balanceRead.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
+import { namesOn, USERNAME_LABEL, usernameOf } from "./lib/names.ts";
 
 const accounts = new AccountStore(localStorage);
 const credentials = new CredentialStore(localStorage);
@@ -530,6 +532,8 @@ function AccountSheet(props: {
   account: StoredAccount;
   hidden: HiddenPot[];
   onUnhide: (potId: string) => void;
+  /** Choose a username, beside the Account ID. Absent while usernames are off. */
+  username?: ReactNode;
   onSwitch: () => void;
   onClose: () => void;
   onRename: (name: string) => void;
@@ -571,6 +575,7 @@ function AccountSheet(props: {
           {copied ? copy.copied : copy.copyAction}
         </button>
         <p className="hint">{copy.accountIdHint}</p>
+        {props.username}
         {receipt && (
           <p className="hint">
             <a className="receipt-link" href={receiptUrl(receipt)} target="_blank" rel="noopener noreferrer">
@@ -700,9 +705,28 @@ function Home(props: {
   onRename: (name: string) => void;
 }) {
   const { account, connection } = props;
-  // A passkey brings back its account but not its name: ask once, on this phone.
-  const [askName, setAskName] = useState(() => accounts.needsName(account.address));
-  useEffect(() => setAskName(accounts.needsName(account.address)), [account.address]);
+  // A passkey brings back its account but not its name. With usernames on,
+  // the account's username comes back from the passkey alone and stands in
+  // for the name; otherwise, or with none, ask once, on this phone.
+  const [askName, setAskName] = useState(() => !namesOn && accounts.needsName(account.address));
+  const rename = useRef(props.onRename);
+  rename.current = props.onRename;
+  useEffect(() => {
+    const needs = accounts.needsName(account.address);
+    if (!needs || !namesOn) return setAskName(needs);
+    let live = true;
+    usernameOf(account.address)
+      .then((name) => {
+        if (!live) return;
+        if (name) rename.current(`@${name}`);
+        setAskName(!name);
+      })
+      .catch(() => live && setAskName(true));
+    return () => {
+      live = false;
+    };
+  }, [account.address]);
+
   const skipAsking = () => {
     accounts.skipName(account.address);
     setAskName(false);
@@ -710,25 +734,29 @@ function Home(props: {
   const [balances, setBalances] = useState<Balances | null>(null);
   // A payment from this account still being confirmed: the Send screen follows it.
   const [sendInFlight, setSendInFlight] = useState(false);
+  const [details, setDetails] = useState(false);
   // A cash out still being confirmed: the Cash out screen follows it.
   const [cashOutInFlight, setCashOutInFlight] = useState(false);
+  // A username claim, change or let go still being confirmed: Account details follows it.
+  const [usernameInFlight, setUsernameInFlight] = useState(false);
   useEffect(() => {
     void idbWriteStore
       .get(account.address)
       .then((w) => {
         setSendInFlight(Boolean(w && (w.label.startsWith(`${SEND_LABEL} `) || w.label.startsWith(`${CURRENCY_LABEL} `))));
         setCashOutInFlight(Boolean(w && w.label.startsWith(`${CASHOUT_LABEL} `)));
+        setUsernameInFlight(Boolean(w && w.label.startsWith(`${USERNAME_LABEL} `)));
       })
       .catch(() => {
         setSendInFlight(false);
         setCashOutInFlight(false);
+        setUsernameInFlight(false);
       });
-  }, [account.address]);
+  }, [account.address, details]);
   const [amountText, setAmountText] = useState("1,000");
   const [step, setStep] = useState<Step | "landing" | null>(null);
   const [result, setResult] = useState<Notice | null>(null);
   const [stuck, setStuck] = useState(false);
-  const [details, setDetails] = useState(false);
   // Keep and Hide for pots that name this account (lib/potSort.ts). The tick re-reads them after a change.
   const choices = useMemo(() => new PotChoiceStore(localStorage, DEPLOYMENT, account.address), [account.address]);
   const [, setChoiceTick] = useState(0);
@@ -911,6 +939,11 @@ function Home(props: {
       </header>
 
       {props.notice && <NoticeLine notice={props.notice} />}
+      {usernameInFlight && !details && (
+        <button type="button" className="btn ghost small" onClick={() => setDetails(true)}>
+          {copy.usernameStillGoing}
+        </button>
+      )}
 
       {askName && (
         <section className="card" aria-labelledby="ask-name">
@@ -1053,6 +1086,13 @@ function Home(props: {
         <AccountSheet
           account={account}
           hidden={choices.hidden()}
+          username={
+            namesOn ? (
+              <Suspense fallback={null}>
+                <UsernameSection me={account.address} />
+              </Suspense>
+            ) : undefined
+          }
           onUnhide={(potId) => {
             choices.unhide(potId);
             choiceChanged();

@@ -209,6 +209,23 @@ fell below the minimum after the quote, nothing moved but its gas: also 52.
 | 91 | The quote taken right before signing differs from the one on the confirm sheet: amount out, minimum or fee. The sheet shows the new one. Nothing was sent. | `getPrice()`, `token0PurchaseFee()`, `getAmountsOut` on the pair |
 | 92 | The pair holds less CTK than this payment would deliver (`reserve0()`). Nothing was sent. | `reserve0()` on the pair |
 
+## Usernames
+
+Usernames live in NivPayNames, a registry separate from the pots (README,
+"Usernames for accounts"). The app shows none of this until the registry's
+address is set in `app/src/lib/config.ts`. Every check below is made at the
+finalized block before anything is signed, so none of them sends anything or
+spends a gas grant. A claim, change or let go that reverts anyway, because
+someone else claimed the name in between, shows 52.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 37 | The username is held by another account (`NameTaken`). | `accountOf(name)` on NivPayNames |
+| 38 | The username breaks a rule (3 to 20 characters, a to z, 0 to 9 and _, starting with a letter, no `__`, not ending in _) or is reserved (`NameNotAllowed`, `NameReserved`). The phone checks the same rules first, from `app/src/lib/usernames.ts`, tested against `test/vectors/usernames.json`. | `isWellFormed`, `isReserved` on NivPayNames |
+| 39 | The username was let go by another account less than 90 days ago, and is held until the date shown (`NameHeld`). Only the account that let it go can take it before then. | `availableAt(name)`, `releasedBy(name)` |
+| 40 | Send to was given a username no account holds. Nothing was sent. | `accountOf(name)` is the zero account |
+| 43 | A username this phone has paid before now belongs to a different account than the one paid then. Checked when the name is looked up and again right before signing. Nothing was sent. The name was let go, held for 90 days, and claimed by someone else, so check with the person another way. | `accountOf(name)` now, and `nivpay.namepairs.v1.*` in the phone's localStorage |
+
 ## Reporting a pot
 
 Report, on a row under "New pots that name you" on Home, sends the

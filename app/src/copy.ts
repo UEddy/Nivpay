@@ -20,7 +20,7 @@ export function sentenceStarts(text: string): string {
 }
 
 /** These make the name itself, which goes in the middle of sentences too. */
-const NAME_MAKERS = new Set(["accountEnding", "mapEnding"]);
+const NAME_MAKERS = new Set(["accountEnding", "mapEnding", "withUsername"]);
 
 function withSentenceStarts<T extends Record<string, unknown>>(words: T): T {
   return Object.fromEntries(
@@ -748,6 +748,51 @@ const words = {
   errRampSlow: "The test desk sent your dollars, but they aren't confirmed yet. Check your balance in a minute. Don't ask again.",
   errCashOutStatement: "Your dollars reached the test desk, but its statement couldn't be read yet. Try again: it won't move any more money.",
 
+  // Usernames (lib/usernames.ts). Shown only once NivPayNames is deployed (config.ts NAMES).
+  username: "Username",
+  chooseUsername: "Choose a username",
+  yourUsername: (name: string) => `Your username: @${name}`,
+  usernamePlaceholder: "username",
+  usernameHint: "3 to 20 characters: a to z, 0 to 9 and _, starting with a letter.",
+  usernamePublic: "Anyone who knows your username can see this account's balance and payments.",
+  usernameLetGoNote: "Letting the name go later doesn't erase payments already made.",
+  usernameHoldNote: "A name you let go is held for 90 days before anyone else can take it. You can take it back any time.",
+  checkingUsername: "Checking…",
+  usernameAvailable: (name: string) => `@${name} is available.`,
+  usernameTaken: (name: string) => `@${name} is taken.`,
+  usernameIsYours: "That's already your username.",
+  usernameFreeOn: (name: string, date: string) => `@${name} is free again on ${date}.`,
+  usernameTakeBack: (name: string) => `@${name} is held for you. You can take it back now.`,
+  usernameShort: "At least 3 characters.",
+  usernameLong: "At most 20 characters.",
+  usernameStart: "Start with a letter, a to z.",
+  usernameCharacters: "Only a to z, 0 to 9 and _.",
+  usernameUnderscores: "No two _ in a row.",
+  usernameEnd: "Don't end with _.",
+  usernameReserved: "That name is kept for NivPay and those it works with.",
+  claimUsername: (name: string) => `Take @${name}`,
+  changeUsername: "Change",
+  changeTo: (name: string) => `Change to @${name}`,
+  letGoUsername: "Let go",
+  letGoOf: (name: string) => `Let go of @${name}`,
+  usernameClaimed: (name: string) => `@${name} is yours.`,
+  usernameLetGoDone: (name: string) => `You let go of @${name}.`,
+  usernameDidNotGoThrough: "That didn't go through. Your username didn't change.",
+  usernameStillGoing: "A change to your username is still going through.",
+  accountIdOrUsername: "Account ID or @username",
+  sendToHintNames: "Open their request link, paste their Account ID, or type their @username.",
+  lookingUpUsername: "Looking it up…",
+  usernameLine: (name: string, ending: string) => `@${name}, ${ending}`,
+  confirmUsernameLast4: (name: string) =>
+    `First time paying @${name}. To be sure it's them, type the last 4 characters of their Account ID. Ask them if you don't have it.`,
+  notAUsername: "That isn't an Account ID or a username.",
+  withUsername: (name: string, username: string) => `${name} (@${username})`,
+  errNameTaken: "That username is taken. Nothing was sent.",
+  errNameNotAllowed: "That username isn't allowed. Nothing was sent.",
+  errNameHeld: (date: string) => `That username is held until ${date}. Nothing was sent.`,
+  errNameNotFound: (name: string) => `No account has the username @${name}.`,
+  errNameChanged: (name: string) => `@${name} belongs to a different account than the one you paid before. Nothing was sent.`,
+
   /** How a vendor or person is shown when a name alone isn't enough. */
   accountEnding: (id: string) => `account ending ${id.slice(-4)}`,
 } as const;
@@ -799,8 +844,13 @@ export const ERROR_CODES = {
   PASSKEY_TIMED_OUT: 34,
   PASSKEY_OTHER: 35,
   HOST_NOT_ALLOWED: 36,
+  NAME_TAKEN: 37,
+  NAME_NOT_ALLOWED: 38,
+  NAME_HELD: 39,
+  NAME_NOT_FOUND: 40,
   SIGNING: 41,
   SAVING: 42,
+  NAME_CHANGED: 43,
   CONFIRMING: 50,
   STUCK: 51,
   REVERTED: 52,
