@@ -793,6 +793,9 @@ const words = {
   errNameNotFound: (name: string) => `No account has the username @${name}.`,
   errNameChanged: (name: string) => `@${name} belongs to a different account than the one you paid before. Nothing was sent.`,
 
+  hideFromHome: "Hide from Home",
+  potHiddenFromHome: "Hidden from Home on this phone. Show it again from Account details.",
+
   // Deleting a draft (lib/draft.ts deleteRefusal)
   deleteDraft: "Delete draft",
   deleteDraftTitle: "Delete this draft?",

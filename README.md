@@ -892,9 +892,11 @@ it ("account ending 7bC1") and your role, with three buttons:
 
 * **Keep** moves it to Your pots.
 * **Hide** takes it off Home on this phone, per account and per deployment,
-  and it stays off even if its maker later becomes a contact. Only opening
-  its link or putting money in brings it back. "Hidden pots" under Account
-  details lists them, with Show again.
+  and it stays off whatever else is true of it, even if its maker later
+  becomes a contact. Opening its link brings it back. "Hidden pots" under
+  Account details lists them, with Show again. Any pot can also be hidden
+  from its own screen ("Hide from Home"), including one you made: a made
+  pot can't be deleted, because it lives on the chain.
 * **Report** asks for a reason ("Scam", "Pretending to be someone", "Spam" or
   "Not for me"), sends it to `/api/report`, then hides the pot.
 

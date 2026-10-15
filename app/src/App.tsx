@@ -252,6 +252,9 @@ function Screens() {
         return;
       }
       const pot = storedFromLink(link, fragment);
+      // Opening a pot's link brings it back to Home if it was hidden.
+      const opener = accounts.active();
+      if (opener) new PotChoiceStore(localStorage, DEPLOYMENT, opener.address).unhide(pot.potId);
       if (accounts.active()) go({ kind: "pot", pot });
       else setPendingPot(pot);
     },
@@ -328,6 +331,10 @@ function Screens() {
         onOpenStory={() => go({ kind: "story", pot: screen.pot })}
         onOpenClose={() => go({ kind: "close", pot: screen.pot })}
         onClose={() => go({ kind: "home" })}
+        onHide={(name) => {
+          new PotChoiceStore(localStorage, DEPLOYMENT, active.address).hide(screen.pot.potId, name, Date.now());
+          go({ kind: "home" }, { tone: "ok", text: copy.potHiddenFromHome });
+        }}
       />
     );
   }
@@ -1306,11 +1313,12 @@ function YourPots(props: {
       pots.put({ deployment: DEPLOYMENT, potId: d.made.potId, block: d.made.block, fragment: d.made.fragment, name: d.name, addedAt: d.createdAt });
     }
   }
-  const opened = pots.all(DEPLOYMENT);
+  const hiddenIds = new Set(props.choices.hidden().map((h) => h.potId));
+  const opened = pots.all(DEPLOYMENT).filter((p) => !hiddenIds.has(p.potId));
   // Pots whose link is open on this phone show with their names; the rest of what was found shows here.
   const linked = new Set(opened.map((p) => p.potId));
   const waiting = answered.filter((r) => !r.match);
-  const matched = answered.filter((r) => r.match && !linked.has(r.match.potId));
+  const matched = answered.filter((r) => r.match && !linked.has(r.match.potId) && !hiddenIds.has(r.match.potId));
   const matchedIds = new Set(matched.map((r) => r.match!.potId));
   // Pots from people you may not know go in their own list, not here (lib/potSort.ts).
   const phoneAccounts = accounts.list().map((a) => a.address);

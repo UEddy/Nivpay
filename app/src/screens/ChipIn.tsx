@@ -71,6 +71,8 @@ export function ChipInScreen(props: {
   onOpenStory: () => void;
   onOpenClose: () => void;
   onClose: () => void;
+  /** Takes the pot off Home on this phone. It can't be deleted: it lives on the chain. */
+  onHide: (name: string) => void;
 }) {
   const { account } = props;
   const me = account.address;
@@ -544,6 +546,9 @@ export function ChipInScreen(props: {
             {state.closed ? copy.seeTheSplit : copy.closeAndSplit}
           </button>
         </div>
+        <button type="button" className="text-btn hide-pot" onClick={() => props.onHide(state.name)}>
+          {copy.hideFromHome}
+        </button>
         {!info.labelsOk && <p className="hint">{copy.namesUnchecked}</p>}
         {props.pot.fragment && link && (
           <CopyLinkButton
