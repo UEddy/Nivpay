@@ -10,8 +10,16 @@ import type { SentRequest } from "./inboxLive.ts";
  * the bell in the app still shows it.
  */
 
+/** Whether notifications are set up on this site, asked once per page: if not, nothing is sent. */
+let enabledOnce: Promise<boolean> | null = null;
+const enabled = () =>
+  (enabledOnce ??= fetch("/api/push")
+    .then(async (r) => r.ok && ((await r.json()) as { enabled?: boolean }).enabled === true)
+    .catch(() => false));
+
 async function post(body: Record<string, unknown>): Promise<void> {
   try {
+    if (!(await enabled())) return;
     await fetch("/api/notify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), keepalive: true });
   } catch {
     // Missed: the bell still shows it.

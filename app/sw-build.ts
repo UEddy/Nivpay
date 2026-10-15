@@ -26,3 +26,12 @@ export function injectBuild(source: string, build: ShellBuild): string {
   if (parts.length !== 2) throw new Error(`sw.js must contain ${BUILD_PLACEHOLDER} exactly once`);
   return parts.join(JSON.stringify(build));
 }
+
+export const TEXTS_PLACEHOLDER = "/* NIVPAY_PUSH_TEXTS */ null";
+
+/** Puts what notifications say, per language, into the service worker's source. */
+export function injectTexts(source: string, texts: unknown): string {
+  const parts = source.split(TEXTS_PLACEHOLDER);
+  if (parts.length !== 2) throw new Error(`sw.js must contain ${TEXTS_PLACEHOLDER} exactly once`);
+  return parts.join(JSON.stringify(texts));
+}

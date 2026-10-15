@@ -38,13 +38,26 @@ export class ReceiptStore {
   }
 }
 
-/** Records a finalized request on this phone. Never throws: a receipt link is a convenience. */
+/**
+ * Records a finalized request on this phone. Never throws: a receipt link is
+ * a convenience. Every screen calls this once its own write is final, so it
+ * is also where /api/notify hears about it (lib/notify.ts, set up in
+ * main.tsx): the server tells whoever the transaction's events affect, and
+ * ignores the rest.
+ */
 export function rememberReceipt(address: Address, hash: Hex): void {
   try {
     new ReceiptStore(localStorage).remember(address, hash);
   } catch {
     // Storage full or unavailable; the request itself already landed.
   }
+  afterFinal?.(hash);
+}
+
+let afterFinal: ((hash: Hex) => void) | null = null;
+/** What happens after each final write, besides remembering it. */
+export function onFinal(f: (hash: Hex) => void): void {
+  afterFinal = f;
 }
 
 export function latestReceipt(address: Address): Hex | undefined {

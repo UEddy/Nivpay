@@ -1,7 +1,12 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
-import { injectBuild, shellBuild } from "./sw-build.ts";
+import { injectBuild, injectTexts, shellBuild } from "./sw-build.ts";
+import { pushTexts } from "./src/lib/push.ts";
+import { en } from "./src/i18n/en.ts";
+import { es } from "./src/i18n/es.ts";
+import { fr } from "./src/i18n/fr.ts";
+import { pt } from "./src/i18n/pt.ts";
 
 // The production security headers live in vercel.json. `vite preview` serves
 // the same ones, so a production build can be checked locally under the real
@@ -31,7 +36,7 @@ function serviceWorkerShell(): Plugin {
       const root = join(outDir, "assets");
       const files = readdirSync(root).map((f) => relative(outDir, join(root, f)));
       const sw = join(outDir, "sw.js");
-      writeFileSync(sw, injectBuild(readFileSync(sw, "utf8"), shellBuild(files)));
+      writeFileSync(sw, injectTexts(injectBuild(readFileSync(sw, "utf8"), shellBuild(files)), pushTexts({ en, es, fr, pt })));
     },
   };
 }

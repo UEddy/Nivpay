@@ -37,6 +37,8 @@ import { LimitStore, settle } from "./lib/limits.ts";
 import { dismiss, fromArrivals, fromPoll, fromRequests, markAllRead, markRead, NotesStore, start as startNotes, unread, withoutRequestsFrom, type Funding, type Note, type NotesState, type PollInputs } from "./lib/notes.ts";
 import { MutedStore } from "./lib/inbox.ts";
 import { readInbox } from "./lib/inboxLive.ts";
+import { parseGo, type Go } from "./lib/push.ts";
+import { syncPush } from "./lib/pushLive.ts";
 import { CASHOUT_LABEL } from "./lib/rampDesk.ts";
 import { followToFinality, type Outcome, type PendingWrite } from "./lib/writes.ts";
 // Every screen but Home loads when it is first opened, and so does the code
@@ -229,6 +231,8 @@ type Tab = "home" | "pots" | "profile";
 function Screens() {
   const [active, setActive] = useState<StoredAccount | undefined>(() => accounts.active());
   const [tab, setTab] = useState<Tab>("home");
+  // A tapped notification asking for the bell (lib/push.ts): Home opens it when this changes.
+  const [notesAsked, setNotesAsked] = useState(0);
   const [switching, setSwitching] = useState(false);
   const [screen, setScreen] = useState<Screen>({ kind: "home" });
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -318,6 +322,42 @@ function Screens() {
     },
     [go],
   );
+
+  /** Opens the screen a tapped notification is about (public/sw.js urlFor). */
+  const openGo = useCallback(
+    (g: Go) => {
+      if (!accounts.active()) return;
+      if (g.kind === "receive") return go({ kind: "receive" });
+      if (g.kind === "notes") {
+        setTab("home");
+        go({ kind: "home" });
+        return setNotesAsked((n) => n + 1);
+      }
+      const pot = potToOpen(g.potId);
+      if (!pot) {
+        setTab("pots");
+        return go({ kind: "home" });
+      }
+      go(g.kind === "request" ? { kind: "request", pot, proposalId: BigInt(g.proposalId) } : { kind: "pot", pot });
+    },
+    [go],
+  );
+  useEffect(() => {
+    const g = parseGo(location.search);
+    if (g) {
+      history.replaceState(null, "", location.pathname + location.hash);
+      openGo(g);
+    }
+    // The app was already open: the service worker says where to go.
+    const onMessage = (e: MessageEvent) => {
+      const url = (e.data as { nivpayGo?: unknown } | null)?.nivpayGo;
+      if (typeof url !== "string") return;
+      const next = parseGo(new URL(url, location.origin).search);
+      if (next) openGo(next);
+    };
+    navigator.serviceWorker?.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker?.removeEventListener("message", onMessage);
+  }, [openGo]);
 
   useEffect(() => {
     const check = () => {
@@ -469,6 +509,7 @@ function Screens() {
         <Home
           tab={tab}
           onTab={setTab}
+          notesAsked={notesAsked}
           account={active}
           connection={connection}
           notice={notice}
@@ -814,6 +855,8 @@ const STEP_LABEL: Record<Step, string> = {
 function Home(props: {
   tab: Tab;
   onTab: (tab: Tab) => void;
+  /** Changes when a tapped notification asks for the bell. */
+  notesAsked: number;
   account: StoredAccount;
   connection: ReturnType<typeof useConnection>;
   notice: Notice | null;
@@ -869,6 +912,9 @@ function Home(props: {
   const notesStore = useMemo(() => new NotesStore(localStorage, DEPLOYMENT, owner), [owner]);
   const [notes, setNotes] = useState<NotesState>(() => notesStore.get());
   const [notesOpen, setNotesOpen] = useState(false);
+  useEffect(() => {
+    if (props.notesAsked > 0) setNotesOpen(true);
+  }, [props.notesAsked]);
   useEffect(() => setNotes(notesStore.get()), [notesStore]);
   const unreadCount = unread(notes);
   const onPoll = useCallback(
@@ -950,6 +996,7 @@ function Home(props: {
     if (!n.from) return;
     muted.mute(n.from);
     setNotes(notesStore.update((s) => withoutRequestsFrom(s, n.from!)));
+    void syncPush(owner);
   };
   /** A contact's name, or an account's on this phone, for notes about them. */
   const nameOf = (who: Address): string | null => nameOnPhone(who, new ContactStore(localStorage, DEPLOYMENT, owner).list(), accounts.list());

@@ -18,6 +18,9 @@ import { serviceWorkerUrl, type TrustedTypesLike } from "./lib/trusted.ts";
 // number and date formats of the language chosen here (i18n/start.ts).
 await startLanguage();
 const { App } = await import("./App.tsx");
+// Each of this phone's writes, once final, is told to /api/notify (lib/notify.ts).
+const [{ onFinal }, { notifyTx }, { DEPLOYMENT }] = await Promise.all([import("./lib/receipts.ts"), import("./lib/notify.ts"), import("./lib/deployment.ts")]);
+onFinal((tx) => void notifyTx(DEPLOYMENT, tx));
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");

@@ -614,6 +614,8 @@ None is needed to run the app locally or the tests.
 | `VITE_PRODUCTION_HOSTNAME` | Vercel, build time | yes in production | The only hostname besides `localhost` where passkeys can be made or used. For this deployment, `nivpay.vercel.app`, and it must never change. |
 | `BLOB_STORE_ID` | Vercel, server | no | Set by connecting a Vercel Blob store to the project. `@vercel/blob` pairs it with the OIDC token Vercel issues and rotates for each function, so no token is stored. Profile photos and shared cities stay hidden until a store is connected. |
 | `BLOB_READ_WRITE_TOKEN` | Vercel, server, Sensitive | no | Only for a store connected the older way, with a token; used instead of `BLOB_STORE_ID` when set. |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Vercel, server; the private key Sensitive | no | Made once with `npx web-push generate-vapid-keys`. Notifications on the phone stay hidden until both are set, with `VAPID_SUBJECT`. Never commit the private key. |
+| `VAPID_SUBJECT` | Vercel, server | no | How push services can reach the sender: a `mailto:` address or the site's URL, such as `https://nivpay.vercel.app`. |
 | `VITE_SUPPORT_EMAIL` | Vercel, build time | no | The address Help and support's Email support writes to. Its button is hidden while this is missing or malformed. |
 | `VITE_SUPPORT_WHATSAPP` | Vercel, build time | no | The WhatsApp number Chat on WhatsApp opens (wa.me), country code first. Hidden while missing or malformed. |
 | `VITE_NIVPAY_POTS` | build time | no | `testusd` builds the app on the TESTUSD instance. Anything else, or unset, is AUSD. |
@@ -989,17 +991,21 @@ Account details has three parts here (`app/src/screens/Devices.tsx`):
 ## Notifications
 
 A bell on Home shows the unread count and opens a list, newest first
-(`app/src/lib/notes.ts`): money received, someone chipping in to a pot you're
-in, a payment request waiting for your yes, a payment paid out, a pot closing
-within a day, a pot closed with your share ready to take, and a raised daily
-limit now in effect. Tapping one opens the right screen. Read and unread are
-kept per account on this phone.
+(`app/src/lib/notes.ts`): money received, your own payment once final,
+someone chipping in to a pot you're in, someone you put in a pot you made
+putting money into it (named, from its `Funded` event), a pot that names you
+when a contact or one of your accounts made it, a payment request waiting for
+your yes, a request for money sent straight to you (with Pay, Ignore and
+Mute), a payment paid out, a pot closing within a day, a pot closed with your
+share ready to take, and a raised daily limit now in effect. Tapping one
+opens the right screen. Read and unread are kept per account on this phone.
 
 They are built only from what the app already reads at the finalized block:
 the pots found for the account, the requests waiting for its yes, its own
 pours and limit, and payments coming in (read like Receive reads them, every
-15 seconds while Home is open). No server and no push messages, so they
-appear only while the app is open. Said honestly:
+15 seconds while Home is open), plus requests sent straight to you (below).
+The list itself needs no server; notifications outside the app are a
+separate, opt-in feature (Notifications on the phone, below). Said honestly:
 
 * **The list starts from when this phone first ran the feature**, and says
   so; nothing earlier is listed.
@@ -1008,7 +1014,88 @@ appear only while the app is open. Said honestly:
 * **"Someone chipped in" is a pot's total rising** between reads, less the
   account's own pours; two things in the same few seconds can show as one.
 * **Pots new to the account, or hidden, never notify** (see Protecting
-  people from bad actors).
+  people from bad actors). A pot that names you is announced only when its
+  maker is one of your contacts or another account on this phone; strangers'
+  pots stay in "New pots that name you" without a word.
+* **"Your payment" is listed already read**: you just saw it go through.
+* **Nudges don't exist in NivPay**, so there is no "someone you nudged"; the
+  people you put in a pot you made are the ones named when they chip in.
+
+## Requests to a person
+
+From Receive, someone can ask a contact, or anyone by their `@username`,
+for an amount or for any amount, without sharing a link
+(`app/src/lib/inbox.ts`, `app/api/inbox/index.ts`).
+
+* **Sealed to the person asked.** Each phone that turns on "Requests from
+  people" (Profile, Notifications; one fingerprint) makes its own key pair in
+  the browser. The private half can't be exported and never leaves the
+  phone; the public half is published, proved by the account's passkey. A
+  request is sealed on the requester's phone to every key the person asked
+  has published (ECDH P-256, HKDF, AES-GCM), so only their phones can read
+  it. `/api/inbox` keeps ciphertext only: not the amount, not the name, and
+  not who asked.
+* **Signed by the requester.** One fingerprint signs a short proof naming the
+  requester, the person asked and a SHA-256 of the request. The server checks
+  it before storing; the phone that opens the request checks it again from
+  inside, and drops anything not addressed to it or not signed by who it says.
+* **Pay, Ignore, Mute.** It shows in the person's bell. Pay opens Send filled
+  in, where the usual checks apply (first payment to an account, a name that
+  clashes with a contact, the daily limit, and a fingerprint). Ignore drops
+  it for good. Mute stops every request from that account on this phone;
+  Profile lists who is muted, with Unmute.
+* **Limits.** A request is kept 30 days, a person has at most 50 waiting, an
+  account at most 5 published keys; a few writes a minute per account. A
+  phone that removes an account forgets its key; the public half stays on
+  the server until turned off there, and requests sealed to it can no longer
+  be opened anywhere.
+* **Someone who never turned it on can't be asked this way** (Code 49): share
+  the link instead.
+* **Hidden until a Vercel Blob store is connected.**
+
+## Notifications on the phone
+
+Notifications outside the app, through Web Push and the existing service
+worker (`app/api/push`, `app/api/notify`, `app/public/sw.js`).
+
+* **Opt in, per phone.** Profile, Notifications, Turn on. The phone is asked
+  for permission only after that tap, never on page load. The subscription is
+  registered through `/api/push`, proved by the account's passkey (one
+  fingerprint), so nobody can subscribe their phone to someone else's
+  account. It is stored private in the Blob store, keyed by account. Turn off
+  removes it, and the browser's subscription goes too once no account on the
+  phone uses it.
+* **What to be told about**, each on or off: money coming in, your own
+  payments going through, money put into your pots, payments waiting for your
+  yes, requests from people, and pots made with you in them by people you
+  know. That last one is off at first: to know who you know, the phone gives
+  the notifications service your contacts' Account IDs (never their names)
+  while it is on.
+* **Show amounts on the lock screen**, off by default: "You received money."
+  instead of "You received $100.00." A request from a person never carries
+  an amount or a name, whatever the setting: they are sealed.
+* **No cron.** Vercel's Hobby plan runs cron jobs once a day, so instead,
+  when someone's own payment, chip-in, pot or pot payment request is final,
+  their app calls `/api/notify` with the transaction hash, or, for a request
+  to a person, with its signed proof. The server reads the receipt at the
+  finalized block and works out who is affected from the events alone
+  (`Transfer` of the dollar or CTK, `Funded`, `Proposed`, `PotCreated`),
+  never from what the app says. Unknown, unfinished, failed or older than 15
+  minutes: ignored. Each is handled once per server instance, and calls are
+  rate limited per account.
+* **If the sender's app closes before it calls `/api/notify`, that push is
+  missed.** The bell in the app still shows it, from the app's own reads.
+* **iPhone**: notifications come only once NivPay is added to the Home Screen,
+  on iOS 16.4 or later. The Notifications screen says so and shows the
+  install steps.
+* **Tapping a notification opens the right screen**: Receive, the pot, the
+  request waiting for your yes, or the bell.
+* **The words come from the app's dictionaries.** The build puts each
+  language's notification texts into `sw.js` (`sw-build.ts`); a push carries
+  only the kind, the phone's language, the pot's number and name, and an
+  amount if allowed.
+* **Hidden until `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` and a
+  Blob store are set.** The private key lives only in Vercel's settings.
 
 ## Profile photos
 
@@ -2115,7 +2202,8 @@ each installed package's `package.json`.
 | [`react`](https://github.com/facebook/react), `react-dom` | 19.3.0 | MIT | the interface |
 | [`@fontsource/besley`](https://fontsource.org/fonts/besley) | 5.3.0 | OFL-1.1 | self hosted Besley font |
 | [`@fontsource/work-sans`](https://fontsource.org/fonts/work-sans) | 5.3.0 | OFL-1.1 | self hosted Work Sans font |
-| [`@vercel/blob`](https://github.com/vercel/storage) | 2.8.2 | Apache-2.0 | storing profile photos and shared cities, private, in the `/api/photo` and `/api/city` functions only; never in the page |
+| [`@vercel/blob`](https://github.com/vercel/storage) | 2.8.2 | Apache-2.0 | storing profile photos, shared cities, sealed requests and push subscriptions, private, in the `/api/photo`, `/api/city`, `/api/inbox`, `/api/push` and `/api/notify` functions only; never in the page |
+| [`web-push`](https://github.com/web-push-libs/web-push) | 3.6.7 | MPL-2.0 | sending notifications to phones, in the `/api/notify` function only; never in the page |
 | `typescript` (dev) | 7.0.2 | Apache-2.0 | type-checking |
 | `vite` (dev) | 8.3.1 | MIT | dev server and build |
 | `@types/node`, `@types/react`, `@types/react-dom` (dev) | 24.19.0, 19.3.0, 19.3.0 | MIT | type definitions |
