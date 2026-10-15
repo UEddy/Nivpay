@@ -384,13 +384,13 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
             <a className="receipt-link" href={receiptUrl(done.hash)} target="_blank" rel="noopener noreferrer">
               {copy.viewReceipt}
             </a>
-            {!savedFor(done.to.account) && <SaveContact suggested={done.to.name} onSave={(name) => saveContact(done.to.account, name)} />}
+            <SaveContact already={Boolean(savedFor(done.to.account))} suggested={done.to.name} onSave={(name) => saveContact(done.to.account, name)} />
           </div>
         ) : (
           <>
             {request && linkName && <p className="lede enter">{copy.sendFromRequest(linkName)}</p>}
-            {request && linkName && !savedFor(request.account) && !step && (
-              <SaveContact suggested={linkName} onSave={(name) => saveContact(request.account, name)} />
+            {request && linkName && !step && (
+              <SaveContact already={Boolean(savedFor(request.account))} suggested={linkName} onSave={(name) => saveContact(request.account, name)} />
             )}
             <div className="card enter" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {to ? (
@@ -594,7 +594,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
  * Saves who this is as a contact, on this phone (lib/contacts.ts). Offered on
  * a pay link and after a final payment. A contact is a label, not a check.
  */
-function SaveContact(props: { suggested: string; onSave: (name: string) => boolean }) {
+function SaveContact(props: { already: boolean; suggested: string; onSave: (name: string) => boolean }) {
   const [open, setOpen] = useState(false);
   // "account ending 7bC1" is what shows when there's no name; it isn't one to save.
   const [name, setName] = useState(/^account ending /i.test(props.suggested) ? "" : props.suggested);
@@ -607,6 +607,8 @@ function SaveContact(props: { suggested: string; onSave: (name: string) => boole
       </p>
     );
   }
+  // Already a contact, and not saved just now: nothing to offer.
+  if (props.already) return null;
   if (!open) {
     return (
       <button type="button" className="btn ghost small" onClick={() => setOpen(true)}>
