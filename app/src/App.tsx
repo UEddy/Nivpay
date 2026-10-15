@@ -146,7 +146,7 @@ function PotMark() {
         <rect x="0" y="150" width="200" height="40" fill="var(--primary)" />
         <rect x="0" y="122" width="200" height="29" fill="var(--person-2)" />
         <path d="M0 103 Q12.5 96 25 103 T50 103 T75 103 T100 103 T125 103 T150 103 T175 103 T200 103 V123 H0 Z" fill="var(--person-3)" />
-        <ellipse cx="60" cy="96" rx="8" ry="22" fill="#fff" opacity="0.28" />
+        <ellipse cx="60" cy="96" rx="8" ry="22" fill="var(--highlight)" opacity="0.28" />
       </g>
       <path d={POT_OUTLINE} fill="none" stroke="var(--ink)" strokeWidth="7" strokeLinejoin="round" />
       <rect x="58" y="28" width="84" height="16" rx="8" fill="var(--pot-lid)" stroke="var(--ink)" strokeWidth="7" />
