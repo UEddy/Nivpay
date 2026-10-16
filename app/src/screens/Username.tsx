@@ -255,9 +255,9 @@ export function useMyUsername(me: Address) {
 export type MyUsername = ReturnType<typeof useMyUsername>;
 
 /** "Choose a username", beside the Account ID in Account details. */
-export function UsernameSection(props: { me: Address }) {
+export function UsernameSection(props: { me: Address; start?: "view" | "choose"; inScreen?: boolean }) {
   const u = useMyUsername(props.me);
-  const [mode, setMode] = useState<"view" | "choose" | "letGo">("view");
+  const [mode, setMode] = useState<"view" | "choose" | "letGo">(props.start ?? "view");
   const [typed, setTyped] = useState("");
   const target = normalizeUsername(typed);
   const status = useAvailability(typed, props.me);
@@ -281,7 +281,7 @@ export function UsernameSection(props: { me: Address }) {
 
   return (
     <section className="username-section" aria-labelledby="username-title">
-      <p className="eyebrow" id="username-title">
+      <p className={props.inScreen ? "sr-only" : "eyebrow"} id="username-title">
         {copy.username}
       </p>
       {u.name === undefined ? (

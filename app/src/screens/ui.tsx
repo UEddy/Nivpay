@@ -7,6 +7,7 @@ import { LastCodeStore } from "../lib/support.ts";
 import { amountForField, formatAmount, readAmount } from "../lib/money.ts";
 import { BANNER_MS, currentPlatform, InstallStore, installWay, onInstallChange, PausableTimer, promptInstall, shouldShowBanner, type InstallWay } from "../lib/install.ts";
 import { dateLocale } from "../lib/locale.ts";
+import { cleanName, NAME_MAX } from "../lib/accounts.ts";
 
 export type Notice = { tone: "ok" | "bad"; text: string; code?: number };
 
@@ -357,5 +358,42 @@ export function AmountUnderstood(props: { text: string; decimals: number | null;
     <p className="error" aria-live="polite">
       {r.problem === "decimals" ? copy.amountTooManyDecimals : copy.amountWriteLike(amountForField(105_050n * 10n ** BigInt(Math.max(0, decimals - 2)), decimals))}
     </p>
+  );
+}
+
+/** Asks for, or changes, the name this phone shows for an account. */
+export function NameForm(props: { initial: string; onSave: (name: string) => void; onSkip: () => void; skipLabel: string }) {
+  const [name, setName] = useState(props.initial);
+  const clean = cleanName(name);
+  return (
+    <form
+      className="name-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (clean) props.onSave(clean);
+      }}
+    >
+      <label className="field">
+        <span>{copy.yourName}</span>
+        <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" maxLength={NAME_MAX * 2} placeholder={copy.namePlaceholder} />
+      </label>
+      <p className="hint">{copy.nameHint}</p>
+      <button type="submit" className="btn primary" disabled={!clean}>
+        {copy.saveName}
+      </button>
+      <button type="button" className="btn ghost" onClick={props.onSkip}>
+        {props.skipLabel}
+      </button>
+    </form>
+  );
+}
+
+/** The longer explanation of a settings screen, folded away so the screen stays short. */
+export function HowThisWorks(props: { children: ReactNode }) {
+  return (
+    <details className="how-it-works">
+      <summary>{copy.howThisWorks}</summary>
+      <div className="how-it-works-body">{props.children}</div>
+    </details>
   );
 }

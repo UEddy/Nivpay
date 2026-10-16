@@ -6,7 +6,7 @@ import { MutedStore } from "../lib/inbox.ts";
 import { inboxEnabled, requestsOnHere, turnOffRequests, turnOnRequests } from "../lib/inboxLive.ts";
 import { DEPLOYMENT } from "../lib/deployment.ts";
 import { reloadOnce } from "../lib/reloadOnce.ts";
-import { InstallHow, NoticeLine, useInstallWay, type Notice } from "./ui.tsx";
+import { HowThisWorks, InstallHow, NoticeLine, useInstallWay, type Notice } from "./ui.tsx";
 import { PUSH_KINDS, type PushKind, type PushSettings } from "../lib/push.ts";
 import { pushInfo, pushOnHere, pushSettings, pushSupported, savePushSettings, syncPush, turnOffPush, turnOnPush } from "../lib/pushLive.ts";
 
@@ -59,22 +59,22 @@ export function NotificationsSection(props: { account: Account; names: (who: Acc
   };
 
   return (
-    <section aria-labelledby="notifications-title">
-      <p className="eyebrow" id="notifications-title">
-        {copy.notifications}
-      </p>
+    <section className="settings-screen" aria-label={copy.notifications}>
       {pushEnabled && <PushPart account={props.account} />}
       {enabled && (
         <>
-      <p className="name">{copy.requestsFromPeople}</p>
-      <p className="hint">{here ? copy.requestsOnHint : copy.requestsOffHint}</p>
-      <button type="button" className={`btn${here ? "" : " primary"}`} disabled={busy} aria-busy={busy} onClick={() => void toggle()}>
-        {busy ? copy.waitingForPasskey : here ? copy.turnOff : copy.turnOn}
-      </button>
-      {notice && <NoticeLine notice={notice} />}
+          <p className="settings-group">{copy.requestsFromPeople}</p>
+          <p className="hint">{here ? copy.requestsOnHint : copy.requestsOffHint}</p>
+          <button type="button" className={`btn${here ? "" : " primary"}`} disabled={busy} aria-busy={busy} onClick={() => void toggle()}>
+            {busy ? copy.waitingForPasskey : here ? copy.turnOff : copy.turnOn}
+          </button>
+          {notice && <NoticeLine notice={notice} />}
+          <HowThisWorks>
+            <p className="hint">{copy.requestsHow}</p>
+          </HowThisWorks>
         </>
       )}
-      <p className="name">{copy.mutedAccounts}</p>
+      <p className="settings-group">{copy.mutedAccounts}</p>
       {list.length === 0 ? (
         <p className="hint">{copy.noneMuted}</p>
       ) : (
@@ -144,11 +144,11 @@ function PushPart(props: { account: Account }) {
 
   return (
     <>
-      <p className="name">{copy.pushOnPhone}</p>
+      <p className="settings-group">{copy.pushOnPhone}</p>
       <p className="hint">{copy.pushHint}</p>
-      <p className="hint">{copy.pushIphone}</p>
       {way === "ios" && (
         <>
+          <p className="hint">{copy.pushIphone}</p>
           <button type="button" className="btn ghost small" aria-expanded={how} onClick={() => setHow(!how)}>
             {copy.pushHowToAdd}
           </button>
@@ -161,7 +161,7 @@ function PushPart(props: { account: Account }) {
       </button>
       {notice && <NoticeLine notice={notice} />}
       <fieldset className="push-kinds">
-        <legend className="name">{copy.pushKindsTitle}</legend>
+        <legend className="settings-group">{copy.pushKindsTitle}</legend>
         {PUSH_KINDS.map((k) => (
           <label className="check-row" key={k}>
             <input type="checkbox" checked={settings.kinds[k]} onChange={(e) => change({ ...settings, kinds: { ...settings.kinds, [k]: e.target.checked } })} />
@@ -173,9 +173,12 @@ function PushPart(props: { account: Account }) {
           <input type="checkbox" checked={settings.amounts} onChange={(e) => change({ ...settings, amounts: e.target.checked })} />
           <span>{copy.pushAmounts}</span>
         </label>
-        <p className="hint">{copy.pushAmountsHint}</p>
       </fieldset>
-      <p className="hint">{copy.pushMissed}</p>
+      <HowThisWorks>
+        <p className="hint">{copy.pushAmountsHint}</p>
+        {way !== "ios" && <p className="hint">{copy.pushIphone}</p>}
+        <p className="hint">{copy.pushMissed}</p>
+      </HowThisWorks>
     </>
   );
 }

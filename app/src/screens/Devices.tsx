@@ -6,7 +6,7 @@ import { forgetAccount, LastUsedStore } from "../lib/forget.ts";
 import { idbWriteStore } from "../lib/idb.ts";
 import { forgetInboxKey } from "../lib/inboxLive.ts";
 import { dateLocale } from "../lib/locale.ts";
-import { NoticeLine, Sheet, type Notice } from "./ui.tsx";
+import { HowThisWorks, NoticeLine, Sheet, type Notice } from "./ui.tsx";
 
 const whenFormat = new Intl.DateTimeFormat(dateLocale(), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -40,24 +40,22 @@ export function DevicesSection(props: { current: Address; onRemoved: (account: A
   };
 
   return (
-    <section aria-labelledby="this-phone">
-      <p className="eyebrow" id="this-phone">
+    <section className="devices-screen" aria-labelledby="this-phone">
+      <p className="settings-group" id="this-phone">
         {copy.thisPhone}
       </p>
-      <div className="list">
+      <div className="settings-list">
         {accounts.map((a) => {
           const used = lastUsed.get(a.address);
           return (
-            <div className="list-row" key={a.address}>
-              <div className="grow">
-                <span className="name">{shownName(a)}</span>
-                <span className="meta">
-                  {copy.accountEnding(a.address)}
-                  {a.address === props.current ? ` · ${copy.signedInHere}` : ""}
-                </span>
-                <span className="meta">{used ? copy.lastUsed(whenFormat.format(new Date(used))) : copy.notUsedHereYet}</span>
-              </div>
-              <button type="button" className="btn ghost small" onClick={() => (setNotice(null), setAsking(a))}>
+            <div className="device-row" key={a.address}>
+              <span className="name">{shownName(a)}</span>
+              <span className="meta">
+                {copy.accountEnding(a.address)}
+                {a.address === props.current ? ` · ${copy.signedInHere}` : ""}
+              </span>
+              <span className="meta">{used ? copy.lastUsed(whenFormat.format(new Date(used))) : copy.notUsedHereYet}</span>
+              <button type="button" className="danger-text-btn" onClick={() => (setNotice(null), setAsking(a))}>
                 {copy.removeFromPhone}
               </button>
             </div>
@@ -65,13 +63,12 @@ export function DevicesSection(props: { current: Address; onRemoved: (account: A
         })}
       </div>
       {notice && <NoticeLine notice={notice} />}
-
-      <p className="eyebrow">{copy.signing}</p>
       <p className="hint">{copy.signingEachTime}</p>
-
-      <p className="eyebrow">{copy.yourPasskey}</p>
-      <p className="hint">{copy.passkeyWhere}</p>
-      <p className="hint">{copy.passkeyNoServer}</p>
+      <HowThisWorks>
+        <p className="hint">{copy.signingNoSession}</p>
+        <p className="hint">{copy.passkeyWhere}</p>
+        <p className="hint">{copy.passkeyNoServer}</p>
+      </HowThisWorks>
 
       {asking && (
         <Sheet title={copy.removeTitle(shownName(asking))} onClose={() => setAsking(null)}>

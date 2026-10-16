@@ -55,17 +55,12 @@ const TimelineScreen = lazy(() => reloadOnce(() => import("./screens/Timeline.ts
 const CloseScreen = lazy(() => reloadOnce(() => import("./screens/Close.tsx")).then((m) => ({ default: m.CloseScreen })));
 const MoneyScreen = lazy(() => reloadOnce(() => import("./screens/Money.tsx")).then((m) => ({ default: m.MoneyScreen })));
 const HelpSheet = lazy(() => reloadOnce(() => import("./screens/Help.tsx")).then((m) => ({ default: m.HelpSheet })));
-const PhotoSection = lazy(() => reloadOnce(() => import("./screens/Photo.tsx")).then((m) => ({ default: m.PhotoSection })));
 const NotesSheet = lazy(() => reloadOnce(() => import("./screens/Notes.tsx")).then((m) => ({ default: m.NotesSheet })));
-const DevicesSection = lazy(() => reloadOnce(() => import("./screens/Devices.tsx")).then((m) => ({ default: m.DevicesSection })));
-const DailyLimitSection = lazy(() => reloadOnce(() => import("./screens/Limits.tsx")).then((m) => ({ default: m.DailyLimitSection })));
-const VoiceSection = lazy(() => reloadOnce(() => import("./screens/Voice.tsx")).then((m) => ({ default: m.VoiceSection })));
-const NotificationsSection = lazy(() => reloadOnce(() => import("./screens/Notify.tsx")).then((m) => ({ default: m.NotificationsSection })));
-const UsernameSection = lazy(() => reloadOnce(() => import("./screens/Username.tsx")).then((m) => ({ default: m.UsernameSection })));
+const ProfilePage = lazy(() => reloadOnce(() => import("./screens/Profile.tsx")).then((m) => ({ default: m.ProfilePage })));
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
 const sending = () => reloadOnce(() => import("./lib/send.ts"));
-import { AmountUnderstood, formatDay, Icon, InstallBanner, InstallHow, type Notice, NoticeLine, openHelp, phoneTimeZone, Sheet, useInstallWay, useOnline } from "./screens/ui.tsx";
+import { AmountUnderstood, formatDay, Icon, InstallBanner, InstallHow, NameForm, type Notice, NoticeLine, openHelp, phoneTimeZone, Sheet, useInstallWay, useOnline } from "./screens/ui.tsx";
 import { balanceNote } from "./lib/connection.ts";
 import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/balanceRead.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
@@ -648,169 +643,12 @@ function Welcome(props: {
   );
 }
 
-/** Account details: the only place the Account ID appears, for support. */
-function AccountSheet(props: {
-  account: StoredAccount;
-  hidden: HiddenPot[];
-  onUnhide: (potId: string) => void;
-  /** After an account is removed from this phone (screens/Devices.tsx). */
-  onRemoved: (account: Address, name: string) => void;
-  /** Choose a username, beside the Account ID. Absent while usernames are off. */
-  username?: ReactNode;
-  onSwitch: () => void;
-  onClose: () => void;
-  onRename: (name: string) => void;
-  /** The Profile tab: a page under the tab bar, not a sheet. */
-  page?: boolean;
-  /** Notifications: requests from people, and who is muted. */
-  notifications?: ReactNode;
-}) {
-  const [copied, setCopied] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const installWay = useInstallWay();
-  const receipt = latestReceipt(props.account.address);
-  const copyId = () => {
-    navigator.clipboard
-      .writeText(props.account.address)
-      .then(() => setCopied(true))
-      .catch(() => setCopied(false));
-  };
-  // A plain function, not a component: the page keeps its state across renders.
-  const wrap = (children: ReactNode) =>
-    props.page ? (
-      <section className="profile-page" aria-label={copy.tabProfile}>
-        {children}
-      </section>
-    ) : (
-      <div className="sheet-backdrop" role="presentation" onClick={props.onClose}>
-        <section className="sheet" role="dialog" aria-modal="true" aria-label={copy.accountDetails} onClick={(e) => e.stopPropagation()}>
-          {children}
-        </section>
-      </div>
-    );
-  return wrap(
-    <>
-        <p className="eyebrow">{copy.accountDetails}</p>
-        <h2>{shownName(props.account)}</h2>
-        <Suspense fallback={null}>
-          <PhotoSection account={props.account.address} name={shownName(props.account)} />
-        </Suspense>
-        {editing ? (
-          <NameForm
-            initial={props.account.name}
-            onSave={(name) => {
-              props.onRename(name);
-              setEditing(false);
-            }}
-            onSkip={() => setEditing(false)}
-            skipLabel={copy.back}
-          />
-        ) : (
-          <button className="btn" onClick={() => setEditing(true)}>
-            {copy.changeName}
-          </button>
-        )}
-        <div className="field">
-          <span>{copy.accountId}</span>
-          <code className="account-id">{props.account.address}</code>
-        </div>
-        <button className="btn" onClick={copyId}>
-          {copied ? copy.copied : copy.copyAction}
-        </button>
-        <p className="hint">{copy.accountIdHint}</p>
-        {props.username}
-        {receipt && (
-          <p className="hint">
-            <a className="receipt-link" href={receiptUrl(receipt)} target="_blank" rel="noopener noreferrer">
-              {copy.viewReceipt}
-            </a>
-            <br />
-            {copy.viewReceiptHint}
-          </p>
-        )}
-        {props.notifications}
-        <Suspense fallback={null}>
-          <DailyLimitSection account={props.account.address} />
-        </Suspense>
-        <Suspense fallback={null}>
-          <DevicesSection current={props.account.address} onRemoved={props.onRemoved} />
-        </Suspense>
-        <button type="button" className="btn" onClick={() => openHelp()}>
-          {copy.helpAndSupport}
-        </button>
-        <LanguagePicker />
-        {installWay && (
-          <section aria-labelledby="install-app">
-            <p className="eyebrow" id="install-app">
-              {copy.installTheApp}
-            </p>
-            <InstallHow way={installWay} />
-          </section>
-        )}
-        <section aria-labelledby="hidden-pots">
-          <p className="eyebrow" id="hidden-pots">
-            {copy.hiddenPots}
-          </p>
-          <p className="hint">{copy.hiddenPotsHint}</p>
-          {props.hidden.length === 0 ? (
-            <p className="hint">{copy.noHiddenPots}</p>
-          ) : (
-            <div className="list">
-              {props.hidden.map((h) => (
-                <div className="list-row" key={`hidden-${h.potId}`}>
-                  <div className="grow">
-                    <span className="name">{h.name || copy.unnamedPot}</span>
-                  </div>
-                  <button type="button" className="btn ghost small" onClick={() => props.onUnhide(h.potId)}>
-                    {copy.showAgain}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-        <button className="btn" onClick={props.onSwitch}>
-          {copy.switchAccount}
-        </button>
-        {!props.page && (
-          <button className="btn ghost" onClick={props.onClose}>
-            {copy.close}
-          </button>
-        )}
-    </>,
-  );
-}
 
 /**
  * Asks what to call the person. The name is cleaned (lib/accounts.ts) and
  * rendered only as text. It stays on this phone: never on chain, never sent
  * to /api.
  */
-function NameForm(props: { initial: string; onSave: (name: string) => void; onSkip: () => void; skipLabel: string }) {
-  const [name, setName] = useState(props.initial);
-  const clean = cleanName(name);
-  return (
-    <form
-      className="name-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (clean) props.onSave(clean);
-      }}
-    >
-      <label className="field">
-        <span>{copy.yourName}</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" maxLength={NAME_MAX * 2} placeholder={copy.namePlaceholder} />
-      </label>
-      <p className="hint">{copy.nameHint}</p>
-      <button type="submit" className="btn primary" disabled={!clean}>
-        {copy.saveName}
-      </button>
-      <button type="button" className="btn ghost" onClick={props.onSkip}>
-        {props.skipLabel}
-      </button>
-    </form>
-  );
-}
 
 /**
  * On the AUSD deployment, "Add test dollars" claims test AUSD from Agora's
@@ -1215,23 +1053,26 @@ function Home(props: {
 
   return (
     <>
-      <header className="top">
-        <div>
-          <h1>{shownName(account)}</h1>
-          {account.name && <p className="account-line">{copy.accountIdLine(account.address)}</p>}
-          <TestModeBadge />
-        </div>
-        <div className="top-actions">
-          <button type="button" className="icon-btn bell" aria-label={copy.notificationsUnread(unreadCount)} onClick={() => setNotesOpen(true)}>
-            <Icon name="bell" size={22} />
-            {unreadCount > 0 && (
-              <span className="bell-count" aria-hidden="true">
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </span>
-            )}
-          </button>
-        </div>
-      </header>
+      {/* Profile has its own header card (screens/Profile.tsx). */}
+      {props.tab !== "profile" && (
+        <header className="top">
+          <div>
+            <h1>{shownName(account)}</h1>
+            {account.name && <p className="account-line">{copy.accountIdLine(account.address)}</p>}
+            <TestModeBadge />
+          </div>
+          <div className="top-actions">
+            <button type="button" className="icon-btn bell" aria-label={copy.notificationsUnread(unreadCount)} onClick={() => setNotesOpen(true)}>
+              <Icon name="bell" size={22} />
+              {unreadCount > 0 && (
+                <span className="bell-count" aria-hidden="true">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </header>
+      )}
 
       {props.notice && <NoticeLine notice={props.notice} />}
       {usernameInFlight && !details && (
@@ -1400,38 +1241,27 @@ function Home(props: {
         </Suspense>
       )}
       {details && (
-        <AccountSheet
-          page
-          account={account}
-          hidden={choices.hidden()}
-          notifications={
-            <Suspense fallback={null}>
-              <NotificationsSection account={account.address} names={(who) => nameOf(who) ?? copy.accountEnding(who)} onMuted={() => setNotes(notesStore.get())} />
-              <VoiceSection account={account.address} />
-            </Suspense>
-          }
-          username={
-            namesOn ? (
-              <Suspense fallback={null}>
-                <UsernameSection me={account.address} />
-              </Suspense>
-            ) : undefined
-          }
-          onUnhide={(potId) => {
-            choices.unhide(potId);
-            choiceChanged();
-          }}
-          onRename={props.onRename}
-          onRemoved={(removed, name) => {
-            setDetails(false);
-            props.onRemoved(removed, name);
-          }}
-          onClose={() => setDetails(false)}
-          onSwitch={() => {
-            setDetails(false);
-            props.onSwitch();
-          }}
-        />
+        <Suspense fallback={null}>
+          <ProfilePage
+            account={account}
+            hidden={choices.hidden()}
+            onUnhide={(potId) => {
+              choices.unhide(potId);
+              choiceChanged();
+            }}
+            onRename={props.onRename}
+            onRemoved={(removed, name) => {
+              setDetails(false);
+              props.onRemoved(removed, name);
+            }}
+            onSwitch={() => {
+              setDetails(false);
+              props.onSwitch();
+            }}
+            names={(who) => nameOf(who) ?? copy.accountEnding(who)}
+            onMuted={() => setNotes(notesStore.get())}
+          />
+        </Suspense>
       )}
       <TabBar tab={props.tab} onTab={props.onTab} account={account} waiting={waitingCount} />
     </>
@@ -2002,34 +1832,3 @@ function ReportSheet(props: { potId: string; onClose: () => void; onReported: ()
   );
 }
 
-/**
- * Language, in Account details: the phone's language, or one picked by hand.
- * Picking reloads the app into it (i18n/start.ts). Each language is named in
- * its own words.
- */
-function LanguagePicker() {
-  const [pick] = useState(() => {
-    try {
-      return readPick(localStorage);
-    } catch {
-      return null;
-    }
-  });
-  return (
-    <section aria-labelledby="language">
-      <label className="field">
-        <span id="language">{copy.language}</span>
-        <select value={pick ?? ""} onChange={(e) => pickLanguage((e.target.value || null) as Lang | null)}>
-          <option value="">{copy.languagePhone}</option>
-          {LANGS.map((l) => (
-            <option key={l} value={l} lang={l}>
-              {LANGUAGE_NAMES[l]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <p className="hint">{copy.languageHint}</p>
-      {language() !== "en" && <p className="hint">{copy.translationNote}</p>}
-    </section>
-  );
-}

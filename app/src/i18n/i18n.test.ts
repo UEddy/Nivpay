@@ -76,7 +76,7 @@ for (const [lang, dict] of langs) {
 
   test(`${lang}: it is translated, not English left behind`, () => {
     // Names, codes and numbers read the same in every language.
-    const same = new Set(["appName", "dollars", "rampDeskAccountNumber", "code", "personPutIn", "personTime", "askedLine", "withUsername", "usernameLine", "fractionPercent", "ofN", "morePeople", "limitOf", "requestRowMeta"]);
+    const same = new Set(["appName", "dollars", "rampDeskAccountNumber", "code", "personPutIn", "personTime", "askedLine", "withUsername", "usernameLine", "fractionPercent", "ofN", "morePeople", "limitOf", "requestRowMeta", "appVersion", "usernameAt", "pushTitle"]);
     const left = keys.filter((k) => !same.has(k) && call(dict, k) === call(en, k) && call(en, k).length > 3);
     assert.ok(left.length <= 4, `left in English: ${left.join(", ")}`);
   });

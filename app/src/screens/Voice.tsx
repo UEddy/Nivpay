@@ -6,7 +6,7 @@ import { DEPLOYMENT } from "../lib/deployment.ts";
 import { language } from "../lib/locale.ts";
 import { listenOnce, SpeechError, speechAvailable } from "../lib/speech.ts";
 import { parseVoice, TRANSFERS_TO_UNLOCK, VoiceStore, type VoiceCommand } from "../lib/voice.ts";
-import { NoticeLine, Sheet, type Notice } from "./ui.tsx";
+import { HowThisWorks, NoticeLine, Sheet, type Notice } from "./ui.tsx";
 
 /** An account, for what this file shows; named so, since screen text is checked for words people mustn't see. */
 type Account = Address;
@@ -124,10 +124,7 @@ export function VoiceSection(props: { account: Account }) {
   const unlocked = count >= TRANSFERS_TO_UNLOCK;
 
   return (
-    <section aria-labelledby="voice-title">
-      <p className="eyebrow" id="voice-title">
-        {copy.voiceTitle}
-      </p>
+    <section className="settings-screen" aria-label={copy.voiceTitle}>
       <label className="check-row">
         <input
           type="checkbox"
@@ -142,7 +139,10 @@ export function VoiceSection(props: { account: Account }) {
       </label>
       {!unlocked && <p className="hint">{copy.voiceLocked(count, TRANSFERS_TO_UNLOCK)}</p>}
       <p className="hint">{copy.voiceWhatItDoes}</p>
-      <p className="name">{copy.voiceTrustedTitle}</p>
+      <HowThisWorks>
+        <p className="hint">{copy.voiceCannot}</p>
+      </HowThisWorks>
+      <p className="settings-group">{copy.voiceTrustedTitle}</p>
       {contacts.length === 0 ? (
         <p className="hint">{copy.voiceNoContacts}</p>
       ) : (

@@ -16,7 +16,7 @@ const passkeys = () => reloadOnce(() => import("../lib/passkey.ts"));
  * is redrawn on a canvas here (lib/photo.ts), shown before anything is sent,
  * with who can see it, and saved with one fingerprint.
  */
-export function PhotoSection(props: { account: Address; name: string }) {
+export function PhotoSection(props: { account: Address; name: string; inScreen?: boolean }) {
   const on = usePhotosOn();
   const input = useRef<HTMLInputElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -92,7 +92,7 @@ export function PhotoSection(props: { account: Address; name: string }) {
 
   return (
     <section aria-labelledby="photo-title" className="photo-section">
-      <p className="eyebrow" id="photo-title">
+      <p className={props.inScreen ? "sr-only" : "eyebrow"} id="photo-title">
         {copy.photo}
       </p>
       <div className="photo-row">
