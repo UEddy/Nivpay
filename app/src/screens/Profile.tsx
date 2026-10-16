@@ -133,7 +133,10 @@ function Group(props: { label: string; children: ReactNode }) {
 
 /** A detail screen: a back arrow and a title, then its contents. */
 function Detail(props: { title: string; onBack: () => void; children: ReactNode }) {
-  useEffect(() => window.scrollTo({ top: 0 }), []);
+  // In braces: newer Chrome's scrollTo returns a promise, which React would call as the cleanup on Back.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, []);
   return (
     <section className="settings-detail" aria-label={props.title}>
       <div className="settings-bar">
@@ -180,7 +183,8 @@ export function ProfilePage(props: {
   onMuted: () => void;
 }) {
   const me = props.account.address;
-  const [view, showView] = useState<View>("main");
+  // After a reload, the detail screen its history entry names (lib/backNav.ts), so the page reopens where it was.
+  const [view, showView] = useState<View>(() => (detailIn(history.state) as View | null) ?? "main");
   // A detail screen is one history entry: the arrow and the phone's own back both return here (lib/backNav.ts).
   const setView = (v: View) => {
     if (v === "main") {

@@ -71,6 +71,7 @@ import { AmountUnderstood, DisplayNameForm, formatDay, Icon, InstallBanner, Inst
 import { balanceNote } from "./lib/connection.ts";
 import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/balanceRead.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
+import { keepPlace, readPlace } from "./lib/place.ts";
 import { LastUsedStore } from "./lib/forget.ts";
 import { namesOn, USERNAME_LABEL, usernameOf } from "./lib/names.ts";
 import { photosEnabled, photoUrl } from "./lib/photo.ts";
@@ -238,13 +239,34 @@ function HelpHost() {
 /** The three places the tab bar leads to, on the signed-in page. */
 type Tab = "home" | "pots" | "profile";
 
+/** This browser tab's storage, read through place.ts, which treats a refusal as nothing kept. */
+const session = {
+  getItem: (k: string) => sessionStorage.getItem(k),
+  setItem: (k: string, v: string) => sessionStorage.setItem(k, v),
+};
+const SCREEN_KINDS = new Set<Screen["kind"]>(["home", "create", "join", "pot", "request", "story", "close", "send", "receive", "money"]);
+
+/** The tab and screen this account was on before a reload (lib/place.ts), or Home. A draft gone meanwhile is Home too. */
+function placeBefore(account: StoredAccount | undefined): { tab: Tab; screen: Screen } {
+  const kept = readPlace(session, account?.address) as { tab?: unknown; screen?: { kind?: unknown } } | null;
+  const tab: Tab = kept?.tab === "pots" || kept?.tab === "profile" ? kept.tab : "home";
+  let screen = (kept?.screen && SCREEN_KINDS.has(kept.screen.kind as Screen["kind"]) ? kept.screen : { kind: "home" }) as Screen;
+  if (screen.kind === "create" && !drafts.get(screen.draftId)) screen = { kind: "home" };
+  return { tab, screen };
+}
+
 function Screens() {
   const [active, setActive] = useState<StoredAccount | undefined>(() => accounts.active());
-  const [tab, setTab] = useState<Tab>("home");
+  const [before] = useState(() => placeBefore(accounts.active()));
+  const [tab, setTab] = useState<Tab>(before.tab);
   // A tapped notification asking for the bell (lib/push.ts): Home opens it when this changes.
   const [notesAsked, setNotesAsked] = useState(0);
   const [switching, setSwitching] = useState(false);
-  const [screen, setScreen] = useState<Screen>({ kind: "home" });
+  const [screen, setScreen] = useState<Screen>(before.screen);
+  // Kept for a reload: it opens here again, not on Home.
+  useEffect(() => {
+    if (active) keepPlace(session, active.address, { tab, screen });
+  }, [active, tab, screen]);
   const [notice, setNotice] = useState<Notice | null>(null);
   // An invite or pot opened before this phone had an account: opened once there is one.
   const [pendingInvite, setPendingInvite] = useState<Invite | null>(null);
