@@ -1,9 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { encodeFunctionData, type Address, type Hex, type Log } from "viem";
 import { copy, ERROR_CODES, offlineMessage } from "./copy.ts";
 import { CredentialStore } from "./lib/credentials.ts";
 import { AccountStore, cleanName, NAME_MAX, shownName, type StoredAccount } from "./lib/accounts.ts";
+import { nameAtStart, PendingNames, readSavedName } from "./lib/displayName.ts";
 import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
 import { AUSD, AUSD_FAUCET, CTK, LOG_PAGE_BLOCKS, POTS_AUSD, POTS_TESTUSD, SETTLEMENT_PAIR, TESTUSD } from "./lib/config.ts";
@@ -66,7 +67,7 @@ const ProfilePage = lazy(() => reloadOnce(() => import("./screens/Profile.tsx"))
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
 const sending = () => reloadOnce(() => import("./lib/send.ts"));
-import { AmountUnderstood, formatDay, Icon, InstallBanner, InstallHow, NameForm, type Notice, NoticeLine, openHelp, phoneTimeZone, ScreenBoundary, Sheet, useInstallWay, useOnline } from "./screens/ui.tsx";
+import { AmountUnderstood, DisplayNameForm, formatDay, Icon, InstallBanner, InstallHow, type Notice, NoticeLine, openHelp, phoneTimeZone, ScreenBoundary, Sheet, useInstallWay, useNamesSyncOn, useOnline } from "./screens/ui.tsx";
 import { balanceNote } from "./lib/connection.ts";
 import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/balanceRead.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
@@ -401,8 +402,12 @@ function Screens() {
     }
   };
 
+  // An empty name forgets the one kept here (a username that stood in for one, lib/displayName.ts).
   const renameActive = (name: string) => {
-    if (active) accounts.rename(active.address, name);
+    if (active) {
+      if (name) accounts.rename(active.address, name);
+      else accounts.forgetName(active.address);
+    }
     setActive(accounts.active());
   };
 
@@ -656,11 +661,14 @@ function Welcome(props: {
 }
 
 
-/**
- * Asks what to call the person. The name is cleaned (lib/accounts.ts) and
- * rendered only as text. It stays on this phone: never on chain, never sent
- * to /api.
- */
+/** An amount on the balance card: its length sets how small it may draw, so a long one fits beside its label (styles.css). */
+function BalanceAmount(props: { text: string }) {
+  return (
+    <span className="balance-amount" style={{ "--chars": Array.from(props.text).length } as CSSProperties}>
+      {props.text}
+    </span>
+  );
+}
 
 /**
  * On the AUSD deployment, "Add test dollars" claims test AUSD from Agora's
@@ -725,23 +733,24 @@ function Home(props: {
   onRemoved: (account: Address, name: string) => void;
 }) {
   const { account, connection } = props;
-  // A passkey brings back its account but not its name. With usernames on,
-  // the account's username comes back from the passkey alone and stands in
-  // for the name; otherwise, or with none, ask once, on this phone.
-  const [askName, setAskName] = useState(() => !namesOn && accounts.needsName(account.address));
+  // The name, when the account signs in: the one kept for every phone wins
+  // (api/name, lib/displayName.ts), unless this phone has a newer one it
+  // couldn't send yet; a username never stands in for it; with no name
+  // anywhere, ask once.
+  const namesSync = useNamesSyncOn();
+  const [askName, setAskName] = useState(false);
   const rename = useRef(props.onRename);
   rename.current = props.onRename;
   useEffect(() => {
-    const needs = accounts.needsName(account.address);
-    if (!needs || !namesOn) return setAskName(needs);
     let live = true;
-    usernameOf(account.address)
-      .then((name) => {
-        if (!live) return;
-        if (name) rename.current(`@${name}`);
-        setAskName(!name);
-      })
-      .catch(() => live && setAskName(true));
+    const pending = new PendingNames(localStorage).has(account.address);
+    void (pending ? Promise.resolve(undefined) : readSavedName(account.address)).then((saved) => {
+      if (!live) return;
+      const local = accounts.list().find((a) => a.address === account.address)?.name ?? "";
+      const next = nameAtStart(local, saved, !local && !accounts.needsName(account.address));
+      if (next.name !== local) rename.current(next.name);
+      setAskName(next.ask);
+    });
     return () => {
       live = false;
     };
@@ -1094,7 +1103,7 @@ function Home(props: {
         <header className="top">
           <div>
             <h1>{shownName(account)}</h1>
-            {account.name && <p className="account-line">{copy.accountEndingTitle(account.address)}</p>}
+            {account.name && <p className="account-line">{copy.accountIdLine(account.address)}</p>}
             <TestModeBadge />
           </div>
           <div className="top-actions">
@@ -1122,16 +1131,8 @@ function Home(props: {
           <p className="eyebrow" id="ask-name">
             {copy.yourName}
           </p>
-          <p className="hint">{copy.askNameLede}</p>
-          <NameForm
-            initial=""
-            onSave={(name) => {
-              props.onRename(name);
-              setAskName(false);
-            }}
-            onSkip={skipAsking}
-            skipLabel={copy.skipName}
-          />
+          <p className="hint">{namesSync ? copy.askNameLedeSynced : copy.askNameLede}</p>
+          <DisplayNameForm account={account.address} initial="" onRename={props.onRename} onDone={() => setAskName(false)} onSkip={skipAsking} skipLabel={copy.skipName} />
         </section>
       )}
 
@@ -1149,7 +1150,7 @@ function Home(props: {
                 <br />
                 <small>{copy.dollarsLine}</small>
               </span>
-              <span className="balance-amount">{formatAmount(shown.dollars.balance, shown.dollars.decimals, "cents")}</span>
+              <BalanceAmount text={formatAmount(shown.dollars.balance, shown.dollars.decimals, "cents")} />
             </div>
             {shown.testDollars && (
               <div className="row balance">
@@ -1158,7 +1159,7 @@ function Home(props: {
                   <br />
                   <small>{copy.testDollarsLine}</small>
                 </span>
-                <span className="balance-amount">{formatAmount(shown.testDollars.balance, shown.testDollars.decimals, "cents")}</span>
+                <BalanceAmount text={formatAmount(shown.testDollars.balance, shown.testDollars.decimals, "cents")} />
               </div>
             )}
             <div className="money-actions">
@@ -1180,16 +1181,6 @@ function Home(props: {
 
       )}
 
-      {props.tab === "home" && (
-        <Suspense fallback={null}>
-          <HistoryCard
-            entries={historyFrom(Object.values(historyIn), historyOut ? [historyOut] : [], { me: owner, pots: [POTS_AUSD, POTS_TESTUSD], pair: SETTLEMENT_PAIR, faucets: [AUSD_FAUCET], desk })}
-            since={notes.startedAt}
-            who={(a) => nameOf(a) ?? copy.accountEnding(a)}
-            potName={(potId) => pots.get(DEPLOYMENT, potId)?.name || new ScanStore(localStorage, DEPLOYMENT, owner).load().found.find((f) => f.potId === potId)?.name || null}
-          />
-        </Suspense>
-      )}
 
       {props.tab === "home" && DEPLOYMENT === "ausd" && (
         <section className="card" aria-labelledby="your-bank">
@@ -1271,6 +1262,18 @@ function Home(props: {
         )}
         {result && <NoticeLine notice={result} />}
       </section>
+      )}
+
+      {/* History, under the money cards. */}
+      {props.tab === "home" && (
+        <Suspense fallback={null}>
+          <HistoryCard
+            entries={historyFrom(Object.values(historyIn), historyOut ? [historyOut] : [], { me: owner, pots: [POTS_AUSD, POTS_TESTUSD], pair: SETTLEMENT_PAIR, faucets: [AUSD_FAUCET], desk })}
+            since={notes.startedAt}
+            who={(a) => nameOf(a) ?? copy.accountEnding(a)}
+            potName={(potId) => pots.get(DEPLOYMENT, potId)?.name || new ScanStore(localStorage, DEPLOYMENT, owner).load().found.find((f) => f.potId === potId)?.name || null}
+          />
+        </Suspense>
       )}
 
       {notesOpen && (

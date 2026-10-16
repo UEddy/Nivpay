@@ -1172,6 +1172,26 @@ background: it listens only after a tap, for one sentence, then stops.
   has no command to change settings or limits, add contacts or mark them
   trusted, or say yes to a pot's payment.
 
+## Display names
+
+The name shown at the top of Home and on Profile is the person's display
+name, never their username (the username shows only on Profile and where
+people pay them). Profile has a Display name row above Username; it and
+Change name open the same screen: one field, up to 40 characters, cleaned
+like every name (`cleanName`), and Save.
+
+The name is saved on the phone at once. Where the site keeps names
+(`/api/name`, on when a Blob store is connected), it is also kept for every
+phone the account signs in on, proved like a photo: the passkey signs a
+short message naming the account, a SHA-256 of the name and the time, one
+fingerprint. The server checks the signature and that the name is already
+clean, and stores it private; `GET /api/name/<account>` returns it, so
+anyone with the Account ID can read it, as with a photo. When the account
+signs in, the kept name wins, unless this phone has a newer one it couldn't
+send yet (Code 88). With no name anywhere, Home asks "What should we call
+you?" once. An `@username` that an earlier version kept in place of a name
+is dropped.
+
 ## Profile photos
 
 An account can add a photo in Account details: from the camera or the

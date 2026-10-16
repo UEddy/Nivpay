@@ -231,6 +231,7 @@ chain. Hidden until a Vercel Blob store is connected.
 | Code | What happened | Where to look |
 | --- | --- | --- |
 | 45 | The photo, or its removal, didn't reach `/api/photo`, or it refused it: photos not set up (503), wrong origin (403), a proof that didn't check out or was over 5 minutes old (401), not a JPEG (415), too large (413), or too many changes in a minute on that server instance (429). | The request's status in the browser; Vercel function log for `/api/photo` |
+| 88 | The display name was saved on this phone but didn't reach `/api/name`, or it refused it: names not set up (503), wrong origin (403), a proof that didn't check out or was over 5 minutes old (401), a name that isn't clean (400), or too many changes in a minute on that server instance (429). Also when the fingerprint was cancelled. The phone keeps the name; Save again sends it. | The request's status in the browser; Vercel function log for `/api/name` |
 | 46 | The picture chosen couldn't be read by the phone (`createImageBitmap`), or couldn't be made small enough. Nothing was sent. | The file's type; HEIC needs a phone that can decode it |
 
 ## Where people in a pot are

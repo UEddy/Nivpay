@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from "react";
-import { copy } from "../copy.ts";
+import { copy, ERROR_CODES } from "../copy.ts";
 import { SLOW_AFTER_MS, slowStepLine } from "../lib/slowStep.ts";
 import { Cancellable } from "../lib/cancel.ts";
 import type { ShareResult } from "../lib/share.ts";
@@ -8,6 +8,9 @@ import { amountForField, formatAmount, readAmount } from "../lib/money.ts";
 import { BANNER_MS, currentPlatform, InstallStore, installWay, onInstallChange, PausableTimer, promptInstall, shouldShowBanner, type InstallWay } from "../lib/install.ts";
 import { dateLocale } from "../lib/locale.ts";
 import { cleanName, NAME_MAX } from "../lib/accounts.ts";
+import { namesSyncOn, PendingNames, saveName } from "../lib/displayName.ts";
+import { reloadOnce } from "../lib/reloadOnce.ts";
+import type { Address } from "viem";
 
 export type Notice = { tone: "ok" | "bad"; text: string; code?: number };
 
@@ -362,7 +365,7 @@ export function AmountUnderstood(props: { text: string; decimals: number | null;
 }
 
 /** Asks for, or changes, the name this phone shows for an account. */
-export function NameForm(props: { initial: string; onSave: (name: string) => void; onSkip: () => void; skipLabel: string }) {
+export function NameForm(props: { initial: string; onSave: (name: string) => void; onSkip: () => void; skipLabel: string; hint?: string; busy?: boolean }) {
   const [name, setName] = useState(props.initial);
   const clean = cleanName(name);
   return (
@@ -370,16 +373,16 @@ export function NameForm(props: { initial: string; onSave: (name: string) => voi
       className="name-form"
       onSubmit={(e) => {
         e.preventDefault();
-        if (clean) props.onSave(clean);
+        if (clean && !props.busy) props.onSave(clean);
       }}
     >
       <label className="field">
         <span>{copy.yourName}</span>
         <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" maxLength={NAME_MAX * 2} placeholder={copy.namePlaceholder} />
       </label>
-      <p className="hint">{copy.nameHint}</p>
-      <button type="submit" className="btn primary" disabled={!clean}>
-        {copy.saveName}
+      <p className="hint">{props.hint ?? copy.nameHint}</p>
+      <button type="submit" className="btn primary" disabled={!clean || props.busy} aria-busy={props.busy}>
+        {props.busy ? copy.savingName : copy.saveName}
       </button>
       <button type="button" className="btn ghost" onClick={props.onSkip}>
         {props.skipLabel}
@@ -449,4 +452,61 @@ export class ScreenBoundary extends Component<{ children: ReactNode }, { failed:
       </div>
     );
   }
+}
+
+function pendingName(account: Address, pending: boolean): void {
+  try {
+    new PendingNames(localStorage).set(account, pending);
+  } catch {
+    // Storage refused: at worst an older kept name comes back at the next sign-in.
+  }
+}
+
+/** Whether display names are kept on this site for every phone (lib/displayName.ts); false until known. */
+export function useNamesSyncOn(): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void namesSyncOn().then((v) => live && setOn(v));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return on;
+}
+
+/**
+ * The display name form: saved on this phone at once, then, where the site
+ * keeps names, for every phone the account signs in on, with one
+ * fingerprint (api/name). If that second step fails the name stays on this
+ * phone and the form says so, with Code 88; Save sends it again.
+ */
+export function DisplayNameForm(props: { account: Address; initial: string; onRename: (name: string) => void; onDone: () => void; onSkip: () => void; skipLabel: string }) {
+  const syncOn = useNamesSyncOn();
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const save = async (name: string) => {
+    props.onRename(name);
+    setNotice(null);
+    if (!(await namesSyncOn())) return props.onDone();
+    setBusy(true);
+    try {
+      const { withSigner } = await reloadOnce(() => import("../lib/passkey.ts"));
+      await saveName(props.account, name, (message) => withSigner(props.account, (a) => a.signMessage({ message })));
+      pendingName(props.account, false);
+      props.onDone();
+    } catch (e) {
+      pendingName(props.account, true);
+      console.warn("The name wasn't kept for other phones (Code 88)", e);
+      setNotice({ tone: "bad", text: copy.errNameSync, code: ERROR_CODES.NAME_SAVE_FAILED });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <NameForm initial={props.initial} onSave={(n) => void save(n)} onSkip={props.onSkip} skipLabel={props.skipLabel} hint={syncOn ? copy.nameHintSynced : copy.nameHint} busy={busy} />
+      {notice && <NoticeLine notice={notice} />}
+    </>
+  );
 }

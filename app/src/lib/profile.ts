@@ -7,7 +7,7 @@ import { LANGS, type Lang } from "./locale.ts";
  * it, doesn't show, and a group with no rows left doesn't either.
  */
 
-export type RowId = "username" | "photo" | "limit" | "hidden" | "receipt" | "devices" | "language" | "notifications" | "voice" | "help" | "install";
+export type RowId = "name" | "username" | "photo" | "limit" | "hidden" | "receipt" | "devices" | "language" | "notifications" | "voice" | "help" | "install";
 export type GroupId = "account" | "money" | "security" | "preferences" | "help";
 
 export type ProfileFacts = {
@@ -24,7 +24,7 @@ export type ProfileFacts = {
 
 export function profileGroups(f: ProfileFacts): { group: GroupId; rows: RowId[] }[] {
   const groups: { group: GroupId; rows: (RowId | false)[] }[] = [
-    { group: "account", rows: [f.namesOn && "username", f.photosOn && "photo"] },
+    { group: "account", rows: ["name", f.namesOn && "username", f.photosOn && "photo"] },
     { group: "money", rows: ["limit", f.hiddenPots > 0 && "hidden", f.hasReceipt && "receipt"] },
     { group: "security", rows: ["devices"] },
     { group: "preferences", rows: ["language", f.notificationsOn && "notifications", f.voiceOffered && "voice"] },

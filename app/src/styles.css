@@ -405,9 +405,11 @@ h2 {
 }
 
 /*
- * Balances. An amount never breaks across lines. On a wide card the label and
- * its note sit to the left of the amount; on a narrow one (a 360 px phone and
- * below) they sit above it, and the amount scales with the card's width.
+ * Balances. The label and its note on the left, the amount on the right of
+ * the same row; an amount never breaks across lines. A long amount draws
+ * smaller to fit beside its label: --chars (set by the app) is its length,
+ * and it may take a little over half the card's width. Only on a phone
+ * narrower than 340 px does the amount go under its label.
  * Besley's tabular figures draw a lighter 0 and 5, so the default figures stay.
  */
 .balances {
@@ -415,7 +417,7 @@ h2 {
 }
 
 .row.balance {
-  align-items: baseline;
+  align-items: center;
 }
 
 .row.balance .label {
@@ -427,12 +429,12 @@ h2 {
   flex: 0 0 auto;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 18px;
+  font-size: clamp(16px, calc(90cqi / var(--chars, 6)), 28px);
   white-space: nowrap;
   text-align: right;
 }
 
-@container (max-width: 300px) {
+@media (max-width: 339px) {
   .row.balance {
     flex-direction: column;
     align-items: flex-start;
@@ -441,7 +443,7 @@ h2 {
 
   .balance-amount {
     text-align: left;
-    font-size: clamp(18px, 9cqi, 26px);
+    font-size: clamp(18px, calc(150cqi / var(--chars, 6)), 28px);
   }
 }
 
@@ -454,6 +456,10 @@ h2 {
 
 .money-actions .btn {
   margin: 0;
+  /* A long label wraps between words onto a second line, never inside one. */
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .receipt-link.small {

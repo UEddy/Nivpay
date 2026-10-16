@@ -121,3 +121,13 @@ test("whatever is typed, only an address and a cleaned name are kept", () => {
   assert.deepEqual(parsed, [{ address: B, name: "Aniekan<script>" }]);
   assert.deepEqual(JSON.parse(kv.raw.get("nivpay.nameSkipped.v1") ?? "[]"), [B]);
 });
+
+test("forgetName clears one account's name, so the screens show its default and the person can be asked", () => {
+  const store = new AccountStore(memory());
+  store.upsert({ address: A as `0x${string}`, name: "@eddy" });
+  store.upsert({ address: B, name: "Ubong" });
+  store.forgetName(A as `0x${string}`);
+  assert.equal(store.list().find((a) => a.address !== B)?.name, "");
+  assert.equal(store.list().find((a) => a.address === B)?.name, "Ubong");
+  assert.equal(store.needsName(A as `0x${string}`), true);
+});

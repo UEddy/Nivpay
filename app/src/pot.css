@@ -2433,27 +2433,6 @@ button.avatar {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-/* The balance: the amount under its label on every phone, so the card looks the same everywhere. */
-.row.balance {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-}
-.row.balance .balance-amount {
-  text-align: left;
-  font-size: clamp(26px, 8vw, 32px);
-}
-/* Two buttons share a line while their words fit; otherwise each takes its own. Words never break inside one. */
-.money-actions {
-  display: flex;
-  flex-wrap: wrap;
-}
-.money-actions .btn {
-  flex: 1 1 auto;
-  width: auto;
-  min-width: calc(50% - 5px);
-  white-space: nowrap;
-}
 /* The test-mode strip keeps its distance from the line above. */
 .ramp-test {
   margin-top: 12px;

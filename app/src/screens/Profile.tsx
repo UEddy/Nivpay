@@ -18,7 +18,7 @@ import { LANGUAGE_CHOICES, profileGroups, type GroupId, type RowId } from "../li
 import { Avatar } from "./Avatar.tsx";
 import { closeDetail, detailIn, openDetail } from "../lib/backNav.ts";
 import { reloadOnce } from "../lib/reloadOnce.ts";
-import { Icon, InstallHow, NameForm, openHelp, useInstallWay } from "./ui.tsx";
+import { DisplayNameForm, Icon, InstallHow, openHelp, useInstallWay } from "./ui.tsx";
 import { useMyUsername } from "./Username.tsx";
 import { voiceOffered } from "./Voice.tsx";
 
@@ -38,6 +38,12 @@ type View = "main" | "name" | "photo" | "username" | "choose" | "limit" | "hidde
 
 /** The row icons: simple strokes in the text colour. */
 const ROW_ICONS: Record<string, ReactNode> = {
+  name: (
+    <>
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M5 20a7 7 0 0 1 14 0" />
+    </>
+  ),
   username: <path d="M16 12a4 4 0 1 1-1.2-2.9M16 8v5a2 2 0 0 0 4 0v-1a8 8 0 1 0-3 6.2" />,
   photo: (
     <>
@@ -222,6 +228,7 @@ export function ProfilePage(props: {
   const notesValue = (pushOn && pushOnHere(me)) || (inboxOn && requestsHere) ? copy.valueOn : copy.valueOff;
 
   const rows: Record<RowId, ReactNode> = {
+    name: <Row icon="name" label={copy.displayName} value={props.account.name || copy.valueNotSet} onClick={() => setView("name")} />,
     username: <Row icon="username" label={copy.username} value={u.name ? copy.usernameAt(u.name) : u.name === null ? copy.valueNotSet : undefined} onClick={() => setView("username")} />,
     photo: <Row icon="photo" label={copy.photo} value={hasPhoto ? copy.photoAdded : copy.photoNotAdded} onClick={() => setView("photo")} />,
     limit: <Row icon="limit" label={copy.dailyLimit} value={limitValue} onClick={() => setView("limit")} />,
@@ -245,16 +252,8 @@ export function ProfilePage(props: {
   switch (view) {
     case "name":
       return (
-        <Detail title={copy.changeName} onBack={back}>
-          <NameForm
-            initial={props.account.name}
-            onSave={(n) => {
-              props.onRename(n);
-              back();
-            }}
-            onSkip={back}
-            skipLabel={copy.back}
-          />
+        <Detail title={copy.displayName} onBack={back}>
+          <DisplayNameForm account={me} initial={props.account.name} onRename={props.onRename} onDone={back} onSkip={back} skipLabel={copy.back} />
         </Detail>
       );
     case "photo":

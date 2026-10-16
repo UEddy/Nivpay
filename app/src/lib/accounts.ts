@@ -6,11 +6,12 @@ import { stripInvisible } from "./text.ts";
  * ever stored. No key, PRF output, mnemonic, seed or session is stored or
  * logged anywhere.
  *
- * The name is what the person asked to be called on this phone. It is a
- * label, not an identity: nobody checks it, it is never written on chain and
- * never sent to /api. "" means no name yet; the screens then show
- * defaultAccountName. A passkey brings back its account on another phone,
- * but not its name.
+ * The name is what the person asked to be called. It is a label, not an
+ * identity: nobody checks it and it is never written on chain. Where the
+ * site keeps names (api/name, lib/displayName.ts), a name saved with the
+ * account's fingerprint comes back on any phone the passkey signs in on;
+ * otherwise it stays on this phone. "" means no name yet; the screens then
+ * show defaultAccountName.
  */
 export type StoredAccount = { address: Address; name: string };
 
@@ -74,6 +75,12 @@ export class AccountStore {
     if (!clean || !this.list().some((a) => a.address === at)) return false;
     this.save(this.list().map((a) => (a.address === at ? { ...a, name: clean } : a)));
     return true;
+  }
+
+  /** Forgets the name this phone shows for an account, as for one that was never a name (lib/displayName.ts). */
+  forgetName(address: Address): void {
+    const at = getAddress(address);
+    this.save(this.list().map((a) => (a.address === at ? { ...a, name: "" } : a)));
   }
 
   /** True when the person should be asked for a name: none kept, and they haven't chosen Skip on this phone. */

@@ -6,7 +6,7 @@ const ALL: ProfileFacts = { namesOn: true, photosOn: true, hiddenPots: 2, hasRec
 
 test("every row, grouped and in order, when everything is set up", () => {
   assert.deepEqual(profileGroups(ALL), [
-    { group: "account", rows: ["username", "photo"] },
+    { group: "account", rows: ["name", "username", "photo"] },
     { group: "money", rows: ["limit", "hidden", "receipt"] },
     { group: "security", rows: ["devices"] },
     { group: "preferences", rows: ["language", "notifications", "voice"] },
@@ -17,6 +17,7 @@ test("every row, grouped and in order, when everything is set up", () => {
 test("a feature not set up, or with nothing in it, has no row; a group with no rows goes", () => {
   const none = profileGroups({ namesOn: false, photosOn: false, hiddenPots: 0, hasReceipt: false, notificationsOn: false, voiceOffered: false, canInstall: false });
   assert.deepEqual(none, [
+    { group: "account", rows: ["name"] },
     { group: "money", rows: ["limit"] },
     { group: "security", rows: ["devices"] },
     { group: "preferences", rows: ["language"] },
