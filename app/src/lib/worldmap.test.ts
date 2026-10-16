@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { cityPlace, fold, placeOf, routeInto, worldLayout, WHOLE_WORLD, type CityRow, type Place, type Zones } from "./worldmap.ts";
+import { between, canZoom, cityPlace, fold, labelOffsets, landCopies, lonUnderPot, movedLayout, placeOf, routeInto, settleView, worldLayout, WHOLE_WORLD, zoomAt, ZOOM_MAX, ZOOM_MIN, type CityRow, type Place, type Zones } from "./worldmap.ts";
 import { personSpots, reverseRoute, VIEW } from "./potmap.ts";
 
 const land = JSON.parse(readFileSync(new URL("../data/world-land.json", import.meta.url), "utf8")) as { land: string[]; zones: Zones };
@@ -105,4 +105,85 @@ test("labels sit clear of the pot, its amount and one another", () => {
       for (let j = i + 1; j < boxes.length; j++) assert.ok(area(b, boxes[j]!) < 150, `${name}: labels ${i} and ${j} overlap`);
     });
   }
+});
+
+const NEW_YORK = P("New York City", "US");
+const TORONTO = P("Toronto", "CA");
+const MEXICO = P("Mexico City", "MX");
+const BUENOS_AIRES = P("Buenos Aires", "AR");
+const ABUJA = P("Abuja", "NG");
+const where = (v: { k: number; tx: number; ty: number }, p: Place) => ({ x: v.tx + p.lon * v.k, y: v.ty - p.lat * v.k });
+
+test("moved by hand: everyone at their city, the Americas brought out from under the pot", () => {
+  const places = [LAGOS, NEW_YORK, TORONTO, MEXICO, BUENOS_AIRES];
+  // Zoomed out to the whole world, the pot over the Atlantic covers some of them.
+  const whole = settleView({ ...WHOLE_WORLD });
+  // Dragged left until the Americas sit left of the pot (Lagos goes under it).
+  const dragged = settleView({ ...whole, tx: whole.tx - 70 });
+  const spots = movedLayout(dragged, places, 2);
+  spots.forEach((s, i) => {
+    const q = where(dragged, places[i]!);
+    if (i > 0) assert.ok(!s.under, `${i}: ${s.x},${s.y} shows`);
+    assert.ok(Math.hypot(s.x - q.x, s.y - q.y) < 41, `${i}: near its city`);
+  });
+  assert.ok(spots[3]!.y < spots[4]!.y && spots[1]!.y < spots[3]!.y, "north is up");
+});
+
+test("moved by hand: the pot covers someone dragged under it, and nobody is pushed off it", () => {
+  const v = settleView({ k: 3, tx: 166 - 3.39 * 3, ty: 114 + 6.45 * 3 });
+  const [lagos] = movedLayout(v, [LAGOS], 0);
+  assert.ok(Math.hypot(lagos!.x - 166, lagos!.y - 114) < 2 && lagos!.under, "Lagos under the pot");
+  const off = settleView({ ...v, tx: v.tx + 600 });
+  assert.ok(movedLayout(off, [LAGOS], 0)[0]!.under, "past the edge, hidden");
+});
+
+test("zooming in brings two people in one country apart, about the point kept still", () => {
+  const places = [LAGOS, ABUJA];
+  const v0 = settleView({ k: 1.7, tx: 60, ty: 120 });
+  const [a0, b0] = places.map((p) => where(v0, p));
+  const v1 = zoomAt(v0, 4, a0!.x, a0!.y);
+  const [a1, b1] = places.map((p) => where(v1, p));
+  assert.ok(Math.hypot(a1!.x - a0!.x, a1!.y - a0!.y) < 0.5, "the point zoomed on stays put");
+  assert.ok(Math.hypot(a1!.x - b1!.x, a1!.y - b1!.y) > 3.5 * Math.hypot(a0!.x - b0!.x, a0!.y - b0!.y));
+  const spots = movedLayout(v1, places, 0);
+  assert.ok(Math.hypot(spots[0]!.x - spots[1]!.x, spots[0]!.y - spots[1]!.y) >= 39, "apart");
+});
+
+test("the zoom stops at the whole world and at two towns apart; the buttons know", () => {
+  assert.equal(zoomAt(WHOLE_WORLD, 0.1, 166, 114).k, ZOOM_MIN);
+  const deep = zoomAt(WHOLE_WORLD, 1000, 166, 114);
+  assert.equal(deep.k, ZOOM_MAX);
+  assert.ok(!canZoom(deep, 2) && canZoom(deep, 0.5) && !canZoom(zoomAt(WHOLE_WORLD, 0.1, 166, 114), 0.5));
+});
+
+test("east and west wrap round; north and south stop", () => {
+  const v = settleView({ k: 2, tx: 166 - 179 * 2, ty: 114 });
+  const across = settleView({ ...v, tx: v.tx - 10 });
+  assert.ok(Math.abs(lonUnderPot(across) - -176) < 1e-6, "past 180 east is the far west");
+  assert.deepEqual(landCopies(across), { west: true, east: false });
+  // Tokyo on the copy of the world nearest the pot: just west of it, not a world away.
+  const [tokyo] = movedLayout(settleView({ k: 2, tx: 166 - -170 * 2, ty: 114 + 35 * 2 }), [TOKYO], 0);
+  assert.ok(tokyo!.x < 166 && tokyo!.x > 0, `${tokyo!.x}`);
+  assert.ok(settleView({ k: 2, tx: 0, ty: 114 + 89 * 2 }).ty < 114 + 70 * 2, "not up into the Arctic");
+});
+
+test("going back to everyone takes the short way round, and ends where the map framed them", () => {
+  const a = settleView({ k: 2, tx: 166 - 170 * 2, ty: 114 });
+  const b = settleView({ k: 1, tx: 166 - -170 * 1, ty: 114 });
+  const half = between(a, b, 0.5);
+  assert.ok(Math.abs(lonUnderPot(half)) > 170, "through the 180 line, not across Africa");
+  assert.deepEqual(between(a, b, 1), b, "ends on it exactly, not a world along");
+  const start = between(a, b, 0);
+  assert.ok(Math.abs(start.k - a.k) < 1e-9 && Math.abs(Math.abs(start.tx - a.tx) % (360 * a.k)) < 1e-6, "starts on the same picture");
+});
+
+test("while dragging, labels ride with their people", () => {
+  const v = settleView({ k: 2, tx: 60, ty: 120 });
+  const still = movedLayout(v, [LONDON, LAGOS], 0, [64, 64]);
+  const follow = labelOffsets(still);
+  const moved = movedLayout(settleView({ ...v, tx: v.tx + 15 }), [LONDON, LAGOS], 0, [64, 64], follow);
+  moved.forEach((s, i) => {
+    assert.equal(s.label.x - s.x, follow[i]!.dx);
+    assert.equal(s.label.y - s.y, follow[i]!.dy);
+  });
 });

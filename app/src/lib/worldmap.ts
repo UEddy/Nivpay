@@ -122,7 +122,8 @@ const overlap = (a: Box, b: Box) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(
 function fixedBoxes(payees: number): Box[] {
   const boxes = [
     { x0: 128, y0: 70, x1: 204, y1: 162 },
-    { x0: 126, y0: 164, x1: 206, y1: 197 },
+    // The amount, and the zoom buttons under it.
+    { x0: 126, y0: 164, x1: 206, y1: VIEW_H },
     { x0: 0, y0: 0, x1: 88, y1: 32 },
   ];
   if (payees > 0) boxes.push({ x0: 262, y0: 0, x1: VIEW_W, y1: VIEW_H });
@@ -216,20 +217,37 @@ export function worldLayout(places: readonly (Place | null)[], payees: number, w
     }
   }
   const view = best!.view;
-
   // Placed people at their cities; then the rest in the free spots furthest from them.
-  const points: { x: number; y: number }[] = new Array(shown.length);
-  for (const { p, i } of known) points[i] = at(view, p);
+  const points = withUnplaced(
+    shown.map((p) => (p ? at(view, p) : null)),
+    payees,
+  );
+  pushApart(points, payees, true);
+  return { spots: spotsFrom(points, widths, payees), view };
+}
+
+/** The rest, with no place, in the free usual spots furthest from those placed. */
+function withUnplaced(placed: readonly ({ x: number; y: number } | null)[], payees: number): { x: number; y: number }[] {
+  const points = placed.slice();
   const free = personSpots(5).filter((s) => trouble(s.x, s.y, payees) === 0 && !(s.y > 150 && s.x > 110 && s.x < 222));
-  for (let i = 0; i < shown.length; i++) {
+  for (let i = 0; i < points.length; i++) {
     if (points[i]) continue;
-    const taken = points.filter(Boolean);
+    const taken = points.filter((p): p is { x: number; y: number } => p !== null);
     const spot = free
       .map((s) => ({ s, room: Math.min(...taken.map((t) => Math.hypot(t.x - s.x, t.y - s.y)), 999) }))
       .sort((a, b) => b.room - a.room)[0];
     points[i] = spot ? { x: spot.s.x, y: spot.s.y } : { x: 40, y: 60 + i * 30 };
   }
-  // People in one city, or very near: pushed apart, a little at a time, then kept clear of the pot.
+  return points as { x: number; y: number }[];
+}
+
+/**
+ * People in one city, or very near: pushed apart, a little at a time. With
+ * `clear`, also kept clear of the pot and on the map; without it (the world
+ * moved by hand) they stay where the world puts them, under the pot or past
+ * the map's edge.
+ */
+function pushApart(points: { x: number; y: number }[], payees: number, clear: boolean): void {
   for (let round = 0; round < 40; round++) {
     for (let a = 0; a < points.length; a++) {
       for (let b = a + 1; b < points.length; b++) {
@@ -252,6 +270,7 @@ export function worldLayout(places: readonly (Place | null)[], payees: number, w
         pb.y += (dy / d) * push;
       }
     }
+    if (!clear) continue;
     for (const p of points) {
       const e = Math.hypot((p.x - POT_C.x) / POT_R.x, (p.y - POT_C.y) / POT_R.y);
       if (e < 1) {
@@ -263,8 +282,93 @@ export function worldLayout(places: readonly (Place | null)[], payees: number, w
       p.y = Math.max(AREA.y0 - 6, Math.min(AREA.y1 + 8, p.y));
     }
   }
+}
+
+/** Where a label sits from its dot, kept while the world is dragged so each label moves with its person. */
+export type LabelOffset = { dx: number; dy: number };
+export const labelOffsets = (spots: readonly PersonSpot[]): LabelOffset[] => spots.map((s) => ({ dx: s.label.x - s.x, dy: s.label.y - s.y }));
+
+function spotsFrom(points: readonly { x: number; y: number }[], widths: readonly number[], payees: number, follow?: readonly LabelOffset[]): PersonSpot[] {
   const rounded = points.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }));
-  const labels = placeLabels(rounded, widths, payees);
-  const spots = rounded.map(({ x, y }, i) => ({ x, y, route: routeInto(x, y), label: labels[i]! }));
-  return { spots, view };
+  const labels = follow ? rounded.map((p, i) => ({ x: p.x + (follow[i]?.dx ?? 0), y: p.y + (follow[i]?.dy ?? 24), anchor: "middle" as const })) : placeLabels(rounded, widths, payees);
+  return rounded.map(({ x, y }, i) => ({ x, y, route: routeInto(x, y), label: labels[i]! }));
+}
+
+/*
+ * The world moved by hand (screens/PotMap.tsx): dragged under the pot, which
+ * never moves, and zoomed in, so people in one country come apart, or out to
+ * the whole world. East and west wrap around, as on a globe.
+ */
+
+/** How far in: two cities in one country well apart. */
+export const ZOOM_MAX = 12;
+/** How far out: the whole world, a little over once round. */
+export const ZOOM_MIN = MIN_K;
+/** How far north and south the pot can go: past that is only sea and ice. */
+const LAT_RANGE = { min: -45, max: 65 };
+
+/** The longitude under the pot. */
+export const lonUnderPot = (v: WorldView): number => (POT_C.x - v.tx) / v.k;
+const latUnderPot = (v: WorldView): number => (v.ty - POT_C.y) / v.k;
+
+/** In the zoom range, wrapped so the longitude under the pot is from -180 to 180, and not too far north or south. */
+export function settleView(v: WorldView): WorldView {
+  const k = Math.max(MIN_K, Math.min(ZOOM_MAX, v.k));
+  const lon = ((((lonUnderPot(v) + 180) % 360) + 360) % 360) - 180;
+  const lat = Math.max(LAT_RANGE.min, Math.min(LAT_RANGE.max, latUnderPot(v)));
+  return { k, tx: POT_C.x - lon * k, ty: POT_C.y + lat * k };
+}
+
+/** Zoomed by `f` about the point (x, y) on the map, which stays where it is unless the zoom range stops it. */
+export function zoomAt(v: WorldView, f: number, x: number, y: number): WorldView {
+  const k = Math.max(MIN_K, Math.min(ZOOM_MAX, v.k * f));
+  const g = k / v.k;
+  return settleView({ k, tx: x - (x - v.tx) * g, ty: y - (y - v.ty) * g });
+}
+
+/** Whether there is room to zoom further in (f > 1) or out. */
+export const canZoom = (v: WorldView, f: number): boolean => (f > 1 ? v.k < ZOOM_MAX - 1e-6 : v.k > MIN_K + 1e-6);
+
+/**
+ * `t` of the way (0 to 1) from one view to another: the scale on a log
+ * curve, so zooming feels even, and the shorter way round the world. It
+ * starts from the copy of `a` nearest `b` (the same picture) and ends on `b`
+ * exactly, so handing the map back to its own view moves nothing.
+ */
+export function between(a: WorldView, b: WorldView, t: number): WorldView {
+  if (t >= 1) return b;
+  const lonB = lonUnderPot(b);
+  const lonA = lonUnderPot(a) + 360 * Math.round((lonB - lonUnderPot(a)) / 360);
+  const k = a.k * (b.k / a.k) ** t;
+  const lon = lonA + (lonB - lonA) * t;
+  const lat = latUnderPot(a) + (latUnderPot(b) - latUnderPot(a)) * t;
+  return { k, tx: POT_C.x - lon * k, ty: POT_C.y + lat * k };
+}
+
+/** Whether the land is drawn again a world to the west or east, where the map shows past 180 degrees. */
+export function landCopies(v: WorldView): { west: boolean; east: boolean } {
+  return { west: -v.tx / v.k < -169, east: (VIEW_W - v.tx) / v.k > 169 };
+}
+
+/** Under the pot's body (screens/PotMap.tsx draws it at 118,66, 96 across), which hides a dot there. */
+export function underPot(x: number, y: number): boolean {
+  return ((x - 166) / 34) ** 2 + ((y - 120) / 36) ** 2 < 1;
+}
+
+/**
+ * Where people sit on a world moved by hand: each at their city, on the copy
+ * of the world nearest the pot, pushed only apart from each other. `under`:
+ * the pot covers them or they are past the map's edge, so their dot and
+ * label are hidden and their route still shows the way. With `follow`,
+ * labels keep those offsets from their dots (while dragging).
+ */
+export function movedLayout(view: WorldView, places: readonly (Place | null)[], payees: number, widths: readonly number[] = [], follow?: readonly LabelOffset[]): (PersonSpot & { under: boolean })[] {
+  const shown = places.slice(0, personSpots(places.length).length);
+  const mid = lonUnderPot(view);
+  const points = withUnplaced(
+    shown.map((p) => (p ? at(view, { lat: p.lat, lon: p.lon + 360 * Math.round((mid - p.lon) / 360) }) : null)),
+    payees,
+  );
+  pushApart(points, payees, false);
+  return spotsFrom(points, widths, payees, follow).map((s) => ({ ...s, under: underPot(s.x, s.y) || s.x < -8 || s.x > VIEW_W + 8 || s.y < -8 || s.y > VIEW_H + 8 }));
 }

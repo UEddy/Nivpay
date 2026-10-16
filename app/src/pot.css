@@ -402,6 +402,84 @@
   display: block;
   width: 100%;
   height: auto;
+  /* The world drags under the pot (screens/PotMap.tsx). Up and down still scrolls the page until it is zoomed in. */
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.map.zoomed {
+  touch-action: none;
+}
+
+.map-card[data-moving] .map {
+  cursor: grabbing;
+}
+
+/* Moved by hand, the world follows the finger at once, not 600ms behind it. */
+.map-land-at.held {
+  transition: none;
+}
+
+/* A person the pot covers, or past the map's edge: hidden, their route still pointing the way. */
+.map-person {
+  transition: opacity 180ms ease-out;
+}
+
+.map-person.under {
+  opacity: 0;
+}
+
+/* Zoom, under the pot's amount, where nobody is placed. */
+.map-zoom {
+  position: absolute;
+  left: 48.5%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+}
+
+.map-zoom-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.map-zoom-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.map-zoom-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Back to everyone: beside the pair, so they stay centred, and only once the world was moved. */
+.map-zoom-back {
+  position: absolute;
+  right: calc(100% + 6px);
+  top: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease-out;
+}
+
+.map-zoom-back.on {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* The world under the map (lib/worldmap.ts): it glides when people's places change. */
