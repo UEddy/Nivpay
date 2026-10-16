@@ -437,7 +437,8 @@ h2 {
   flex: 0 0 auto;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: clamp(17px, calc(96cqi / var(--chars, 6)), 26px);
+  /* A little bigger than "Dollars", as in the first design: 20px at most. */
+  font-size: clamp(16px, calc(80cqi / var(--chars, 6)), 20px);
   line-height: 1.1;
   margin-top: -2px;
   white-space: nowrap;
@@ -453,7 +454,7 @@ h2 {
 
   .balance-amount {
     text-align: left;
-    font-size: clamp(18px, calc(150cqi / var(--chars, 6)), 28px);
+    font-size: clamp(16px, calc(120cqi / var(--chars, 6)), 22px);
   }
 }
 
