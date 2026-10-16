@@ -27,6 +27,15 @@ test("only addresses and names are stored, checksummed", () => {
   for (const entry of parsed) assert.deepEqual(Object.keys(entry).sort(), ["address", "name"]);
 });
 
+test("log out leaves no account open and every account still listed", () => {
+  const store = new AccountStore(memory());
+  store.upsert({ address: A as `0x${string}`, name: "Idara" });
+  store.setActive(A as `0x${string}`);
+  store.signOut();
+  assert.equal(store.active(), undefined);
+  assert.deepEqual(store.list().map((a) => a.name), ["Idara"]);
+});
+
 test("upsert keeps one entry per address and keeps a name when none is given", () => {
   const store = new AccountStore(memory());
   store.upsert({ address: B, name: "Ubong" });

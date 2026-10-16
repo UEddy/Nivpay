@@ -38,6 +38,7 @@ export const pt: Dictionary = {
   testMode: "Modo de teste",
 
   switchAccount: "Trocar de conta",
+  logOut: "Sair",
   accountsOnThisPhone: "Contas neste celular",
   whoIsSigningIn: "Quem está entrando?",
   anotherAccount: "Outra conta",

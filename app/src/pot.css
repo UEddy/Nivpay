@@ -2322,6 +2322,11 @@ button.avatar {
 .profile-switch {
   margin-top: 32px;
 }
+/* Log out, in red, a clear gap under Switch account so a thumb can't hit the wrong one. */
+.btn.ghost.profile-logout {
+  margin-top: 40px;
+  color: var(--danger);
+}
 .profile-version {
   margin: 12px 0 0;
   color: var(--muted);

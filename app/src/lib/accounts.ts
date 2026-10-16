@@ -104,6 +104,11 @@ export class AccountStore {
     this.kv.setItem(ACTIVE, getAddress(address));
   }
 
+  /** Log out: no account is open, so Welcome shows and a fingerprint opens one again. The accounts stay listed on the phone. */
+  signOut(): void {
+    this.kv.setItem(ACTIVE, "");
+  }
+
   private skipped(): string[] {
     try {
       const raw = JSON.parse(this.kv.getItem(NAME_SKIPPED) ?? "[]") as unknown;

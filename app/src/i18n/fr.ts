@@ -37,6 +37,7 @@ export const fr: Dictionary = {
   testMode: "Mode test",
 
   switchAccount: "Changer de compte",
+  logOut: "Se déconnecter",
   accountsOnThisPhone: "Comptes sur ce téléphone",
   whoIsSigningIn: "Qui se connecte ?",
   anotherAccount: "Un autre compte",

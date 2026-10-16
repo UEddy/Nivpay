@@ -100,6 +100,7 @@ const PAIRS: [string, string][] = [
   ...["--bg", "--card", "--chip", "--input-bg", "--map-paper", "--request-bubble"].map((bg) => ["--ink", bg] as [string, string]),
   ...["--bg", "--card", "--chip", "--input-bg"].map((bg) => ["--muted", bg] as [string, string]),
   ...["--bg", "--card", "--chip"].map((bg) => ["--primary-text", bg] as [string, string]),
+  ...["--bg", "--card"].map((bg) => ["--danger", bg] as [string, string]),
   ["--on-primary", "--primary"],
   ["--on-primary", "--primary-pressed"],
   ["--person-2", "--card"],

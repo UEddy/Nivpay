@@ -179,6 +179,7 @@ export function ProfilePage(props: {
   onRename: (name: string) => void;
   onRemoved: (account: Account, name: string) => void;
   onSwitch: () => void;
+  onLogOut: () => void;
   names: (who: Account) => string;
   onMuted: () => void;
 }) {
@@ -410,6 +411,10 @@ export function ProfilePage(props: {
 
       <button type="button" className="btn ghost profile-switch" onClick={props.onSwitch}>
         {copy.switchAccount}
+      </button>
+      {/* Well below Switch account, so one is never tapped for the other. */}
+      <button type="button" className="btn ghost profile-logout" onClick={props.onLogOut}>
+        {copy.logOut}
       </button>
       <p className="profile-version">{copy.appVersion(VERSION)}</p>
     </section>

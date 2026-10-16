@@ -6,6 +6,8 @@
   --primary: #a5451f;
   --primary-pressed: #7f3316;
   --primary-text: #8c3a1a;
+  /* Red, for Log out: an action that leaves, not one that pays. */
+  --danger: #b3261e;
   --card: #fffbf5;
   --card-border: #ead6bd;
   --chip: #f6e6d2;
@@ -66,6 +68,7 @@
     --primary: #b4532a;
     --primary-pressed: #8f3f1d;
     --primary-text: #f2a77f;
+    --danger: #ff8a80;
     --card: #2a1d17;
     --card-border: #4a372b;
     --chip: #3b2a20;

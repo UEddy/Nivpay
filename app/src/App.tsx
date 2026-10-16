@@ -550,6 +550,14 @@ function Screens() {
           connection={connection}
           notice={notice}
           onSwitch={() => setSwitching(true)}
+          onLogOut={() => {
+            // Log out: Welcome shows, with this phone's accounts listed; a fingerprint opens one again.
+            accounts.signOut();
+            setActive(undefined);
+            setSwitching(false);
+            setTab("home");
+            go({ kind: "home" });
+          }}
           onOpenDraft={(draftId) => go({ kind: "create", draftId })}
           onOpenPot={(pot) => go({ kind: "pot", pot })}
           onOpenRequest={(pot, proposalId) => go({ kind: "request", pot, proposalId })}
@@ -743,6 +751,7 @@ function Home(props: {
   connection: ReturnType<typeof useConnection>;
   notice: Notice | null;
   onSwitch: () => void;
+  onLogOut: () => void;
   onOpenDraft: (draftId: Hex) => void;
   onOpenPot: (pot: StoredPot) => void;
   onOpenRequest: (pot: StoredPot, proposalId: bigint) => void;
@@ -1328,6 +1337,10 @@ function Home(props: {
             onSwitch={() => {
               setDetails(false);
               props.onSwitch();
+            }}
+            onLogOut={() => {
+              setDetails(false);
+              props.onLogOut();
             }}
             names={(who) => nameOf(who) ?? copy.accountEnding(who)}
             onMuted={() => setNotes(notesStore.get())}

@@ -38,6 +38,7 @@ export const es: Dictionary = {
   testMode: "Modo de prueba",
 
   switchAccount: "Cambiar de cuenta",
+  logOut: "Cerrar sesión",
   accountsOnThisPhone: "Cuentas en este teléfono",
   whoIsSigningIn: "¿Quién inicia sesión?",
   anotherAccount: "Otra cuenta",

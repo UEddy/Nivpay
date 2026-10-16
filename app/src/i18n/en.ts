@@ -36,6 +36,7 @@ export const en = {
 
   // Welcome, sign up, sign in, switch account
   switchAccount: "Switch account",
+  logOut: "Log out",
   accountsOnThisPhone: "Accounts on this phone",
   whoIsSigningIn: "Who is signing in?",
   anotherAccount: "A different account",
