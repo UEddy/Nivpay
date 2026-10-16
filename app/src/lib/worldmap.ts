@@ -73,8 +73,12 @@ const MAX_K = 4;
 const APART = 40;
 const LABEL_H = 30;
 
-/** When nobody is placed: most of the inhabited world. */
-export const WHOLE_WORLD: WorldView = { k: MIN_K, tx: 166 - 15 * MIN_K, ty: 114 + 22 * MIN_K };
+/**
+ * When nobody is placed: the world with the pot over the Atlantic, as in the
+ * film, so it covers no continent: the Americas to its left, Europe and
+ * Africa to its right.
+ */
+export const WHOLE_WORLD: WorldView = { k: MIN_K, tx: 166 + 38 * MIN_K, ty: 114 + 18 * MIN_K };
 
 function areaRight(payees: number): number {
   return payees > 0 ? 262 : 320;
@@ -189,11 +193,12 @@ export function worldLayout(places: readonly (Place | null)[], payees: number, w
   const spanLon = Math.max(50, Math.max(...lons) - Math.min(...lons));
   const spanLat = Math.max(30, Math.max(...lats) - Math.min(...lats));
   const right = areaRight(payees);
-  const fit = Math.max(MIN_K, Math.min(MAX_K, (right - AREA.x0 - 50) / spanLon, (AREA.y1 - AREA.y0 - 40) / spanLat));
+  // One person alone: their whole continent around them, not one country filling the map.
+  const fit = known.length === 1 ? 1.7 : Math.max(MIN_K, Math.min(MAX_K, (right - AREA.x0 - 50) / spanLon, (AREA.y1 - AREA.y0 - 40) / spanLat));
   const midLon = (Math.max(...lons) + Math.min(...lons)) / 2;
   const midLat = (Math.max(...lats) + Math.min(...lats)) / 2;
   // With one person, start them left of the pot rather than on it.
-  const goal = known.length === 1 ? { x: 70, y: 100 } : { x: (AREA.x0 + right) / 2, y: (AREA.y0 + AREA.y1) / 2 };
+  const goal = known.length === 1 ? { x: 50, y: 100 } : { x: (AREA.x0 + right) / 2, y: (AREA.y0 + AREA.y1) / 2 };
 
   let best: { view: WorldView; score: number } | null = null;
   for (const k of [fit, fit * 0.8, fit * 0.65].filter((v) => v >= MIN_K * 0.99)) {

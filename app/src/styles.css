@@ -423,8 +423,9 @@ h2 {
   container-type: inline-size;
 }
 
+/* The amount level with "Dollars", at the top of the row, as the first design had it. */
 .row.balance {
-  align-items: center;
+  align-items: flex-start;
 }
 
 .row.balance .label {
@@ -436,7 +437,9 @@ h2 {
   flex: 0 0 auto;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: clamp(16px, calc(90cqi / var(--chars, 6)), 28px);
+  font-size: clamp(17px, calc(96cqi / var(--chars, 6)), 26px);
+  line-height: 1.1;
+  margin-top: -2px;
   white-space: nowrap;
   text-align: right;
 }

@@ -11,7 +11,7 @@ test("with signed names the map shows the city, then who and what", () => {
 
 test("without names the first line is short enough for the map, and never says You twice", () => {
   assert.deepEqual(mapLines({ account: A, city: "", me: false, name: "account ending 8C9d" }, false, "account ending 8C9d · asked", "asked"), { city: "Ending 8C9d", sub: "asked", where: { city: undefined, timeZone: undefined } });
-  assert.deepEqual(mapLines({ account: A, city: "", me: true, name: "You" }, false, "You", ""), { city: "You", sub: "", where: { city: undefined, timeZone: undefined } });
+  assert.deepEqual(mapLines({ account: A, city: "", me: true, name: "You" }, false, "You", ""), { city: "You", sub: "", where: { city: undefined, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } });
   assert.ok("Ending 8C9d".length <= 12, "fits beside a city at the map's edge");
 });
 
@@ -28,4 +28,12 @@ test("your own circle says You, as the map does, never two characters of your ac
 test("the map is told where someone is: their city, else their time zone", () => {
   assert.deepEqual(mapLines({ account: A, city: "Lagos", me: false, name: "Idara", timeZone: "Africa/Lagos" }, true, "Idara", "").where, { city: "Lagos", timeZone: "Africa/Lagos" });
   assert.deepEqual(mapLines({ account: A, city: "", me: true, name: "You", timeZone: "Europe/London" }, true, "You", "").where, { city: undefined, timeZone: "Europe/London" });
+});
+
+test("the person looking is placed by this phone's time zone when the pot doesn't know theirs", () => {
+  const lagos = () => "Africa/Lagos";
+  assert.equal(mapLines({ account: A, city: "", me: true, name: "You", timeZone: "UTC" }, false, "You", "", lagos).where.timeZone, "Africa/Lagos");
+  assert.equal(mapLines({ account: A, city: "", me: true, name: "You", timeZone: "" }, false, "You", "", lagos).where.timeZone, "Africa/Lagos");
+  assert.equal(mapLines({ account: A, city: "", me: true, name: "You", timeZone: "Europe/London" }, true, "You", "", lagos).where.timeZone, "Europe/London", "the pot's own wins");
+  assert.equal(mapLines({ account: A, city: "", me: false, name: "x", timeZone: "UTC" }, false, "x", "", lagos).where.timeZone, undefined, "never someone else's from this phone");
 });

@@ -13,9 +13,12 @@ export function mapLines(
   named: boolean,
   withName: string,
   alone: string,
+  phoneZone: () => string = () => Intl.DateTimeFormat().resolvedOptions().timeZone,
 ): { city: string; sub: string; where: { city?: string; timeZone?: string } } {
-  // Where they are on the world: the city, else their phone's time zone (lib/worldmap.ts).
-  const where = { city: p.city || undefined, timeZone: p.timeZone || undefined };
+  // Where they are on the world: the city, else their time zone (lib/worldmap.ts). For the person
+  // looking, when the pot doesn't know theirs (no names, so "UTC" or none), this phone's own.
+  const known = p.timeZone && p.timeZone !== "UTC" ? p.timeZone : undefined;
+  const where = { city: p.city || undefined, timeZone: known ?? (p.me ? phoneZone() || undefined : undefined) };
   if (p.city) return { city: p.city, sub: withName, where };
   return { city: p.me ? copy.youCap : named ? p.name : copy.mapEnding(p.account), sub: alone, where };
 }
