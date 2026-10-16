@@ -78,7 +78,7 @@ export const en = {
 
   // Add test dollars
   addTestDollars: "Add test dollars",
-  addTestDollarsHint: "For trying NivPay out. These are test dollars, not real money, and they only work in test mode.",
+  addTestDollarsHint: "Test dollars, for trying NivPay. Not real money.",
   howMany: "How many",
   upToAtATime: (max: string) => `Up to ${max} at a time.`,
   stepPreparing: "Getting ready…",
@@ -90,8 +90,7 @@ export const en = {
   stepSending: "Adding test dollars…",
   added: (amount: string, seconds: string) => `Added ${amount} test dollars. Settled in ${seconds}s.`,
   tryAgain: "Try again",
-  claimAmountHint: (amount: string, ceiling: string) =>
-    `Adds ${amount} each time, once a minute at most. You can hold up to ${ceiling} this way.`,
+  claimAmountHint: (amount: string, ceiling: string) => `Adds ${amount}, once a minute at most, up to ${ceiling}.`,
   errClaimCooldown: (seconds: number) =>
     `Test dollars can be added once a minute, and someone just did. Try again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`,
   claimCooldownOver: "You can try again now.",

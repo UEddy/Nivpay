@@ -594,7 +594,7 @@ export function ChipInScreen(props: {
             onClick={() => setAmount((a) => (a === null ? a : a - stepSize >= unit ? a - stepSize : unit))}>
             <svg width="22" height="22" viewBox="0 0 24 24" className="ico" aria-hidden="true"><path d="M5 12h14" /></svg>
           </button>
-          <button type="button" className="step-amount" disabled={busy || done} onClick={() => setExact(true)} aria-label={copy.exactAmount}>
+          <button type="button" className={`step-amount${fmt(amount).length > 6 ? " long" : ""}`} disabled={busy || done} onClick={() => setExact(true)} aria-label={copy.exactAmount}>
             {fmt(amount)}
           </button>
           <button type="button" className="step-btn" aria-label={copy.more} disabled={busy || done} onClick={() => setAmount((a) => (a === null ? a : a + stepSize))}>
@@ -608,6 +608,7 @@ export function ChipInScreen(props: {
           <span className="chip">{copy.chipLeftover}</span>
         </div>
         <WhoControls state={state} maker={info.creator} me={me} labels={info.labelsOk ? info.people : []} contacts={contacts} />
+        {!info.labelsOk && <p className="hint">{copy.namesUnchecked}</p>}
         {citiesOn && props.pot.fragment && (
           <CityShare
             account={me}
@@ -634,7 +635,6 @@ export function ChipInScreen(props: {
         <button type="button" className="text-btn hide-pot" onClick={() => props.onHide(state.name)}>
           {copy.hideFromHome}
         </button>
-        {!info.labelsOk && <p className="hint">{copy.namesUnchecked}</p>}
         {props.pot.fragment && link && (
           <CopyLinkButton
             onCopy={async () => {

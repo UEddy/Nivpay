@@ -77,7 +77,7 @@ export const fr: Dictionary = {
   testDollarsLine: "Des dollars de test, pas du vrai argent.",
 
   addTestDollars: "Ajouter des dollars de test",
-  addTestDollarsHint: "Pour essayer NivPay. Ce sont des dollars de test, pas du vrai argent, et ils ne marchent qu'en mode test.",
+  addTestDollarsHint: "Des dollars de test, pour essayer NivPay. Pas du vrai argent.",
   howMany: "Combien",
   upToAtATime: (max: string) => `Jusqu'à ${max} à la fois.`,
   stepPreparing: "Préparation…",
@@ -89,8 +89,7 @@ export const fr: Dictionary = {
   stepSending: "Ajout des dollars de test…",
   added: (amount: string, seconds: string) => `${amount} de dollars de test ajoutés. Réglé en ${seconds} s.`,
   tryAgain: "Réessayer",
-  claimAmountHint: (amount: string, ceiling: string) =>
-    `Ajoute ${amount} à chaque fois, une fois par minute au plus. Vous pouvez détenir jusqu'à ${ceiling} de cette façon.`,
+  claimAmountHint: (amount: string, ceiling: string) => `Ajoute ${amount}, une fois par minute au plus, jusqu'à ${ceiling}.`,
   errClaimCooldown: (seconds: number) =>
     `Les dollars de test s'ajoutent une fois par minute, et quelqu'un vient de le faire. Réessayez dans ${seconds} ${s(seconds, "seconde", "secondes")}.`,
   claimCooldownOver: "Vous pouvez réessayer maintenant.",

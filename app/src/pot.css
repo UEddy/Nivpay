@@ -2420,3 +2420,56 @@ button.avatar {
   max-width: 100%;
   margin-left: auto;
 }
+
+/*
+ * Home and a pot's screen, tidied (the same spacing scale as Profile).
+ */
+/* A long name: two lines at most, its size easing down on a narrow phone. */
+.top h1 {
+  font-size: clamp(24px, 7.5vw, 30px);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* The balance: the amount under its label on every phone, so the card looks the same everywhere. */
+.row.balance {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.row.balance .balance-amount {
+  text-align: left;
+  font-size: clamp(26px, 8vw, 32px);
+}
+/* Two buttons share a line while their words fit; otherwise each takes its own. Words never break inside one. */
+.money-actions {
+  display: flex;
+  flex-wrap: wrap;
+}
+.money-actions .btn {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: calc(50% - 5px);
+  white-space: nowrap;
+}
+/* The test-mode strip keeps its distance from the line above. */
+.ramp-test {
+  margin-top: 12px;
+}
+/* A pot's amount that won't fit at full size, such as "100 $US", is shown smaller, never cut. */
+.step-amount.long {
+  font-size: clamp(26px, 9.5vw, 42px);
+}
+/* The rules, one to a line. */
+.chips {
+  flex-direction: column;
+  align-items: flex-start;
+}
+/* The story and Closing links, one above the other. */
+.foot-row {
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}

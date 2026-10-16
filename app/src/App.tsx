@@ -1058,7 +1058,7 @@ function Home(props: {
         <header className="top">
           <div>
             <h1>{shownName(account)}</h1>
-            {account.name && <p className="account-line">{copy.accountIdLine(account.address)}</p>}
+            {account.name && <p className="account-line">{copy.accountEndingTitle(account.address)}</p>}
             <TestModeBadge />
           </div>
           <div className="top-actions">
