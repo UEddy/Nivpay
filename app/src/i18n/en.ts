@@ -381,7 +381,7 @@ export const en = {
   lastReceipt: "Last receipt",
   copyAccountId: "Copy Account ID",
   usernameAt: (name: string) => `@${name}`,
-  voiceCannot: "Voice can't change settings or limits, add or trust contacts, or say yes to a pot's payment. It waits for 10 payments so you know how one looks first.",
+  voiceCannot: "Voice pays only someone you've had 10 payments with on this phone, sent or received, including one you paid them, and marked trusted. It can't change settings or limits, add or trust contacts, or say yes to a pot's payment.",
   requestsHow: "Each phone that turns this on gets its own key. Requests are sealed to it, so the server never sees the amount, the name or who asked.",
   showAgain: "Show again",
 
@@ -960,6 +960,7 @@ export const en = {
   voiceNoContacts: "No contacts yet. Save someone as a contact after paying them, then mark them here.",
   trustedForVoice: (name: string) => `${name}: trusted for voice`,
   voicePayOnceFirst: "(pay them once first)",
+  voicePaymentsWith: (n: number, of: number) => `(${n} of ${of} payments together)`,
   pushTitle: "NivPay",
   pushReceived: (amount: string) => `You received ${amount}.`,
   pushReceivedNoAmount: "You received money.",

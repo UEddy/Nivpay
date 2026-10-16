@@ -123,7 +123,10 @@ function potForRequest(link: AskLink): StoredPot {
  */
 function withTransition(change: () => void) {
   if (!prefersReducedMotion() && typeof document.startViewTransition === "function") {
-    document.startViewTransition(() => flushSync(change));
+    const t = document.startViewTransition(() => flushSync(change));
+    // A transition skipped because another began is fine: the change still happens. Nothing to report.
+    t.ready.catch(() => {});
+    t.finished.catch(() => {});
   } else change();
 }
 
@@ -796,9 +799,9 @@ function Home(props: {
           feed.start((_all, added) => {
             const arrivals = incomingFrom(added, owner).map((a) => ({ ...a, decimals: w.decimals, symbol: w.symbol }));
             if (!live || !arrivals.length) return;
-            // Each one counts towards turning voice on (lib/voice.ts).
+            // Each one counts towards voice paying that person (lib/voice.ts).
             const voice = new VoiceStore(localStorage, DEPLOYMENT, owner);
-            for (const a of arrivals) voice.saw(`${a.tx}:${a.logIndex}`);
+            for (const a of arrivals) voice.sawWith(a.from, `${a.tx}:${a.logIndex}`);
             setNotes(notesStore.update((s) => fromArrivals(s, arrivals, Date.now())));
           });
         }

@@ -369,7 +369,7 @@ export const fr: Dictionary = {
   lastReceipt: "Dernier reçu",
   copyAccountId: "Copier l'identifiant de compte",
   usernameAt: (name: string) => `@${name}`,
-  voiceCannot: "La voix ne peut pas changer les réglages ou les limites, ajouter des contacts ou leur faire confiance, ni dire oui à un paiement de cagnotte. Elle attend 10 paiements pour que vous sachiez à quoi ils ressemblent.",
+  voiceCannot: "La voix ne paie que quelqu'un avec qui ce téléphone a vu 10 paiements, envoyés ou reçus, dont un que vous lui avez fait, et que vous avez marqué de confiance. Elle ne peut pas changer les réglages ou les limites, ajouter des contacts ou leur faire confiance, ni dire oui à un paiement de cagnotte.",
   requestsHow: "Chaque téléphone qui l'active reçoit sa propre clé. Les demandes y sont scellées : le serveur ne voit ni le montant, ni le nom, ni qui demande.",
   showAgain: "Réafficher",
 
@@ -927,6 +927,7 @@ export const fr: Dictionary = {
   voiceNoContacts: "Pas encore de contacts. Enregistrez quelqu'un comme contact après l'avoir payé, puis cochez-le ici.",
   trustedForVoice: (name: string) => `${name} : de confiance pour la voix`,
   voicePayOnceFirst: "(payez-le une fois d'abord)",
+  voicePaymentsWith: (n: number, of: number) => `(${n} paiements sur ${of} ensemble)`,
   pushTitle: "NivPay",
   pushReceived: (amount: string) => `Vous avez reçu ${amount}.`,
   pushReceivedNoAmount: "Vous avez reçu de l'argent.",

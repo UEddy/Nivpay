@@ -1128,13 +1128,13 @@ background: it listens only after a tap, for one sentence, then stops.
   Mama's 60th". Anything else is "I didn't catch that", with examples. The
   button is hidden in French, Spanish and Portuguese until their parsers are
   tested.
-* **Who voice can pay**: only contacts marked "Trusted for voice" in
-  Profile, Voice, and only ones this phone has paid at least once; only pots
-  the person is already in. The spoken name is matched against those
-  contacts only; when two names are close, both are shown to pick from.
-* **Off until it has been seen working**: voice can be turned on only after
-  10 final transfers, sent or received, on this phone. Until then the switch
-  shows "x of 10" and says why.
+* **Who voice can pay**: only a contact marked "Trusted for voice" in
+  Profile, Voice, and only once this phone has seen 10 final payments with
+  that person, sent to them or received from them, including at least one
+  paid to them (the remembered pair). Until then the contact shows "x of 10
+  payments together" and can't be marked. Pots: only ones the person is
+  already in. The spoken name is matched against those contacts only; when
+  two names are close, both are shown to pick from.
 * **Safety.** Voice only fills in the screen. Send's confirm sheet reads back
   the words heard, the amount and the person, and the fingerprint is still
   needed every time; on a pot, the same read-back sits above the button, and

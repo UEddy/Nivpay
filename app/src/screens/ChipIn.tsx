@@ -25,7 +25,7 @@ import { PotMap, type Coin, type Layer, type MapPayee, type MapPerson } from "./
 import { WhoControls } from "./WhoControls.tsx";
 import { ContactStore } from "../lib/contacts.ts";
 import { ScanStore } from "../lib/discover.ts";
-import { matchName, VOICE_CAP, VoiceStore, withinVoiceCap, type VoiceCommand } from "../lib/voice.ts";
+import { matchName, VOICE_CAP, withinVoiceCap, type VoiceCommand } from "../lib/voice.ts";
 import { VoiceButton } from "./Voice.tsx";
 import { mapLines } from "./mapNames.ts";
 import { factsOf } from "./Request.tsx";
@@ -297,7 +297,6 @@ export function ChipInScreen(props: {
         spendEnded(me, write, outcome.kind);
         if (outcome.kind === "final") {
           rememberReceipt(write.address, write.hash);
-          new VoiceStore(localStorage, DEPLOYMENT, me).saw(write.hash);
           const next = await read();
           if (!alive.current) return;
           setMyCoin("end");

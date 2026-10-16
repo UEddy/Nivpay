@@ -5,7 +5,7 @@ import { ContactStore, PaidStore } from "../lib/contacts.ts";
 import { DEPLOYMENT } from "../lib/deployment.ts";
 import { language } from "../lib/locale.ts";
 import { listenOnce, SpeechError, speechAvailable } from "../lib/speech.ts";
-import { parseVoice, TRANSFERS_TO_UNLOCK, VoiceStore, type VoiceCommand } from "../lib/voice.ts";
+import { parseVoice, PAYMENTS_WITH_PERSON, VoiceStore, type VoiceCommand } from "../lib/voice.ts";
 import { HowThisWorks, NoticeLine, Sheet, type Notice } from "./ui.tsx";
 
 /** An account, for what this file shows; named so, since screen text is checked for words people mustn't see. */
@@ -109,10 +109,11 @@ export function VoiceButton(props: {
 }
 
 /**
- * Voice, in Profile: on or off, "x of 10" until this phone has seen ten final
- * transfers, and which contacts voice may pay. Only contacts already paid
- * once from this phone can be marked; voice can't mark them itself. Hidden in
- * other languages and where the browser can't do speech.
+ * Voice, in Profile: on or off, and which contacts voice may pay. A contact
+ * can be marked only once this phone has seen 10 final payments with them,
+ * sent or received, including one paid to them; until then it shows "x of
+ * 10". Voice can't mark anyone itself. Hidden in other languages and where
+ * the browser can't do speech.
  */
 export function VoiceSection(props: { account: Account }) {
   const store = useMemo(() => new VoiceStore(localStorage, DEPLOYMENT, props.account), [props.account]);
@@ -120,16 +121,13 @@ export function VoiceSection(props: { account: Account }) {
   if (!voiceOffered()) return null;
   const contacts = new ContactStore(localStorage, DEPLOYMENT, props.account).list();
   const paid = new PaidStore(localStorage, DEPLOYMENT, props.account);
-  const count = state.seen.length;
-  const unlocked = count >= TRANSFERS_TO_UNLOCK;
 
   return (
     <section className="settings-screen" aria-label={copy.voiceTitle}>
       <label className="check-row">
         <input
           type="checkbox"
-          checked={state.on && unlocked}
-          disabled={!unlocked}
+          checked={state.on}
           onChange={(e) => {
             store.setOn(e.target.checked);
             setState(store.get());
@@ -137,7 +135,6 @@ export function VoiceSection(props: { account: Account }) {
         />
         <span>{copy.voiceCommands}</span>
       </label>
-      {!unlocked && <p className="hint">{copy.voiceLocked(count, TRANSFERS_TO_UNLOCK)}</p>}
       <p className="hint">{copy.voiceWhatItDoes}</p>
       <HowThisWorks>
         <p className="hint">{copy.voiceCannot}</p>
@@ -147,13 +144,14 @@ export function VoiceSection(props: { account: Account }) {
         <p className="hint">{copy.voiceNoContacts}</p>
       ) : (
         contacts.map((c) => {
-          const canPay = paid.has(c.account);
+          const together = state.withPerson[c.account] ?? [];
+          const ready = together.length >= PAYMENTS_WITH_PERSON && paid.has(c.account);
           return (
             <label className="check-row" key={`voice-${c.account}`}>
               <input
                 type="checkbox"
-                checked={canPay && state.trusted.some((t) => t.toLowerCase() === c.account.toLowerCase())}
-                disabled={!canPay}
+                checked={ready && state.trusted.some((t) => t.toLowerCase() === c.account.toLowerCase())}
+                disabled={!ready}
                 onChange={(e) => {
                   store.setTrusted(c.account, e.target.checked);
                   setState(store.get());
@@ -161,7 +159,12 @@ export function VoiceSection(props: { account: Account }) {
               />
               <span>
                 {copy.trustedForVoice(c.name)}
-                {!canPay && <span className="meta"> {copy.voicePayOnceFirst}</span>}
+                {!ready && (
+                  <span className="meta">
+                    {" "}
+                    {together.length < PAYMENTS_WITH_PERSON ? copy.voicePaymentsWith(together.length, PAYMENTS_WITH_PERSON) : copy.voicePayOnceFirst}
+                  </span>
+                )}
               </span>
             </label>
           );

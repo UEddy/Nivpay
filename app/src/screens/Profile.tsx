@@ -12,7 +12,7 @@ import { namesOn } from "../lib/names.ts";
 import { photosEnabled, photoUrl } from "../lib/photo.ts";
 import { pushInfo, pushOnHere } from "../lib/pushLive.ts";
 import { latestReceipt, receiptUrl } from "../lib/receipts.ts";
-import { TRANSFERS_TO_UNLOCK, VoiceStore } from "../lib/voice.ts";
+import { VoiceStore } from "../lib/voice.ts";
 import type { HiddenPot } from "../lib/potSort.ts";
 import { LANGUAGE_CHOICES, profileGroups, type GroupId, type RowId } from "../lib/profile.ts";
 import { Avatar } from "./Avatar.tsx";
@@ -198,7 +198,7 @@ export function ProfilePage(props: {
     // Storage refused: the phone's language.
   }
   const voice = new VoiceStore(localStorage, DEPLOYMENT, me).get();
-  const voiceValue = voice.seen.length < TRANSFERS_TO_UNLOCK ? copy.limitOf(String(voice.seen.length), String(TRANSFERS_TO_UNLOCK)) : voice.on ? copy.valueOn : copy.valueOff;
+  const voiceValue = voice.on ? copy.valueOn : copy.valueOff;
   const notesValue = (pushOn && pushOnHere(me)) || (inboxOn && requestsHere) ? copy.valueOn : copy.valueOff;
 
   const rows: Record<RowId, ReactNode> = {

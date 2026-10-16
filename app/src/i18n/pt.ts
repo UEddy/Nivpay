@@ -370,7 +370,7 @@ export const pt: Dictionary = {
   lastReceipt: "Último recibo",
   copyAccountId: "Copiar ID da conta",
   usernameAt: (name: string) => `@${name}`,
-  voiceCannot: "A voz não muda ajustes nem limites, não adiciona nem confia em contatos e não diz sim a pagamento de vaquinha. Ela espera 10 pagamentos para você saber como um aparece.",
+  voiceCannot: "A voz só paga alguém com quem este celular viu 10 pagamentos, enviados ou recebidos, incluindo um que você fez a essa pessoa, e que você marcou como de confiança. Ela não muda ajustes nem limites, não adiciona nem confia em contatos e não diz sim a pagamento de vaquinha.",
   requestsHow: "Cada celular que ativa recebe sua própria chave. Os pedidos são lacrados nela: o servidor nunca vê o valor, o nome nem quem pediu.",
   showAgain: "Mostrar",
 
@@ -928,6 +928,7 @@ export const pt: Dictionary = {
   voiceNoContacts: "Ainda não há contatos. Salve alguém como contato depois de pagar e marque aqui.",
   trustedForVoice: (name: string) => `${name}: de confiança para a voz`,
   voicePayOnceFirst: "(pague uma vez antes)",
+  voicePaymentsWith: (n: number, of: number) => `(${n} de ${of} pagamentos juntos)`,
   pushTitle: "NivPay",
   pushReceived: (amount: string) => `Você recebeu ${amount}.`,
   pushReceivedNoAmount: "Você recebeu dinheiro.",

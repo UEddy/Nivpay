@@ -18,8 +18,11 @@ export const VOICE_DECIMALS = 6;
 const UNIT = 10n ** BigInt(VOICE_DECIMALS);
 /** The most one voice payment can be: $200. */
 export const VOICE_CAP = 200n * UNIT;
-/** Final transfers this phone has seen, sent or received, before voice can be turned on. */
-export const TRANSFERS_TO_UNLOCK = 10;
+/**
+ * Final payments this phone has seen between this account and one person,
+ * sent to them or received from them, before voice can pay that person.
+ */
+export const PAYMENTS_WITH_PERSON = 10;
 
 export type VoiceCommand = { kind: "send"; amount: bigint; name: string } | { kind: "put"; amount: bigint; pot: string };
 
@@ -208,11 +211,15 @@ export type VoiceState = {
   explained: boolean;
   /** Contacts marked Trusted for voice. */
   trusted: Address[];
-  /** Final transfers this phone has seen, sent or received, by id; only the count matters. */
-  seen: string[];
+  /**
+   * Final payments seen on this phone with each person, sent or received, by
+   * their account, as ids (transaction and log); only the count matters, up
+   * to PAYMENTS_WITH_PERSON each.
+   */
+  withPerson: Record<string, string[]>;
 };
 
-const FRESH: VoiceState = { on: false, explained: false, trusted: [], seen: [] };
+const FRESH: VoiceState = { on: false, explained: false, trusted: [], withPerson: {} };
 
 /** Voice, per deployment and account, on this phone. */
 export class VoiceStore {
@@ -222,18 +229,24 @@ export class VoiceStore {
   constructor(kv: KeyValue, deployment: string, account: Address) {
     if (!isAddress(account)) throw new Error("not an account");
     this.kv = kv;
-    this.key = `nivpay.voice.v1.${deployment}.${getAddress(account)}`;
+    this.key = `nivpay.voice.v2.${deployment}.${getAddress(account)}`;
   }
 
   get(): VoiceState {
     try {
       const raw = JSON.parse(this.kv.getItem(this.key) ?? "null") as Partial<VoiceState> | null;
       if (!raw || typeof raw !== "object") return FRESH;
+      const withPerson: Record<string, string[]> = {};
+      if (raw.withPerson && typeof raw.withPerson === "object") {
+        for (const [who, ids] of Object.entries(raw.withPerson)) {
+          if (isAddress(who) && Array.isArray(ids)) withPerson[getAddress(who)] = (ids as unknown[]).filter((x): x is string => typeof x === "string").slice(0, PAYMENTS_WITH_PERSON);
+        }
+      }
       return {
         on: raw.on === true,
         explained: raw.explained === true,
         trusted: Array.isArray(raw.trusted) ? (raw.trusted as unknown[]).filter((a): a is string => typeof a === "string" && isAddress(a)).map((a) => getAddress(a)) : [],
-        seen: Array.isArray(raw.seen) ? (raw.seen as unknown[]).filter((x): x is string => typeof x === "string").slice(-TRANSFERS_TO_UNLOCK) : [],
+        withPerson,
       };
     } catch {
       return FRESH;
@@ -248,32 +261,27 @@ export class VoiceStore {
     }
   }
 
-  /** A final transfer seen on this phone. Each id counts once. */
-  saw(id: string): void {
+  /** A final payment with this person, sent or received, seen on this phone. Each id counts once. */
+  sawWith(who: Address, id: string): void {
+    if (!isAddress(who)) return;
     const s = this.get();
-    if (s.seen.includes(id) || s.seen.length >= TRANSFERS_TO_UNLOCK) return;
-    this.set({ ...s, seen: [...s.seen, id] });
+    const key = getAddress(who);
+    const ids = s.withPerson[key] ?? [];
+    if (ids.includes(id) || ids.length >= PAYMENTS_WITH_PERSON) return;
+    this.set({ ...s, withPerson: { ...s.withPerson, [key]: [...ids, id] } });
   }
 
-  count(): number {
-    return this.get().seen.length;
+  /** Payments seen with this person so far, at most PAYMENTS_WITH_PERSON. */
+  countWith(who: Address): number {
+    return this.get().withPerson[getAddress(who)]?.length ?? 0;
   }
 
-  unlocked(): boolean {
-    return this.count() >= TRANSFERS_TO_UNLOCK;
-  }
-
-  /** Turning on needs the transfers first; turning off always works. */
-  setOn(on: boolean): boolean {
-    if (on && !this.unlocked()) return false;
+  setOn(on: boolean): void {
     this.set({ ...this.get(), on });
-    return true;
   }
 
-  /** On, and allowed. */
   active(): boolean {
-    const s = this.get();
-    return s.on && s.seen.length >= TRANSFERS_TO_UNLOCK;
+    return this.get().on;
   }
 
   explained(): void {
@@ -291,12 +299,19 @@ export class VoiceStore {
   }
 }
 
+/** Whether voice may pay this person: enough payments together, paid at least once, and marked Trusted for voice. */
+export function voiceCanPay(s: VoiceState, who: Address, paid: readonly Address[]): boolean {
+  const seen = s.withPerson[getAddress(who)]?.length ?? 0;
+  return seen >= PAYMENTS_WITH_PERSON && paid.some((p) => isAddressEqual(p, who)) && s.trusted.some((t) => isAddressEqual(t, who));
+}
+
 /**
- * Who voice may pay: contacts marked Trusted for voice that this phone has
- * paid before (the remembered pair: this name, this account).
+ * Who voice can pay: contacts marked Trusted for voice, that this phone has
+ * paid before (the remembered pair: this name, this account), and with whom
+ * it has seen PAYMENTS_WITH_PERSON final payments, sent or received.
  */
-export function payableByVoice<T extends { account: Address; name: string }>(contacts: readonly T[], trusted: readonly Address[], paid: readonly Address[]): T[] {
-  return contacts.filter((c) => trusted.some((t) => isAddressEqual(t, c.account)) && paid.some((p) => isAddressEqual(p, c.account)));
+export function payableByVoice<T extends { account: Address; name: string }>(contacts: readonly T[], s: VoiceState, paid: readonly Address[]): T[] {
+  return contacts.filter((c) => voiceCanPay(s, c.account, paid));
 }
 
 /** Whether an amount filled in by voice can be paid by voice. */

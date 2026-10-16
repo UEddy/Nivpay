@@ -62,7 +62,7 @@ const STEP_TEXT: Record<Step | "landing", string> = {
  * and counted towards turning voice on (lib/voice.ts). Amounts are in dollars.
  */
 function noteSent(me: Address, tx: string, to: Recipient, amount: bigint): void {
-  new VoiceStore(localStorage, DEPLOYMENT, me).saw(tx);
+  new VoiceStore(localStorage, DEPLOYMENT, me).sawWith(to.account, tx);
   try {
     new NotesStore(localStorage, DEPLOYMENT, me).update((s) => fromSent(s, { tx, to: to.account, toName: to.name, amount, decimals: 6, symbol: "$" }, Date.now()));
   } catch {
@@ -309,7 +309,7 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
     setResult(null);
     setVoicePick(null);
     if (!withinVoiceCap(cmd.amount)) return setResult({ tone: "bad", text: copy.errVoiceCap, code: ERROR_CODES.VOICE_OVER_CAP });
-    const can = payableByVoice(contacts, new VoiceStore(localStorage, DEPLOYMENT, me).get().trusted, paid.all());
+    const can = payableByVoice(contacts, new VoiceStore(localStorage, DEPLOYMENT, me).get(), paid.all());
     const found = matchName(cmd.name, can);
     if (found.length === 0) return setResult({ tone: "bad", text: copy.voiceNoSuchContact(cmd.name) });
     if (found.length > 1) return setVoicePick({ options: found, amount: cmd.amount, heard });

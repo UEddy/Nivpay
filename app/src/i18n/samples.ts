@@ -244,6 +244,7 @@ export const SAMPLES: Record<string, unknown[]> = {
   voiceReadBack: ["$50.00", "Mum", "send 50 dollars to Mum"],
   voiceReadBackPot: ["$20.00", "Birthday", "put 20 into Birthday"],
   voiceLocked: [3, 10],
+  voicePaymentsWith: [3, 10],
   trustedForVoice: ["Mum"],
   sendAccepted: ["15 Oct, 16:24:05"],
   sendTurnedDown: ["15 Oct, 16:24:09"],

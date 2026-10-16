@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { getAddress } from "viem";
-import { editDistance, matchName, parseVoice, payableByVoice, spokenKey, TRANSFERS_TO_UNLOCK, VOICE_CAP, VoiceStore, withinVoiceCap, wordsToNumber } from "./voice.ts";
+import { editDistance, matchName, parseVoice, PAYMENTS_WITH_PERSON, payableByVoice, spokenKey, VOICE_CAP, voiceCanPay, VoiceStore, withinVoiceCap, wordsToNumber } from "./voice.ts";
 
 const $ = (d: number) => BigInt(Math.round(d * 100)) * 10_000n;
 const amountOf = (heard: string) => {
@@ -116,12 +116,27 @@ test("names: matched only among the options, close ones shown together", () => {
   assert.equal(editDistance("kitten", "sitting"), 3);
 });
 
-test("voice pays only contacts marked trusted that this phone has paid before", () => {
-  const a = getAddress("0x1111111111111111111111111111111111111111");
-  const b = getAddress("0x2222222222222222222222222222222222222222");
-  const c = getAddress("0x3333333333333333333333333333333333333333");
-  const contacts = [{ account: a, name: "Mum" }, { account: b, name: "Idara" }, { account: c, name: "Ubong" }];
-  assert.deepEqual(payableByVoice(contacts, [a, b], [a, c]).map((x) => x.name), ["Mum"], "Idara never paid, Ubong not trusted");
+test("voice pays only someone with 10 payments together on this phone, paid at least once, and marked trusted", () => {
+  const kv = new Map<string, string>();
+  const store = { getItem: (k: string) => kv.get(k) ?? null, setItem: (k: string, v: string) => void kv.set(k, v) };
+  const me = getAddress("0x4444444444444444444444444444444444444444");
+  const mum = getAddress("0x1111111111111111111111111111111111111111");
+  const idara = getAddress("0x2222222222222222222222222222222222222222");
+  const ubong = getAddress("0x3333333333333333333333333333333333333333");
+  const contacts = [{ account: mum, name: "Mum" }, { account: idara, name: "Idara" }, { account: ubong, name: "Ubong" }];
+  const v = new VoiceStore(store, "ausd", me);
+  // Mum: 10 together, some sent and some received. Idara: only 9. Ubong: 10, all received, never paid.
+  for (let i = 0; i < PAYMENTS_WITH_PERSON; i++) v.sawWith(mum, `m${i}`);
+  for (let i = 0; i < PAYMENTS_WITH_PERSON - 1; i++) v.sawWith(idara, `i${i}`);
+  for (let i = 0; i < PAYMENTS_WITH_PERSON; i++) v.sawWith(ubong, `u${i}`);
+  for (const c of contacts) v.setTrusted(c.account, true);
+  const paid = [mum, idara];
+  assert.deepEqual(payableByVoice(contacts, v.get(), paid).map((c) => c.name), ["Mum"], "Idara 9 of 10; Ubong never paid");
+  v.setTrusted(mum, false);
+  assert.deepEqual(payableByVoice(contacts, v.get(), paid), [], "not trusted any more");
+  assert.equal(voiceCanPay(v.get(), idara, paid), false);
+  v.sawWith(idara, "i9");
+  assert.equal(voiceCanPay(v.get(), idara, paid), true, "the tenth payment with Idara");
 });
 
 test("each voice payment is at most $200", () => {
@@ -131,26 +146,22 @@ test("each voice payment is at most $200", () => {
   assert.ok(!withinVoiceCap(0n));
 });
 
-test("voice turns on only after 10 final transfers seen on this phone, each counted once", () => {
+test("payments are counted per person, each once, and the switch is per account", () => {
   const kv = new Map<string, string>();
   const store = { getItem: (k: string) => kv.get(k) ?? null, setItem: (k: string, v: string) => void kv.set(k, v) };
   const me = getAddress("0x4444444444444444444444444444444444444444");
+  const mum = getAddress("0x1111111111111111111111111111111111111111");
   const v = new VoiceStore(store, "ausd", me);
-  assert.equal(v.setOn(true), false, "not yet");
-  for (let i = 0; i < TRANSFERS_TO_UNLOCK - 1; i++) v.saw(`tx${i}`);
-  v.saw("tx0");
-  assert.equal(v.count(), TRANSFERS_TO_UNLOCK - 1);
-  assert.equal(v.setOn(true), false);
-  v.saw("tx9");
-  assert.equal(v.count(), TRANSFERS_TO_UNLOCK);
-  assert.equal(v.active(), false, "unlocked is not on");
-  assert.equal(v.setOn(true), true);
-  assert.equal(v.active(), true);
-  v.setTrusted(getAddress("0x1111111111111111111111111111111111111111"), true);
-  assert.ok(v.isTrusted(getAddress("0x1111111111111111111111111111111111111111")));
-  assert.equal(new VoiceStore(store, "ausd", getAddress("0x5555555555555555555555555555555555555555")).active(), false, "per account");
-  assert.equal(v.setOn(false), true);
+  v.sawWith(mum, "tx0");
+  v.sawWith(mum.toLowerCase() as typeof mum, "tx0");
+  assert.equal(v.countWith(mum), 1, "the same payment counts once");
+  for (let i = 1; i < PAYMENTS_WITH_PERSON + 5; i++) v.sawWith(mum, `tx${i}`);
+  assert.equal(v.countWith(mum), PAYMENTS_WITH_PERSON, "kept at 10");
+  assert.equal(v.countWith(getAddress("0x2222222222222222222222222222222222222222")), 0, "someone else starts at 0");
   assert.equal(v.active(), false);
+  v.setOn(true);
+  assert.equal(v.active(), true, "the switch itself has no wait: each person does");
+  assert.equal(new VoiceStore(store, "ausd", getAddress("0x5555555555555555555555555555555555555555")).active(), false, "per account");
   kv.set([...kv.keys()][0]!, "{");
-  assert.equal(v.count(), 0, "damaged storage starts over, locked");
+  assert.equal(v.countWith(mum), 0, "damaged storage starts over");
 });
