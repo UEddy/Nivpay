@@ -2092,3 +2092,10 @@ button.avatar {
     opacity: 0.6;
   }
 }
+
+/* Get help: the last answers to this phone's sends. */
+.recent-sends {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}

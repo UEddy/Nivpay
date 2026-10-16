@@ -806,6 +806,12 @@ export const en = {
   supportCodeLine: (code: number) => `Last code shown: Code ${code}`,
   supportNoCode: "Last code shown: none",
   supportAccountLine: (id: string) => `Account ID: ${id}`,
+  supportSendsLine: "Recent sends from this phone:",
+  recentSends: "Recent sends from this phone",
+  recentSendsHint: "What came back each time this phone sent a request. With the Account ID ticked, these go in the message too, so support can see what happened.",
+  sendAccepted: (when: string) => `${when}: taken`,
+  sendTurnedDown: (when: string) => `${when}: turned down`,
+  sendNoAnswer: (when: string) => `${when}: no answer`,
 
   // Deleting a draft (lib/draft.ts deleteRefusal)
   deleteDraft: "Delete draft",

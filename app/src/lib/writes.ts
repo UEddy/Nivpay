@@ -111,11 +111,47 @@ export async function assertNoWriteInFlight(store: WriteStore, address: Address)
   if (await store.get(address)) throw new WriteInFlightError();
 }
 
+/**
+ * What the node said to one broadcast, for Get help (lib/sendLog.ts): when,
+ * which transaction, and a short result. A record only: nothing here reads it
+ * back, and nothing secret is in it (a hash is public, and so is the raw
+ * transaction, which is not kept here).
+ */
+export type SendAnswer = { address: Address; hash: Hex; at: number; result: string };
+
+let answerLog: ((a: SendAnswer) => void) | null = null;
+/** Where answers go. Set once at start (main.tsx); none in tests unless a test sets one. */
+export function onSendAnswer(log: ((a: SendAnswer) => void) | null): void {
+  answerLog = log;
+}
+
+/** A short, plain result: "accepted", or "refused" or "no answer" with the first line of the error. */
+export function answerResult(error: unknown | null): string {
+  if (error === null) return "accepted";
+  const kind = error instanceof BroadcastRefused ? "refused" : "no answer";
+  const inner = error instanceof BroadcastRefused ? error.cause : error;
+  const e = inner as { shortMessage?: unknown; message?: unknown } | null;
+  const text = String((typeof e?.shortMessage === "string" && e.shortMessage) || (typeof e?.message === "string" && e.message) || "").split(/\r?\n/u)[0]!.slice(0, 120);
+  return text ? `${kind}: ${text}` : kind;
+}
+
+/** Records one answer. Never throws and never waits: recording can't change what happens next. */
+function record(write: { address: Address; hash: Hex }, error: unknown | null, now: number): void {
+  try {
+    answerLog?.({ address: write.address, hash: write.hash, at: now, result: answerResult(error) });
+  } catch {
+    // A record only.
+  }
+}
+
 /** Saves the record, then broadcasts. A failed broadcast is not an error: the record is tracked by hash. */
 export async function submit(store: WriteStore, chain: WriteChain, write: PendingWrite): Promise<void> {
   await assertNoWriteInFlight(store, write.address);
   await store.put(write);
-  await chain.sendRawTransaction(write.raw).catch(() => undefined);
+  await chain.sendRawTransaction(write.raw).then(
+    () => record(write, null, Date.now()),
+    (e: unknown) => record(write, e, Date.now()),
+  );
 }
 
 /**
@@ -160,8 +196,8 @@ export async function followToFinality(
       if (now - lastBroadcast >= timing.rebroadcastEveryMs) {
         lastBroadcast = now;
         const answer = await chain.sendRawTransaction(write.raw).then(
-          () => "taken" as const,
-          (e: unknown) => (e instanceof BroadcastRefused ? ("refused" as const) : ("unanswered" as const)),
+          () => (record(write, null, Date.now()), "taken" as const),
+          (e: unknown) => (record(write, e, Date.now()), e instanceof BroadcastRefused ? ("refused" as const) : ("unanswered" as const)),
         );
         if (answer === "refused") refusals += 1;
         if (answer === "taken") refusals = 0;
@@ -225,7 +261,10 @@ export async function replace(store: WriteStore, chain: WriteChain, replacement:
     throw new Error(`a replacement must reuse nonce ${old.nonce}, got ${replacement.nonce}`);
   }
   await store.put({ ...replacement, replaceable: false });
-  await chain.sendRawTransaction(replacement.raw).catch(() => undefined);
+  await chain.sendRawTransaction(replacement.raw).then(
+    () => record(replacement, null, Date.now()),
+    (e: unknown) => record(replacement, e, Date.now()),
+  );
 }
 
 /** Nonce for a brand new write. Only valid when no write is pending for the account. */

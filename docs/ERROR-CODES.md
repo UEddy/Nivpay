@@ -88,12 +88,12 @@ a call before anything is signed, so these send nothing.
 | 41 | Signing the transaction failed after the passkey step. | Browser console |
 | 42 | Saving the signed request to IndexedDB failed, so it was never broadcast. | Storage settings, private browsing |
 | 50 | The request was broadcast, but following it to finality failed. The app resumes on reload. | The pending write's hash |
-| 51 | Not in any block after 45 seconds of the network answering, and its nonce is still unused at finalized. Time offline doesn't count: a request signed or sent while offline is sent again, the same bytes, when the phone is back. Nothing moved; it can be retried on the same nonce. | The pending write |
+| 51 | Not in any block after 45 seconds of the network answering, and its nonce is still unused at finalized. Time offline doesn't count: a request signed or sent while offline is sent again, the same bytes, when the phone is back. Nothing moved; it can be retried on the same nonce. | The pending write; Get help, Recent sends from this phone (taken each time means the node accepted it and it was dropped) |
 | 52 | Included and finalized, but reverted. Nothing moved. | The transaction receipt |
 | 53 | Its nonce was used by a different transaction. Nothing of this request moved. | The account's transactions |
 | 54 | A retry was refused because the earlier attempt may still go through. Wait. | The pending write |
 | 55 | Try again was pressed but there was nothing stuck to retry. | |
-| 56 | The node answered the broadcast and turned it down twice in a row (a JSON-RPC error other than a rate limit, an internal error, "already known" or "nonce too low"), and its nonce is still unused at finalized. Nothing moved; it can be retried on the same nonce. Shown when making a pot, paying from a pot, closing it and taking a share out; elsewhere (adding test dollars, putting money in, sending) it shows as 51. | The pending write; the RPC's error for its raw bytes |
+| 56 | The node answered the broadcast and turned it down twice in a row (a JSON-RPC error other than a rate limit, an internal error, "already known" or "nonce too low"), and its nonce is still unused at finalized. Nothing moved; it can be retried on the same nonce. Shown when making a pot, paying from a pot, closing it, taking a share out, and claiming, changing or letting go of a username; elsewhere (adding test dollars, putting money in, sending) it shows as 51. | The pending write; the RPC's error for its raw bytes |
 
 ## Adding test dollars on the AUSD deployment (Agora's faucet)
 

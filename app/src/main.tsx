@@ -21,6 +21,15 @@ const { App } = await import("./App.tsx");
 // Each of this phone's writes, once final, is told to /api/notify (lib/notify.ts).
 const [{ onFinal }, { notifyTx }, { DEPLOYMENT }] = await Promise.all([import("./lib/receipts.ts"), import("./lib/notify.ts"), import("./lib/deployment.ts")]);
 onFinal((tx) => void notifyTx(DEPLOYMENT, tx));
+// Each broadcast's answer is kept for Get help (lib/sendLog.ts); a record only.
+const [{ onSendAnswer }, { logSend }] = await Promise.all([import("./lib/writes.ts"), import("./lib/sendLog.ts")]);
+onSendAnswer((a) => {
+  try {
+    logSend(localStorage, a);
+  } catch {
+    // Storage refused: nothing kept.
+  }
+});
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");

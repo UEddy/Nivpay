@@ -778,6 +778,12 @@ export const fr: Dictionary = {
   supportCodeLine: (code: number) => `Dernier code affiché : Code ${code}`,
   supportNoCode: "Dernier code affiché : aucun",
   supportAccountLine: (id: string) => `Identifiant de compte : ${id}`,
+  supportSendsLine: "Derniers envois depuis ce téléphone :",
+  recentSends: "Derniers envois depuis ce téléphone",
+  recentSendsHint: "Ce qui est revenu à chaque envoi de ce téléphone. Avec l'identifiant de compte coché, ils vont aussi dans le message, pour que l'assistance voie ce qui s'est passé.",
+  sendAccepted: (when: string) => `${when} : pris en charge`,
+  sendTurnedDown: (when: string) => `${when} : refusé`,
+  sendNoAnswer: (when: string) => `${when} : pas de réponse`,
 
   deleteDraft: "Supprimer le brouillon",
   deleteDraftTitle: "Supprimer ce brouillon ?",

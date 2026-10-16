@@ -779,6 +779,12 @@ export const pt: Dictionary = {
   supportCodeLine: (code: number) => `Último código mostrado: Código ${code}`,
   supportNoCode: "Último código mostrado: nenhum",
   supportAccountLine: (id: string) => `ID da conta: ${id}`,
+  supportSendsLine: "Últimos envios deste celular:",
+  recentSends: "Últimos envios deste celular",
+  recentSendsHint: "O que voltou cada vez que este celular enviou um pedido. Com o ID da conta marcado, eles vão também na mensagem, para o suporte ver o que aconteceu.",
+  sendAccepted: (when: string) => `${when}: aceito`,
+  sendTurnedDown: (when: string) => `${when}: recusado`,
+  sendNoAnswer: (when: string) => `${when}: sem resposta`,
 
   deleteDraft: "Excluir rascunho",
   deleteDraftTitle: "Excluir este rascunho?",

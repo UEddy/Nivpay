@@ -1097,6 +1097,21 @@ worker (`app/api/push`, `app/api/notify`, `app/public/sw.js`).
 * **Hidden until `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` and a
   Blob store are set.** The private key lives only in Vercel's settings.
 
+## Get help: what came back from each send
+
+Each time this phone broadcasts a request, the node's answer is kept: the
+time, the transaction hash, and a short result ("accepted", or "refused" or
+"no answer" with the first line of the reason). The last 5 per account are
+shown under Get help in plain words (taken, turned down, no answer), and go
+into the support message, in full, only with "include my Account ID" ticked,
+since a transaction leads to the account. A record only: `writes.ts` hands
+each answer to a recorder set at start and never reads it back, so sending,
+retrying and nonces work exactly as before (`writes.answers.test.ts` runs
+every case with and without a recorder, and with one that throws, and gets
+the same calls and outcome). Nothing secret is kept, not even the raw
+transaction. This is what tells a dropped request (Code 51: accepted, then
+never included) from a refused one (Code 56).
+
 ## Voice commands
 
 A microphone on Send and on a pot's screen (`app/src/lib/voice.ts`,

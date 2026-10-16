@@ -23,7 +23,13 @@ export function supportWhatsApp(raw: string | undefined): string | null {
   return /^[1-9]\d{7,14}$/.test(digits) ? digits : null;
 }
 
-export type SupportFacts = { version: string; code: number | null; accountId: string | null };
+export type SupportFacts = {
+  version: string;
+  code: number | null;
+  accountId: string | null;
+  /** The last answers to this account's sends (lib/sendLog.ts), one line each; only with the Account ID. */
+  sends?: string[];
+};
 
 /** The words written in for support. */
 export function supportBody(f: SupportFacts): string {
@@ -35,6 +41,7 @@ export function supportBody(f: SupportFacts): string {
     copy.supportVersionLine(f.version),
     f.code === null ? copy.supportNoCode : copy.supportCodeLine(f.code),
     ...(f.accountId ? [copy.supportAccountLine(f.accountId)] : []),
+    ...(f.accountId && f.sends?.length ? [copy.supportSendsLine, ...f.sends] : []),
   ].join("\n");
 }
 

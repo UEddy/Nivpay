@@ -172,7 +172,8 @@ export function useMyUsername(me: Address) {
           setResult({ tone: "ok", text: what.kind === "claim" ? copy.usernameClaimed(what.name) : copy.usernameLetGoDone(what.name) });
         } else if (outcome.kind === "stuck") {
           setStuck(what);
-          setResult({ tone: "bad", text: copy.stuck, code: ERROR_CODES.STUCK });
+          // Turned down twice by the node (56), or not in any block in time (51), as the other screens say it.
+          setResult(outcome.refused ? { tone: "bad", text: copy.requestTurnedDown, code: ERROR_CODES.REFUSED } : { tone: "bad", text: copy.stuck, code: ERROR_CODES.STUCK });
         } else {
           setStuck(null);
           setResult({ tone: "bad", text: copy.usernameDidNotGoThrough, code: outcome.kind === "reverted" ? ERROR_CODES.REVERTED : ERROR_CODES.SUPERSEDED });
