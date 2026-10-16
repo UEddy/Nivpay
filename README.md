@@ -1187,6 +1187,16 @@ label takes the side of its dot that covers least (`lib/worldmap.ts`).
 Someone with no known place sits in one of the map's usual spots, not
 somewhere they may not be.
 
+The world can be moved by hand under the pot, which stays put: dragged with
+a finger or the mouse, round the world east and west as on a globe, and
+zoomed with two fingers, a double tap, Ctrl and the wheel, or the − and +
+buttons under the pot's amount, from the whole world in to two cities in one
+country, so people in one country come apart. Each person stays at their
+city as it moves; one the pot covers, or past the map's edge, is hidden, and
+their route still points the way. The button beside them goes back to the
+map that frames everyone. Up and down on the map still scrolls the page
+until it is zoomed in.
+
 ## Display names
 
 The name shown at the top of Home and on Profile is the person's display
@@ -2156,6 +2166,115 @@ Sources:
 
 * https://rampnetwork.com/blog/monad-live-on-ramp-network
 * https://docs.monad.xyz/tooling-and-infra/onramps
+
+## Plan: mobile apps for Android and iOS
+
+Today NivPay is a web app that installs to the home screen (Install the app,
+in Profile). The plan is a store app on both phones, built around the same
+code, so the two never drift apart and every fix ships to everyone at once.
+
+**What must not change.** Passkeys are tied to `nivpay.vercel.app`, and each
+account is derived from its passkey. Both apps keep that hostname as the
+passkey's site and keep the derivation exactly as it is, so the same
+fingerprint opens the same account in the browser, in the Android app and in
+the iPhone app. An app that made its own passkeys under another name would
+show people an empty account. This is a hard rule, not a preference.
+
+**Android first, as a Trusted Web Activity.** The Android app is the web app
+running full screen in Chrome (a Trusted Web Activity, packaged with
+Bubblewrap), listed on Google Play. Chrome does the passkeys, so they work as
+they do now, and Web Push, the service worker and the map all carry over.
+The site proves the app is its own through `/.well-known/assetlinks.json`.
+Most of NivPay's first people use Android (it was tested by hand on a Galaxy
+S10), so this comes first.
+
+1. A Play Console account, the app's signing key kept offline, and
+   `assetlinks.json` served by Vercel with that key's fingerprint.
+2. A Bubblewrap project in the repository, built in CI, with the app's
+   icons, name and colours from `manifest.webmanifest`.
+3. An internal test track on the team's own phones, then closed testing,
+   then Play's review. The listing says plainly that it holds dollars as
+   AUSD and that payouts need the pot's yeses.
+
+**iPhone next, as a thin native shell.** On iOS, Apple doesn't allow a
+store app that is only a website, and Web Push works only after the web app
+is added to the home screen (iOS 16.4 or later). The iPhone app is a small
+native shell (Capacitor) that loads the same screens and adds what a store
+app needs:
+
+* **Passkeys** through the shell, with Associated Domains
+  (`webcredentials:nivpay.vercel.app` and `/.well-known/apple-app-site-association`),
+  so the passkeys people already made on an iPhone in Safari still work.
+  [CHECK] that the web view hands WebAuthn to the system with these
+  entitlements on every iOS version supported, before anything else is built.
+* **Notifications** through Apple's push service, sent by `/api/notify`
+  beside Web Push, with the same per-kind switches and the same privacy
+  (amounts on the lock screen off by default).
+* **Face ID** is the passkey's own prompt; the app adds no second lock.
+
+Then TestFlight with the team and early pot makers, and App Review. Apple's
+rules on crypto apps and on payments are read before submitting, and the
+review notes explain that NivPay moves AUSD on Monad and takes no payment
+inside the app. [CHECK] the current App Review Guidelines (3.1 and 5.x) at
+the time of submission.
+
+**What stays the same everywhere.** One codebase, one deploy. The apps load
+the deployed screens, so a fix on the web reaches both apps without a store
+update; only the shells themselves (icons, entitlements, push keys) go
+through review. The four languages, the error codes and Get help are
+unchanged.
+
+## Plan: mainnet launch
+
+NivPay runs on Monad testnet today, with test AUSD and TESTUSD. Mainnet is a
+launch of the AUSD instance only (see [Two instances](#two-instances));
+TESTUSD never goes to a mainnet. It happens in stages, each one opened only
+when the one before held up.
+
+**Before anything is deployed**
+
+1. **An external audit** of `NivPayPots` and `NivPayNames`, with every
+   finding fixed or answered in the open, and the invariant, adversarial and
+   mutation suites (see [Tests](#tests)) run again on the audited code.
+2. **The decisions left for mainnet** made and written down: usernames'
+   squatting and disputes (see
+   [Disputes, and squatting](#disputes-and-squatting-decisions-before-mainnet)),
+   and whether payouts wait 24 hours (see [Future work](#future-work)), which
+   would mean a new contract version before launch rather than after.
+3. **Keys.** The deployer key and the fee recipient on a hardware wallet or
+   a multisig, never a keystore on a laptop. Nobody holds a key that can move
+   people's money: the contract has no owner and no admin, and that is kept.
+4. **Fees for people's requests.** The testnet gas grant from `/api/fund` is
+   replaced by a sponsor that pays only for NivPay's own actions on NivPay's
+   own contracts (see [Future work](#future-work)), with a budget and alerts.
+5. **Money partners signed.** At least the direct route (Ramp) and one local
+   route for Nigeria live, with their checks on sanctions and identity, and
+   each partner's fee and rate shown on the confirm sheet (see
+   [Mainnet plan: money in and out](#mainnet-plan-money-in-and-out-in-any-currency)).
+
+**Launch**
+
+6. Deploy with `script/Deploy.s.sol` to Monad mainnet: dry run, broadcast,
+   verify, the receipts committed, and the addresses added to
+   [Contract addresses](#contract-addresses), where the docs test checks them
+   against the app.
+7. Build the app on the mainnet instance at the same hostname,
+   `nivpay.vercel.app`, so people's passkeys and accounts carry over. Add
+   test dollars and the Test mode badge go away on that build; nothing else
+   in the screens changes.
+8. **Invite only first**, with low limits in the app: a lower default daily
+   limit and a cap on what the app lets one pot take in, both raised as weeks
+   pass without trouble. The contract itself stays as deployed, with no
+   limits to change. The first pots are the team's own and people they know.
+9. A bug bounty, open from launch day, and monitoring of the contracts'
+   events and the API's errors. NivPay can't pause or change the contract
+   (it has no owner), so the written plan for trouble is what NivPay does
+   control: the fee sponsor and the money partners' screens can be switched
+   off, the app can show a notice, and each pot's deciders can pause their
+   own pot, which stops pour-ins and payments but never exits.
+
+**Then open to everyone**, the store apps released on the mainnet build, and
+the limits set from what the invite-only weeks showed.
 
 ## Future work
 
