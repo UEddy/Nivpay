@@ -10,6 +10,7 @@ import { idbFeedStore } from "./idb.ts";
 import { verifyLabels, type PotLink } from "./invites.ts";
 import { readClient } from "./rpc.ts";
 import { shownText32 } from "./text32.ts";
+import { lastOf, PotLastStore } from "./potLast.ts";
 
 /** A pot as opened from its link, checked against its PotCreated event. */
 export type PotInfo = {
@@ -144,11 +145,29 @@ function rpcSource(potId: bigint): FeedSource {
 }
 
 export function potFeed(potId: bigint, fromBlock: bigint): PotFeed {
-  return new PotFeed(rpcSource(potId), idbFeedStore(`${POTS}:${potId}`), fromBlock, {
+  const feed = new PotFeed(rpcSource(potId), idbFeedStore(`${POTS}:${potId}`), fromBlock, {
     pageSize: LOG_PAGE_BLOCKS,
     parallel: 4,
     everyMs: 1_000,
   });
+  // Whoever follows the pot, the Pots tab learns its last event too (lib/potLast.ts).
+  const start = feed.start.bind(feed);
+  feed.start = (onEvents, onError) =>
+    start((all, fresh, progress) => {
+      rememberLast(potId, all);
+      onEvents(all, fresh, progress);
+    }, onError);
+  return feed;
+}
+
+/** Keeps a pot's last event for its row, from events already read. Never throws. */
+export function rememberLast(potId: bigint, events: PotEvent[]): void {
+  try {
+    const last = lastOf(events);
+    if (last) new PotLastStore(localStorage, DEPLOYMENT).put(potId.toString(), last);
+  } catch {
+    // Storage refused: the row shows what the pot holds.
+  }
 }
 
 /** Total each account has put in, from Funded events. */

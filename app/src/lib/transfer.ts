@@ -81,6 +81,20 @@ export function incomingSource(asset: Address, me: Address, finalized: () => Pro
   };
 }
 
+/** Transfers of `asset` out of `me`, from finalized blocks only, in the feed's shape (History on Home). */
+export function outgoingSource(asset: Address, me: Address, finalized: () => Promise<bigint>, getLogs: GetLogs): FeedSource {
+  const fromTopic = pad(me, { size: 32 });
+  return {
+    finalized,
+    async logs(from, to) {
+      const raw = await getLogs({ address: asset, fromBlock: numberToHex(from), toBlock: numberToHex(to), topics: [TRANSFER_TOPIC, fromTopic, null] });
+      return parseEventLogs({ abi: ERC20_TRANSFER_ABI, eventName: "Transfer", logs: raw })
+        .filter((l) => isAddressEqual(l.args.from, me))
+        .map((l) => ({ name: "Transfer", block: l.blockNumber, logIndex: l.logIndex, tx: l.transactionHash, args: l.args as Record<string, unknown> }));
+    },
+  };
+}
+
 /** About ten minutes of blocks. Payments older than this when the view opens aren't read back from history. */
 export const RECEIVE_BACKLOG_BLOCKS = 2_000n;
 

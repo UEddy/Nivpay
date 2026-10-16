@@ -6,13 +6,16 @@ import { CredentialStore } from "./lib/credentials.ts";
 import { AccountStore, cleanName, NAME_MAX, shownName, type StoredAccount } from "./lib/accounts.ts";
 import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
-import { AUSD, AUSD_FAUCET, CTK, LOG_PAGE_BLOCKS, TESTUSD } from "./lib/config.ts";
+import { AUSD, AUSD_FAUCET, CTK, LOG_PAGE_BLOCKS, POTS_AUSD, POTS_TESTUSD, SETTLEMENT_PAIR, TESTUSD } from "./lib/config.ts";
 import { DEPLOYMENT, POTS, POTS_DEPLOY_BLOCK } from "./lib/deployment.ts";
 import { DraftStore, newDraft } from "./lib/draft.ts";
 import { findPots, ScanStore, type FoundPot, type Role, type ScanState } from "./lib/discover.ts";
 import { askReader, creatorReader, fundingsReader, makerReader, potsReader } from "./lib/discoverLive.ts";
 import { FundingsCursor, memberCache, readFundings } from "./lib/fundings.ts";
 import { ContactStore, nameOnPhone } from "./lib/contacts.ts";
+import { BlockTimes, timesFor } from "./lib/blockTimes.ts";
+import { lastLine, PotLastStore, timeAgo, type PotLast } from "./lib/potLast.ts";
+import { rememberLast } from "./lib/potview.ts";
 import { learnPotMakers, PotChoiceStore, PotMakers, sortFound, type HiddenPot, type SortFacts } from "./lib/potSort.ts";
 import { REASONS, sendReport, type Reason } from "./lib/report.ts";
 import { AskScanStore, findOpenRequests, learnPotBlocks, needingMyYes, PotBlocks, type AskScan } from "./lib/waiting.ts";
@@ -30,7 +33,9 @@ import { PotStore, rememberPotLink, type StoredPot } from "./lib/potstore.ts";
 import type { Step } from "./lib/send.ts";
 import { latestReceipt, receiptUrl, rememberReceipt } from "./lib/receipts.ts";
 import { CURRENCY_LABEL } from "./lib/settle.ts";
-import { incomingFrom, incomingSource, SEND_LABEL, withFloor } from "./lib/transfer.ts";
+import { incomingFrom, incomingSource, outgoingSource, SEND_LABEL, withFloor } from "./lib/transfer.ts";
+import { historyFrom, type TransferFeed } from "./lib/history.ts";
+import { readDesk } from "./lib/rampDesk.ts";
 import { PotFeed } from "./lib/feed.ts";
 import { idbFeedStore } from "./lib/idb.ts";
 import { LimitStore, settle } from "./lib/limits.ts";
@@ -56,6 +61,7 @@ const CloseScreen = lazy(() => reloadOnce(() => import("./screens/Close.tsx")).t
 const MoneyScreen = lazy(() => reloadOnce(() => import("./screens/Money.tsx")).then((m) => ({ default: m.MoneyScreen })));
 const HelpSheet = lazy(() => reloadOnce(() => import("./screens/Help.tsx")).then((m) => ({ default: m.HelpSheet })));
 const NotesSheet = lazy(() => reloadOnce(() => import("./screens/Notes.tsx")).then((m) => ({ default: m.NotesSheet })));
+const HistoryCard = lazy(() => reloadOnce(() => import("./screens/History.tsx")).then((m) => ({ default: m.HistoryCard })));
 const ProfilePage = lazy(() => reloadOnce(() => import("./screens/Profile.tsx")).then((m) => ({ default: m.ProfilePage })));
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
@@ -771,6 +777,20 @@ function Home(props: {
     },
     [owner, notesStore],
   );
+  // History (lib/history.ts): the same feeds' events in, and money going out.
+  const [historyIn, setHistoryIn] = useState<Record<string, TransferFeed>>({});
+  const [historyOut, setHistoryOut] = useState<TransferFeed | null>(null);
+  const [desk, setDesk] = useState<Address | null>(null);
+  useEffect(() => {
+    let live = true;
+    if (DEPLOYMENT === "ausd")
+      void readDesk()
+        .then((d) => live && setDesk(d.desk))
+        .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
   // Payments coming in, read like Receive reads them but less often, from where the list started.
   useEffect(() => {
     let live = true;
@@ -796,7 +816,8 @@ function Home(props: {
           const source = incomingSource(w.asset, owner, finalizedBlock, (params) => readClient.request({ method: "eth_getLogs", params: [params] }) as Promise<Log[]>);
           const feed = new PotFeed(source, withFloor(idbFeedStore(`notes-in:${w.asset}:${owner}`), floor), floor, { pageSize: LOG_PAGE_BLOCKS, parallel: 2, everyMs: 15_000 });
           feeds.push(feed);
-          feed.start((_all, added) => {
+          feed.start((all, added) => {
+            if (live) setHistoryIn((h) => ({ ...h, [w.asset]: { events: all, decimals: w.decimals, symbol: w.symbol } }));
             const arrivals = incomingFrom(added, owner).map((a) => ({ ...a, decimals: w.decimals, symbol: w.symbol }));
             if (!live || !arrivals.length) return;
             // Each one counts towards voice paying that person (lib/voice.ts).
@@ -805,6 +826,15 @@ function Home(props: {
             setNotes(notesStore.update((s) => fromArrivals(s, arrivals, Date.now())));
           });
         }
+        // Money going out, for History only, from the same block.
+        const out = new PotFeed(
+          outgoingSource(DOLLAR_FOR_NOTES, owner, finalizedBlock, (params) => readClient.request({ method: "eth_getLogs", params: [params] }) as Promise<Log[]>),
+          withFloor(idbFeedStore(`history-out:${DOLLAR_FOR_NOTES}:${owner}`), floor),
+          floor,
+          { pageSize: LOG_PAGE_BLOCKS, parallel: 2, everyMs: 15_000 },
+        );
+        feeds.push(out);
+        out.start((all) => live && setHistoryOut({ events: all, decimals: 6, symbol: "$" }));
       } catch {
         // Reads failed: Home's own reads say so; notifications just wait for the next open.
       }
@@ -1147,6 +1177,17 @@ function Home(props: {
 
       )}
 
+      {props.tab === "home" && (
+        <Suspense fallback={null}>
+          <HistoryCard
+            entries={historyFrom(Object.values(historyIn), historyOut ? [historyOut] : [], { me: owner, pots: [POTS_AUSD, POTS_TESTUSD], pair: SETTLEMENT_PAIR, faucets: [AUSD_FAUCET], desk })}
+            since={notes.startedAt}
+            who={(a) => nameOf(a) ?? copy.accountEnding(a)}
+            potName={(potId) => pots.get(DEPLOYMENT, potId)?.name || new ScanStore(localStorage, DEPLOYMENT, owner).load().found.find((f) => f.potId === potId)?.name || null}
+          />
+        </Suspense>
+      )}
+
       {props.tab === "home" && DEPLOYMENT === "ausd" && (
         <section className="card" aria-labelledby="your-bank">
           <p className="eyebrow" id="your-bank">
@@ -1188,11 +1229,8 @@ function Home(props: {
       {props.tab === "home" && (
       <section className="card">
         <p className="eyebrow">{copy.addTestDollars}</p>
-        <p className="hint">{copy.addTestDollarsHint}</p>
         {balances?.kind === "ausd" ? (
-          <p className="hint">
-            {copy.claimAmountHint(formatAmount(balances.faucet.drip, decimals, "auto"), formatAmount(balances.faucet.ceiling, decimals, "auto"))}
-          </p>
+          null
         ) : addDollarsField(DEPLOYMENT, balances !== null) === "reading" ? (
           <p className="hint">{copy.readingBalance}</p>
         ) : (
@@ -1441,38 +1479,120 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
 }
 
 
+const potLasts = new PotLastStore(localStorage, DEPLOYMENT);
+const blockTimes = new BlockTimes(localStorage, DEPLOYMENT);
+
+/**
+ * What the Pots tab says about each pot (lib/potLast.ts): the last event of
+ * each, from feeds this phone has already read, and when it happened. Reads
+ * no events itself; a pot whose feed hasn't run shows what it holds.
+ */
+function usePotLasts(potIds: string[], extraBlocks: string[]) {
+  const [lasts, setLasts] = useState<Record<string, PotLast>>(() => potLasts.all());
+  const [times, setTimes] = useState<Map<bigint, bigint>>(() => blockTimes.all());
+  const ids = potIds.join(",");
+  useEffect(() => {
+    const changed = () => setLasts(potLasts.all());
+    window.addEventListener("nivpay:potlast", changed);
+    return () => window.removeEventListener("nivpay:potlast", changed);
+  }, []);
+  // Pots opened on this phone before keep their events: learn their last one from there.
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      for (const id of ids ? ids.split(",") : []) {
+        if (potLasts.all()[id]) continue;
+        const saved = await idbFeedStore(`${POTS}:${id}`)
+          .load()
+          .catch(() => undefined);
+        if (saved?.events.length) rememberLast(BigInt(id), saved.events);
+      }
+      if (live) setLasts(potLasts.all());
+    })();
+    return () => {
+      live = false;
+    };
+  }, [ids]);
+  const blocks = [...Object.values(lasts).map((l) => l.block), ...extraBlocks].join(",");
+  useEffect(() => {
+    let live = true;
+    const want = blocks ? blocks.split(",").map((b) => BigInt(b)) : [];
+    if (want.every((b) => blockTimes.all().has(b))) return;
+    void timesFor(want, blockTimes, async (b) => (await readClient.getBlock({ blockNumber: b })).timestamp)
+      .then((m) => live && setTimes(m))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [blocks]);
+  const ago = (block: string | undefined) => {
+    const t = block ? times.get(BigInt(block)) : undefined;
+    return t === undefined ? null : timeAgo(Number(t), Math.floor(Date.now() / 1000), dateLocale());
+  };
+  return { lasts, ago };
+}
+
+/** Usernames for the people in pot rows, read once each (lib/names.ts). */
+function useRowUsernames(accounts: Address[]) {
+  const [names, setNames] = useState<Record<string, string>>({});
+  const key = [...new Set(accounts.map((a) => a.toLowerCase()))].sort().join(",");
+  useEffect(() => {
+    if (!namesOn || !key) return;
+    let live = true;
+    for (const a of key.split(",")) {
+      void usernameOf(a as Address)
+        .then((n) => live && n && setNames((m) => ({ ...m, [a]: n })))
+        .catch(() => {});
+    }
+    return () => {
+      live = false;
+    };
+  }, [key]);
+  return names;
+}
+
+/**
+ * One pot on the Pots tab: its name and what it holds, then the last thing
+ * that happened, with how long ago. Until that is known, only what it holds.
+ */
+function PotRow(props: { name: string; holds: string | null; line: string | null; tag: "live" | "closed" | "yes" | null; onClick?: () => void; expanded?: boolean }) {
+  const tag =
+    props.tag === "yes" ? (
+      <span className="tag yes">{copy.needsYourYes}</span>
+    ) : props.tag === "closed" ? (
+      <span className="tag">{copy.closedTag}</span>
+    ) : props.tag === "live" ? (
+      <span className="tag live">{copy.live}</span>
+    ) : null;
+  const known = props.line !== null;
+  return (
+    <button type="button" className="home-pot pot-row" onClick={props.onClick} aria-expanded={props.expanded}>
+      <span className="grow">
+        <span className="pot-row-top">
+          <span className="name">{props.name}</span>
+          {known && props.holds && <span className="pot-row-amount">{props.holds}</span>}
+        </span>
+        <span className="meta">{known ? props.line : props.holds ? copy.potHolds(props.holds) : ""}</span>
+      </span>
+      {tag}
+    </button>
+  );
+}
+
 /**
  * A pot found from the chain whose link hasn't been opened on this phone:
  * live numbers, no names yet. Once its creation block is known it opens
  * here with no link, people shown by the end of their account.
  */
-function FoundPotRow(props: { pot: FoundPot; decimals: number | null; onOpen?: () => void }) {
+function FoundPotRow(props: { pot: FoundPot; decimals: number | null; line: string | null; waiting: boolean; onOpen?: () => void }) {
   const [open, setOpen] = useState(false);
   const { pot } = props;
-  const holds = props.decimals === null ? "…" : formatAmount(BigInt(pot.totalAssets), props.decimals, "auto");
-  if (props.onOpen) {
-    return (
-      <button type="button" className="home-pot" onClick={props.onOpen}>
-        <span className="grow">
-          <span className="name">{pot.name || copy.unnamedPot}</span>
-          <span className="meta">{copy.addedToAPot}</span>
-          <span className="meta">{copy.foundMeta(pot.roles.map((r) => ROLE_TEXT[r]), holds)}</span>
-          <span className="meta">{copy.foundOpens}</span>
-        </span>
-        <span className={`tag${pot.closed ? "" : " live"}`}>{pot.closed ? copy.closedTag : copy.live}</span>
-      </button>
-    );
-  }
+  const holds = props.decimals === null ? null : formatAmount(BigInt(pot.totalAssets), props.decimals, "auto");
+  const tag = props.waiting ? "yes" : pot.closed ? "closed" : "live";
+  if (props.onOpen) return <PotRow name={pot.name || copy.unnamedPot} holds={holds} line={props.line} tag={tag} onClick={props.onOpen} />;
   return (
     <>
-      <button type="button" className="home-pot" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <span className="grow">
-          <span className="name">{pot.name || copy.unnamedPot}</span>
-          <span className="meta">{copy.addedToAPot}</span>
-          <span className="meta">{copy.foundMeta(pot.roles.map((r) => ROLE_TEXT[r]), holds)}</span>
-        </span>
-        <span className={`tag${pot.closed ? "" : " live"}`}>{pot.closed ? copy.closedTag : copy.live}</span>
-      </button>
+      <PotRow name={pot.name || copy.unnamedPot} holds={holds} line={props.line} tag={tag} expanded={open} onClick={() => setOpen((o) => !o)} />
       {open && <p className="hint found-note">{copy.foundNeedsLink}</p>}
     </>
   );
@@ -1500,24 +1620,10 @@ function WaitingRow(props: { row: AnsweredInvite; decimals: number | null }) {
  * the end of their account until a pot link with names is opened. Opens with
  * no link.
  */
-function MatchedRow(props: { row: AnsweredInvite; pot: FoundPot | undefined; decimals: number | null; me: Address; onOpen: () => void }) {
+function MatchedRow(props: { row: AnsweredInvite; pot: FoundPot | undefined; decimals: number | null; line: string | null; waiting: boolean; onOpen: () => void }) {
   const { row, pot } = props;
-  const match = row.match!;
-  const holds = !pot || props.decimals === null ? "…" : formatAmount(BigInt(pot.totalAssets), props.decimals, "auto");
-  const others = [...new Set([...match.deciders, ...match.payees].map((a) => a.toLowerCase()))]
-    .filter((a) => a !== props.me.toLowerCase())
-    .map((a) => copy.accountEnding(a));
-  return (
-    <button type="button" className="home-pot" onClick={props.onOpen}>
-      <span className="grow">
-        <span className="name">{pot?.name || row.potName || copy.unnamedPot}</span>
-        <span className="meta">{copy.invitedBy(row.from)}</span>
-        {pot && <span className="meta">{copy.foundMeta(pot.roles.map((r) => ROLE_TEXT[r]), holds)}</span>}
-        {others.length > 0 && <span className="meta">{copy.alsoInIt(others)}</span>}
-      </span>
-      <span className={`tag${pot?.closed ? "" : " live"}`}>{pot?.closed ? copy.closedTag : copy.live}</span>
-    </button>
-  );
+  const holds = !pot || props.decimals === null ? null : formatAmount(BigInt(pot.totalAssets), props.decimals, "auto");
+  return <PotRow name={pot?.name || row.potName || copy.unnamedPot} holds={holds} line={props.line} tag={props.waiting ? "yes" : pot?.closed ? "closed" : "live"} onClick={props.onOpen} />;
 }
 
 /** Pots this account is making, pots made or opened on this phone, invites it answered, and pots it is named on. */
@@ -1576,6 +1682,28 @@ function YourPots(props: {
   };
   // A pot that is new to you, or hidden, never asks for your yes on Home.
   const waitingMine = needingMyYes(asks, props.account.address).filter((r) => !notYours.has(r.potId));
+  // Each row's second line: the last thing that happened in it (lib/potLast.ts).
+  const waitingPots = new Set(waitingMine.map((r) => r.potId));
+  const { lasts, ago } = usePotLasts(
+    scan.found.map((p) => p.potId),
+    sorted.fresh.flatMap((p) => (starts[p.potId] ? [starts[p.potId]!] : [])),
+  );
+  const rowNames = useRowUsernames(Object.values(lasts).flatMap((l) => ("who" in l ? [l.who] : [])));
+  const who = (a: Address) => nameOnPhone(a, contacts, accounts.list()) ?? (rowNames[a.toLowerCase()] ? copy.usernameAt(rowNames[a.toLowerCase()]!) : copy.accountEnding(a));
+  const lineFor = (potId: string): string | null => {
+    const last = lasts[potId];
+    const f = scan.found.find((p) => p.potId === potId);
+    if (!last || scan.decimals === null) return null;
+    const decimals = scan.decimals;
+    return lastLine(last, { me: owner, who, money: (u) => formatAmount(u, decimals, "auto"), when: ago(last.block), shareReady: Boolean(f?.closed && f.roles.includes("putIn")) });
+  };
+  const madeLine = (potId: string): string => {
+    const maker = makers[potId];
+    // Its maker isn't known yet: just when it was made.
+    const text = maker ? copy.madeBy(who(maker)) : copy.lastMade;
+    const when = ago(starts[potId]);
+    return when ? copy.withWhen(text, when) : text;
+  };
   // Notifications from the same reads: never about a pot that is new to this account or hidden.
   const { onPoll, onWaiting } = props;
   useEffect(() => onWaiting(waitingMine.length), [onWaiting, waitingMine.length]);
@@ -1635,7 +1763,8 @@ function YourPots(props: {
           row={r}
           pot={scan.found.find((p) => p.potId === r.match!.potId)}
           decimals={scan.decimals}
-          me={props.account.address}
+          line={lineFor(r.match!.potId)}
+          waiting={waitingPots.has(r.match!.potId)}
           onOpen={() => props.onOpenPot({ deployment: DEPLOYMENT, potId: r.match!.potId, block: r.match!.block, fragment: "", name: "", addedAt: r.answeredAt })}
         />
       ))}
@@ -1644,27 +1773,22 @@ function YourPots(props: {
       ))}
       {found.map((p) => {
         const stored = storedFor(p.potId);
-        return <FoundPotRow key={`found-${p.potId}`} pot={p} decimals={scan.decimals} onOpen={stored ? () => props.onOpenPot(stored) : undefined} />;
+        return <FoundPotRow key={`found-${p.potId}`} pot={p} decimals={scan.decimals} line={lineFor(p.potId)} waiting={waitingPots.has(p.potId)} onOpen={stored ? () => props.onOpenPot(stored) : undefined} />;
       })}
-      {opened.map((p) => (
-        <button
-          type="button"
-          className="home-pot"
-          key={`pot-${p.potId}`}
-          onClick={() => props.onOpenPot(p)}
-        >
-          <span className="grow">
-            <span className="name">{p.name || copy.unnamedPot}</span>
-            <span className="meta">
-              {(() => {
-                const f = scan.found.find((x) => x.potId === p.potId);
-                return openedPotMeta(f, f && scan.decimals !== null ? formatAmount(BigInt(f.totalAssets), scan.decimals, "auto") : "…");
-              })()}
-            </span>
-          </span>
-          <span className="tag live">{copy.live}</span>
-        </button>
-      ))}
+      {opened.map((p) => {
+        const f = scan.found.find((x) => x.potId === p.potId);
+        const holds = f && scan.decimals !== null ? formatAmount(BigInt(f.totalAssets), scan.decimals, "auto") : null;
+        return (
+          <PotRow
+            key={`pot-${p.potId}`}
+            name={p.name || copy.unnamedPot}
+            holds={holds}
+            line={lineFor(p.potId)}
+            tag={waitingPots.has(p.potId) ? "yes" : f?.closed ? "closed" : "live"}
+            onClick={() => props.onOpenPot(p)}
+          />
+        );
+      })}
       {mine.map((d) => (
         <button type="button" className="home-pot" key={d.id} onClick={() => props.onOpen(d.id)}>
           <span className="grow">
@@ -1683,7 +1807,7 @@ function YourPots(props: {
       <NewPots
         pots={sorted.fresh}
         decimals={scan.decimals}
-        makers={makers}
+        madeLine={madeLine}
         onKeep={(potId) => {
           props.choices.keep(potId);
           setReportNote(null);
@@ -1735,7 +1859,8 @@ function YourPots(props: {
 function NewPots(props: {
   pots: FoundPot[];
   decimals: number | null;
-  makers: Record<string, Address>;
+  /** "Made by account ending 7bC1 · 1h ago". */
+  madeLine: (potId: string) => string;
   onKeep: (potId: string) => void;
   onHide: (potId: string, name: string) => void;
   onReport: (potId: string, name: string) => void;
@@ -1754,15 +1879,16 @@ function NewPots(props: {
           <p className="hint">{copy.newPotsHint}</p>
           {props.pots.map((p) => {
             const name = cleanName(p.name);
-            const maker = props.makers[p.potId];
-            const holds = props.decimals === null ? "…" : formatAmount(BigInt(p.totalAssets), props.decimals, "auto");
+            const holds = props.decimals === null ? null : formatAmount(BigInt(p.totalAssets), props.decimals, "auto");
             return (
               <div key={`new-${p.potId}`}>
-                <div className="home-pot">
+                <div className="home-pot pot-row">
                   <span className="grow">
-                    <span className="name">{name || copy.unnamedPot}</span>
-                    <span className="meta">{maker ? copy.newPotMadeBy(copy.accountEnding(maker)) : copy.newPotMakerUnknown}</span>
-                    <span className="meta">{copy.foundMeta(p.roles.map((r) => ROLE_TEXT[r]), holds)}</span>
+                    <span className="pot-row-top">
+                      <span className="name">{name || copy.unnamedPot}</span>
+                      {holds && <span className="pot-row-amount">{holds}</span>}
+                    </span>
+                    <span className="meta">{props.madeLine(p.potId)}</span>
                   </span>
                 </div>
                 <div className="new-pot-actions">

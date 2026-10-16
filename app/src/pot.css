@@ -2473,3 +2473,119 @@ button.avatar {
   align-items: center;
   gap: 0;
 }
+
+/* A pot on the Pots tab: name and amount on one line, the last event under it in grey. */
+.pot-row .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pot-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pot-row-top .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pot-row-amount {
+  flex: none;
+  font-weight: 600;
+}
+.pot-row .meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag.yes {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+/* History on Home: a list that folds away, each entry opening its details. */
+.history-list {
+  display: flex;
+  flex-direction: column;
+}
+.history-item + .history-item {
+  border-top: 1px solid var(--divider);
+}
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.history-row .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.history-row .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-row .meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+.history-amount {
+  flex: none;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.history-amount.in {
+  color: var(--person-2);
+}
+.history-detail {
+  margin: 0 0 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--chip);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.history-detail > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.history-detail dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+.history-detail dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.history-more {
+  color: var(--primary-text);
+  font-weight: 600;
+}
+
+/* The title column takes the room, so amounts line up at the right. */
+.history-row .grow {
+  flex: 1 1 auto;
+}
+/* A pot row's second line wraps rather than cutting off the time. */
+.pot-row .meta {
+  white-space: normal;
+  overflow: visible;
+}

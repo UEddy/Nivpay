@@ -1097,6 +1097,35 @@ worker (`app/api/push`, `app/api/notify`, `app/public/sw.js`).
 * **Hidden until `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` and a
   Blob store are set.** The private key lives only in Vercel's settings.
 
+## History
+
+Home has a History card, folded or open as the person left it on this phone
+(`app/src/lib/history.ts`, `app/src/screens/History.tsx`). It lists every
+finalized movement of the account's money that this phone has followed,
+newest first, five at a time: money sent to or received from a person, sent
+or received in another currency, Add money and Cash out through the test
+desk, test dollars, money put into a pot and money paid out of one. What
+each was is read from who was on the other side of the dollar's Transfer:
+a pot, the desk, Agora's settlement pair, the faucet, or a person. Opening an
+entry shows when, how much, who (by contact name, @username, or the end of
+their account), the pot, what the other person got in another currency, and
+the receipt; the pot and the other currency are read from that one receipt
+when the entry is opened. The transfers come from the same finalized reads
+the bell uses, in and, for History, out, so History starts when this phone
+first ran them, and says so.
+
+## Pots, each in two lines
+
+On the Pots tab each pot is its name and what it holds, then the last thing
+that happened in it and how long ago ("Ubong put in $50 · 2h ago", "Asked to
+pay Caterer $600 · yesterday", "Closed · your share is ready"), with Live, or
+"Needs your yes" when a request waits for this account
+(`app/src/lib/potLast.ts`). The last event comes from the pot's own
+finalized events, the ones its screen reads; each is remembered per pot, so
+the list shows it at once and updates quietly. A pot whose events this phone
+hasn't read yet shows only what it holds. New pots that name you read "Made
+by account ending 7bC1 · 1h ago".
+
 ## Get help: what came back from each send
 
 Each time this phone broadcasts a request, the node's answer is kept: the
