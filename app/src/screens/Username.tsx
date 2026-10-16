@@ -157,6 +157,22 @@ export function useMyUsername(me: Address) {
     if (alive.current) setName(n);
     return n;
   }, [me]);
+  // Read with a few retries: a single failed read (a refused or dropped request) must not leave "Checking" for good.
+  const [failed, setFailed] = useState(false);
+  const readWithRetries = useCallback(async () => {
+    setFailed(false);
+    for (const wait of [0, 1_000, 3_000, 6_000]) {
+      if (wait) await new Promise((r) => setTimeout(r, wait));
+      if (!alive.current) return;
+      try {
+        await refresh();
+        return;
+      } catch {
+        // Try again after the next wait.
+      }
+    }
+    if (alive.current) setFailed(true);
+  }, [refresh]);
 
   const land = useCallback(
     async (write: PendingWrite, what: { kind: Kind; name: string }) => {
@@ -190,7 +206,7 @@ export function useMyUsername(me: Address) {
   useEffect(() => {
     alive.current = true;
     if (!reader) return;
-    void refresh().catch(() => {});
+    void readWithRetries();
     // A claim, change or let go in flight when the app was closed.
     void idbWriteStore.get(me).then((w) => {
       const what = w ? fromLabel(w.label) : null;
@@ -245,6 +261,9 @@ export function useMyUsername(me: Address) {
     busyText: step ? STEP_TEXT[step] : null,
     result,
     stuck,
+    /** True once every read of the username failed; recheck tries again. */
+    failed,
+    recheck: readWithRetries,
     claim: (n: string) => run({ kind: "claim", name: n }),
     letGo: () => name && run({ kind: "release", name }),
     retry: () => stuck && run(stuck, true),

@@ -66,7 +66,7 @@ const ProfilePage = lazy(() => reloadOnce(() => import("./screens/Profile.tsx"))
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
 const sending = () => reloadOnce(() => import("./lib/send.ts"));
-import { AmountUnderstood, formatDay, Icon, InstallBanner, InstallHow, NameForm, type Notice, NoticeLine, openHelp, phoneTimeZone, Sheet, useInstallWay, useOnline } from "./screens/ui.tsx";
+import { AmountUnderstood, formatDay, Icon, InstallBanner, InstallHow, NameForm, type Notice, NoticeLine, openHelp, phoneTimeZone, ScreenBoundary, Sheet, useInstallWay, useOnline } from "./screens/ui.tsx";
 import { balanceNote } from "./lib/connection.ts";
 import { LastBalanceStore, SingleRead, SLOW_READ_MS, type Holding } from "./lib/balanceRead.ts";
 import { reloadOnce } from "./lib/reloadOnce.ts";
@@ -201,9 +201,12 @@ function TestModeBadge() {
 export function App() {
   return (
     <>
-      <Suspense fallback={<div className="page" aria-busy="true" />}>
-        <Screens />
-      </Suspense>
+      {/* A screen that fails shows Something went wrong, never a blank page; help stays outside it. */}
+      <ScreenBoundary>
+        <Suspense fallback={<div className="page" aria-busy="true" />}>
+          <Screens />
+        </Suspense>
+      </ScreenBoundary>
       <HelpHost />
     </>
   );
@@ -814,7 +817,7 @@ function Home(props: {
         if (!live) return;
         for (const w of watched) {
           const source = incomingSource(w.asset, owner, finalizedBlock, (params) => readClient.request({ method: "eth_getLogs", params: [params] }) as Promise<Log[]>);
-          const feed = new PotFeed(source, withFloor(idbFeedStore(`notes-in:${w.asset}:${owner}`), floor), floor, { pageSize: LOG_PAGE_BLOCKS, parallel: 2, everyMs: 15_000 });
+          const feed = new PotFeed(source, withFloor(idbFeedStore(`notes-in:${w.asset}:${owner}`), floor), floor, { pageSize: LOG_PAGE_BLOCKS, parallel: 1, everyMs: 15_000 });
           feeds.push(feed);
           feed.start((all, added) => {
             if (live) setHistoryIn((h) => ({ ...h, [w.asset]: { events: all, decimals: w.decimals, symbol: w.symbol } }));
@@ -831,7 +834,7 @@ function Home(props: {
           outgoingSource(DOLLAR_FOR_NOTES, owner, finalizedBlock, (params) => readClient.request({ method: "eth_getLogs", params: [params] }) as Promise<Log[]>),
           withFloor(idbFeedStore(`history-out:${DOLLAR_FOR_NOTES}:${owner}`), floor),
           floor,
-          { pageSize: LOG_PAGE_BLOCKS, parallel: 2, everyMs: 15_000 },
+          { pageSize: LOG_PAGE_BLOCKS, parallel: 1, everyMs: 15_000 },
         );
         feeds.push(out);
         out.start((all) => live && setHistoryOut({ events: all, decimals: 6, symbol: "$" }));

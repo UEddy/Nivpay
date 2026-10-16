@@ -2589,3 +2589,14 @@ button.avatar {
   white-space: normal;
   overflow: visible;
 }
+
+/* The error boundary's wrapper adds no box of its own, so the screens lay out as before. */
+.boundary-round {
+  display: contents;
+}
+
+.screen-failed {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}

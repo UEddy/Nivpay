@@ -16,16 +16,18 @@ import { VoiceStore } from "../lib/voice.ts";
 import type { HiddenPot } from "../lib/potSort.ts";
 import { LANGUAGE_CHOICES, profileGroups, type GroupId, type RowId } from "../lib/profile.ts";
 import { Avatar } from "./Avatar.tsx";
+import { closeDetail, detailIn, openDetail } from "../lib/backNav.ts";
+import { reloadOnce } from "../lib/reloadOnce.ts";
 import { Icon, InstallHow, NameForm, openHelp, useInstallWay } from "./ui.tsx";
 import { useMyUsername } from "./Username.tsx";
 import { voiceOffered } from "./Voice.tsx";
 
-const PhotoSection = lazy(() => import("./Photo.tsx").then((m) => ({ default: m.PhotoSection })));
-const UsernameSection = lazy(() => import("./Username.tsx").then((m) => ({ default: m.UsernameSection })));
-const DailyLimitSection = lazy(() => import("./Limits.tsx").then((m) => ({ default: m.DailyLimitSection })));
-const DevicesSection = lazy(() => import("./Devices.tsx").then((m) => ({ default: m.DevicesSection })));
-const NotificationsSection = lazy(() => import("./Notify.tsx").then((m) => ({ default: m.NotificationsSection })));
-const VoiceSection = lazy(() => import("./Voice.tsx").then((m) => ({ default: m.VoiceSection })));
+const PhotoSection = lazy(() => reloadOnce(() => import("./Photo.tsx")).then((m) => ({ default: m.PhotoSection })));
+const UsernameSection = lazy(() => reloadOnce(() => import("./Username.tsx")).then((m) => ({ default: m.UsernameSection })));
+const DailyLimitSection = lazy(() => reloadOnce(() => import("./Limits.tsx")).then((m) => ({ default: m.DailyLimitSection })));
+const DevicesSection = lazy(() => reloadOnce(() => import("./Devices.tsx")).then((m) => ({ default: m.DevicesSection })));
+const NotificationsSection = lazy(() => reloadOnce(() => import("./Notify.tsx")).then((m) => ({ default: m.NotificationsSection })));
+const VoiceSection = lazy(() => reloadOnce(() => import("./Voice.tsx")).then((m) => ({ default: m.VoiceSection })));
 
 const VERSION: string = import.meta.env.VITE_APP_VERSION ?? "local";
 
@@ -172,7 +174,25 @@ export function ProfilePage(props: {
   onMuted: () => void;
 }) {
   const me = props.account.address;
-  const [view, setView] = useState<View>("main");
+  const [view, showView] = useState<View>("main");
+  // A detail screen is one history entry: the arrow and the phone's own back both return here (lib/backNav.ts).
+  const setView = (v: View) => {
+    if (v === "main") {
+      if (closeDetail(history) === "shown") showView("main");
+    } else {
+      openDetail(history, v);
+      showView(v);
+    }
+  };
+  useEffect(() => {
+    const popped = (e: PopStateEvent) => showView((detailIn(e.state) as View | null) ?? "main");
+    window.addEventListener("popstate", popped);
+    return () => {
+      window.removeEventListener("popstate", popped);
+      // Leaving Profile from a detail screen (another tab): its entry goes too.
+      if (detailIn(history.state)) history.back();
+    };
+  }, []);
   const [copied, setCopied] = useState(false);
   const installWay = useInstallWay();
   const u = useMyUsername(me);
@@ -344,7 +364,14 @@ export function ProfilePage(props: {
         {photosOn && <p className="hint profile-note">{copy.photoPublic}</p>}
         {namesOn && (
           <div className="profile-username">
-            {u.name === undefined ? (
+            {u.name === undefined && u.failed ? (
+              <>
+                <span className="meta">{copy.usernameCheckFailed}</span>
+                <button type="button" className="text-btn small" onClick={() => void u.recheck()}>
+                  {copy.tryAgain}
+                </button>
+              </>
+            ) : u.name === undefined ? (
               <span className="meta">{copy.checkingUsername}</span>
             ) : u.name ? (
               <>

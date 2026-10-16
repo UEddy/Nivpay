@@ -312,4 +312,5 @@ pot itself is untouched.
 
 | Code | What happened | Where to look |
 | --- | --- | --- |
+| 98 | A screen failed to show: its code couldn't be loaded (often a new version replaced it while the app was open, or the connection dropped), or it hit an error while drawing. The app shows Something went wrong with Back to Home instead of a blank screen. Nothing moved. | Browser console on a USB debug session; the error is logged there |
 | 99 | Anything not covered above. | Browser console on a USB debug session |

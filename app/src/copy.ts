@@ -151,6 +151,7 @@ export const ERROR_CODES = {
   QUOTE_CHANGED: 91,
   LOW_LIQUIDITY: 92,
   NOT_ENOUGH_FOR_FEES: 93,
+  SCREEN_FAILED: 98,
   UNKNOWN: 99,
 } as const;
 

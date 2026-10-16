@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import { copy } from "../copy.ts";
 import { SLOW_AFTER_MS, slowStepLine } from "../lib/slowStep.ts";
 import { Cancellable } from "../lib/cancel.ts";
@@ -396,4 +396,57 @@ export function HowThisWorks(props: { children: ReactNode }) {
       <div className="how-it-works-body">{props.children}</div>
     </details>
   );
+}
+
+/**
+ * If a screen fails, while loading its code or while drawing, this shows
+ * Something went wrong with Back to Home and Get help with a code, never a
+ * blank page. Back to Home opens the app again on Home: a fresh load when
+ * online (a screen whose code failed to load stays failed until the page
+ * loads again), else everything inside is drawn again from the start.
+ */
+export class ScreenBoundary extends Component<{ children: ReactNode }, { failed: boolean; round: number }> {
+  state = { failed: false, round: 0 };
+
+  static getDerivedStateFromError(): Partial<{ failed: boolean }> {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown, info: ErrorInfo): void {
+    console.error("A screen failed (Code 98)", error, info.componentStack);
+    try {
+      new LastCodeStore(localStorage).shown(98);
+    } catch {
+      // Storage refused: Get help still carries the code.
+    }
+  }
+
+  render(): ReactNode {
+    if (!this.state.failed) return <div key={this.state.round} className="boundary-round">{this.props.children}</div>;
+    return (
+      <div className="page">
+        <section className="card screen-failed" role="alert">
+          <h2>{copy.screenFailedTitle}</h2>
+          <p className="hint">{copy.screenFailedLine}</p>
+          <p className="reason">
+            {copy.code(98)}{" "}
+            <button type="button" className="text-btn small" onClick={() => openHelp(98)}>
+              {copy.getHelp}
+            </button>
+          </p>
+          <button
+            type="button"
+            className="btn primary"
+            onClick={() => {
+              history.replaceState(null, "", location.pathname);
+              if (navigator.onLine) location.reload();
+              else this.setState((s) => ({ failed: false, round: s.round + 1 }));
+            }}
+          >
+            {copy.backToHome}
+          </button>
+        </section>
+      </div>
+    );
+  }
 }
