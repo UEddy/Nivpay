@@ -29,7 +29,7 @@ import { matchName, VOICE_CAP, withinVoiceCap, type VoiceCommand } from "../lib/
 import { VoiceButton } from "./Voice.tsx";
 import { mapLines } from "./mapNames.ts";
 import { factsOf } from "./Request.tsx";
-import { AmountUnderstood, andList, copyLink, CopyLinkButton, Icon, type Notice, NoticeLine, shareLink, Sheet, STOPPED, useCancellable, useSlowStepLine } from "./ui.tsx";
+import { AmountUnderstood, andList, copyLink, CopyLinkButton, Icon, type Notice, NoticeLine, phoneTimeZone, shareLink, Sheet, STOPPED, useCancellable, useSlowStepLine } from "./ui.tsx";
 import { beforePasskey } from "../lib/cancel.ts";
 import { checkDailyLimit, spendEnded, spendSent } from "../lib/spending.ts";
 import { dateLocale } from "../lib/locale.ts";
@@ -68,7 +68,7 @@ function useTicker(target: bigint | null, decimals: number): string {
   return formatAmount(shown.value, decimals, shown.moving ? "whole" : "auto");
 }
 
-type Who = { account: Address; name: string; city: string; me: boolean };
+type Who = { account: Address; name: string; city: string; timeZone: string; me: boolean };
 
 /** Pour in your share (docs/design/Live-ChipIn.dc.html). */
 export function ChipInScreen(props: {
@@ -158,8 +158,8 @@ export function ChipInScreen(props: {
     const labelled: Person[] = info.labelsOk
       ? info.people
       : (state?.deciders ?? []).map((a) => ({ account: a, name: copy.accountEnding(a), city: "", timeZone: "UTC" }));
-    const list: Who[] = labelled.map((p) => ({ account: p.account, name: p.name, city: sharedCities[p.account.toLowerCase()]?.city ?? p.city, me: isAddressEqual(p.account, me) }));
-    if (!list.some((p) => p.me)) list.push({ account: me, name: copy.youCap, city: "", me: true });
+    const list: Who[] = labelled.map((p) => ({ account: p.account, name: p.name, city: sharedCities[p.account.toLowerCase()]?.city ?? p.city, timeZone: p.timeZone, me: isAddressEqual(p.account, me) }));
+    if (!list.some((p) => p.me)) list.push({ account: me, name: copy.youCap, city: "", timeZone: phoneTimeZone(), me: true });
     return list;
   }, [info, state?.deciders, me, sharedCities]);
 

@@ -6,12 +6,12 @@ import { initialsOf, mapLines } from "./mapNames.ts";
 const A = "0x5c8f2e3d4a1B6c7d8e9f0a1b2c3d4e5f6a7b8C9d" as Address;
 
 test("with signed names the map shows the city, then who and what", () => {
-  assert.deepEqual(mapLines({ account: A, city: "Uyo", me: false, name: "Aniekan" }, true, "Aniekan · asked", "asked"), { city: "Uyo", sub: "Aniekan · asked" });
+  assert.deepEqual(mapLines({ account: A, city: "Uyo", me: false, name: "Aniekan" }, true, "Aniekan · asked", "asked"), { city: "Uyo", sub: "Aniekan · asked", where: { city: "Uyo", timeZone: undefined } });
 });
 
 test("without names the first line is short enough for the map, and never says You twice", () => {
-  assert.deepEqual(mapLines({ account: A, city: "", me: false, name: "account ending 8C9d" }, false, "account ending 8C9d · asked", "asked"), { city: "Ending 8C9d", sub: "asked" });
-  assert.deepEqual(mapLines({ account: A, city: "", me: true, name: "You" }, false, "You", ""), { city: "You", sub: "" });
+  assert.deepEqual(mapLines({ account: A, city: "", me: false, name: "account ending 8C9d" }, false, "account ending 8C9d · asked", "asked"), { city: "Ending 8C9d", sub: "asked", where: { city: undefined, timeZone: undefined } });
+  assert.deepEqual(mapLines({ account: A, city: "", me: true, name: "You" }, false, "You", ""), { city: "You", sub: "", where: { city: undefined, timeZone: undefined } });
   assert.ok("Ending 8C9d".length <= 12, "fits beside a city at the map's edge");
 });
 
@@ -23,4 +23,9 @@ test("a decider's circle shows their initial, or two characters of their account
 test("your own circle says You, as the map does, never two characters of your account", () => {
   assert.equal(initialsOf(A, "You", false, true), "You");
   assert.equal(initialsOf(A, "Aniekan", true, true), "You");
+});
+
+test("the map is told where someone is: their city, else their time zone", () => {
+  assert.deepEqual(mapLines({ account: A, city: "Lagos", me: false, name: "Idara", timeZone: "Africa/Lagos" }, true, "Idara", "").where, { city: "Lagos", timeZone: "Africa/Lagos" });
+  assert.deepEqual(mapLines({ account: A, city: "", me: true, name: "You", timeZone: "Europe/London" }, true, "You", "").where, { city: undefined, timeZone: "Europe/London" });
 });

@@ -1172,6 +1172,21 @@ background: it listens only after a tap, for one sentence, then stops.
   has no command to change settings or limits, add contacts or mark them
   trusted, or say yes to a pot's payment.
 
+## The pot map, on the world
+
+A pot's map shows the world as the demo film does: a teal sea, sand land,
+each person at their city in a box with their name, a route from there into
+the pot, and the payees on the right. Where someone is comes from the city
+they shared with the pot (opt in, encrypted for the pot's link,
+`lib/cityShare.ts`), else the city written in the pot's link, else the time
+zone their phone gave when they joined; never a position. A city's place is
+looked up on the phone in a bundled list of cities of 100,000 people or
+more, loaded only when a map needs it. The world is scaled and moved so
+everyone placed is on the map and clear of the pot and payees, and each
+label takes the side of its dot that covers least (`lib/worldmap.ts`).
+Someone with no known place sits in one of the map's usual spots, not
+somewhere they may not be.
+
 ## Display names
 
 The name shown at the top of Home and on Profile is the person's display
@@ -2307,6 +2322,7 @@ each installed package's `package.json`.
 
 | Data | Source | License | Used for |
 | --- | --- | --- | --- |
+| World land outlines (`app/src/data/world-land.json`, made by `app/scripts/make_world.mjs`, simplified) | [Natural Earth](https://www.naturalearthdata.com/), `ne_110m_land`, v5.1.2, downloaded 16 Oct 2026 | Public domain | the world under the pot map |
 | World cities (`app/src/data/cities.json`, made by `app/scripts/make_cities.py`) | [GeoNames](https://www.geonames.org/), `cities15000`, downloaded 15 Oct 2026 | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | turning a phone's position, or a typed name, into a city, on the phone only |
 
 ### App, indirect dependencies

@@ -391,6 +391,7 @@ export function CreateScreen(props: {
     return {
       name: p.name,
       city: p.city || copy.yourCity,
+      where: { city: p.city || undefined, timeZone: p.timeZone || undefined },
       sub: you ? copy.personYou(p.name) : phase === "landed" ? copy.personDecides(p.name) : p.name,
       ring: you ? "solid" : phase === "landed" ? "dashed" : "pencil",
       ping: !you && phase === "landed" && celebrate,

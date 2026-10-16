@@ -1,11 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { copy } from "../copy.ts";
 import { loopsOn } from "../lib/loops.ts";
 import { useOnline } from "./ui.tsx";
-import { PERSON_COLORS, payeeSpots, personSpots, reverseRoute, VIEW } from "../lib/potmap.ts";
+import { PERSON_COLORS, payeeSpots, reverseRoute, VIEW } from "../lib/potmap.ts";
+import { placeOf, worldLayout, type CityRow, type Zones } from "../lib/worldmap.ts";
+import world from "../data/world-land.json";
+import { reloadOnce } from "../lib/reloadOnce.ts";
 
 /**
- * The Three Cities map with the clay pot (docs/design, docs/MOTION.md).
+ * The Three Cities map with the clay pot (docs/design, docs/MOTION.md), on
+ * a map of the world: each person at their city, where it is known
+ * (lib/worldmap.ts), with their city and name in a label beside them.
  *
  * The map draws a state; the screens decide when it changes, because only
  * they know when something is final. Only transform, opacity and
@@ -28,6 +33,8 @@ export type MapPerson = {
   sub: string;
   /** "You": the sub line in the person's colour, bold. */
   subStrong?: boolean;
+  /** Where they are, for their place on the world: the city in the pot's link or the one they shared, and their phone's time zone. */
+  where?: { city?: string; timeZone?: string };
   /** solid: the person's colour. dashed: their colour, dashed. pencil: not there yet. */
   ring: "solid" | "dashed" | "pencil";
   dim?: boolean;
@@ -65,7 +72,35 @@ export type Layer = { person: number | null; fraction: number };
 
 const POT_PATH =
   "M72 38 C72 50 60 54 50 63 C28 82 23 118 35 146 C47 173 76 186 100 186 C124 186 153 173 165 146 C177 118 172 82 150 63 C140 54 128 50 128 38 Z";
-const GRID = ["M57 0 V232", "M114 0 V232", "M171 0 V232", "M228 0 V232", "M285 0 V232", "M0 46 H342", "M0 92 H342", "M0 138 H342", "M0 184 H342"];
+const LAND = (world as { land: string[] }).land;
+const ZONES = (world as unknown as { zones: Zones }).zones;
+/** Gentle lines on the sea, as on the film's map. */
+const SEA_LINES = [30, 80, 130, 180, 222].map((y) => `M0 ${y} Q85 ${y - 5} 171 ${y} T342 ${y}`);
+
+/** The bigger city list, loaded once, the first time a map needs it. Until then, places come from time zones. */
+let citiesLoad: Promise<CityRow[] | null> | null = null;
+function loadMapCities(): Promise<CityRow[] | null> {
+  citiesLoad ??= reloadOnce(() => import("../data/world-cities.json"))
+    .then((m) => m.default as CityRow[])
+    .catch(() => null);
+  return citiesLoad;
+}
+function useMapCities(): CityRow[] | null {
+  const [list, setList] = useState<CityRow[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    void loadMapCities().then((l) => live && setList(l));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return list;
+}
+
+/** A label's width, from its longest line: near enough for Work Sans at the map's sizes. */
+function labelWidth(lines: string[]): number {
+  return Math.ceil(Math.max(...lines.map((l) => Array.from(l).length * 6.6), 24)) + 14;
+}
 /** Full height of the liquid in pot units: the most the pot can ever pay out. */
 const FULL = 128.5;
 const BOTTOM = 186.5;
@@ -155,16 +190,28 @@ export function PotMap(props: {
   // Offline, nothing on the map is live: the badge says so and stops its ping.
   const online = useOnline();
   const live = props.badge === "live" && online;
-  const spots = personSpots(people.length);
+  const cities = useMapCities();
+  const placesKey = people.map((p) => `${p.where?.city ?? ""}|${p.where?.timeZone ?? ""}`).join(";");
+  const { spots, view } = useMemo(
+    () =>
+      worldLayout(
+        people.map((p) => (p.where ? placeOf({ cities, zones: ZONES }, p.where) : null)),
+        payees.length,
+        people.map((p) => labelWidth([p.city, p.sub])),
+      ),
+    // The layout depends only on where people are, their labels and how many payees there are.
+    [placesKey, cities, payees.length, people.map((p) => `${p.city}|${p.sub}`).join(";")],
+  );
   const payeeAt = payeeSpots(payees.length);
   const routes = useRef<(SVGPathElement | null)[]>([]);
   const [lengths, setLengths] = useState<number[]>([]);
   const payeeRoutes = useRef<(SVGPathElement | null)[]>([]);
   const [payeeLengths, setPayeeLengths] = useState<number[]>([]);
 
+  const routeKey = spots.map((s) => s.route).join(";");
   useLayoutEffect(() => {
     setLengths(routes.current.map((c) => (c ? Math.ceil(c.getTotalLength()) : 0)));
-  }, [spots.length]);
+  }, [routeKey]);
   useLayoutEffect(() => {
     setPayeeLengths(payeeRoutes.current.map((c) => (c ? Math.ceil(c.getTotalLength()) : 0)));
   }, [payeeAt.length]);
@@ -193,10 +240,20 @@ export function PotMap(props: {
   return (
     <div ref={card} className="map-card" data-paused={paused || undefined}>
       <svg className="map" viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} role="img" aria-label={props.label}>
-        <g className="map-grid">
-          {GRID.map((d) => (
-            <path key={d} d={d} />
+        <g className="map-world" aria-hidden="true">
+          {SEA_LINES.map((d) => (
+            <path key={d} d={d} className="map-sea-line" />
           ))}
+          <g className="map-land-at" style={{ transform: `translate(${view.tx.toFixed(1)}px, ${view.ty.toFixed(1)}px) scale(${(view.k / 10).toFixed(4)})` }}>
+            <g style={{ transform: `translateY(${(25 / view.k).toFixed(2)}px)` }}>
+              {LAND.map((d, i) => (
+                <path key={`edge-${i}`} d={d} className="map-land-edge" />
+              ))}
+            </g>
+            {LAND.map((d, i) => (
+              <path key={`land-${i}`} d={d} className="map-land" />
+            ))}
+          </g>
         </g>
 
         <g className="map-fade">
@@ -204,7 +261,7 @@ export function PotMap(props: {
             const p = people[i]!;
             const color = PERSON_COLORS[i]!.route;
             return (
-              <g key={`route-${s.route}`}>
+              <g key={`route-${i}`}>
                 <path d={s.route} className={`route pencil${p.route === "pencil" ? "" : " gone"}`} />
                 <path
                   ref={(el) => {
@@ -351,7 +408,7 @@ export function PotMap(props: {
           const p = people[i]!;
           const color = PERSON_COLORS[i]!;
           return (
-            <g key={`city-${s.route}`} className="pop-in" style={{ animationDelay: `${250 + i * 100}ms` }}>
+            <g key={`city-${i}`} className="pop-in" style={{ animationDelay: `${250 + i * 100}ms` }}>
               <circle cx={s.x} cy={s.y} r="11" className={`ping-ring${p.ping ? " pinging" : ""}`} style={{ stroke: color.route }} />
               <circle
                 cx={s.x}
@@ -403,8 +460,12 @@ export function PotMap(props: {
         <g className="map-labels">
           {spots.map((s, i) => {
             const p = people[i]!;
+            // A label in a box, as on the film's map: the city, then the name, in the person's colour.
+            const w = labelWidth([p.city, p.sub]);
+            const left = s.label.anchor === "middle" ? s.label.x - w / 2 : s.label.x - 6;
             return (
-              <g key={`label-${s.route}`}>
+              <g key={`label-${i}`}>
+                <rect x={left} y={s.label.y - 12} width={w} height={p.sub ? 30 : 17} rx="5" className="map-tag" style={{ stroke: PERSON_COLORS[i]!.route }} />
                 <text x={s.label.x} y={s.label.y} className="map-city" textAnchor={s.label.anchor}>
                   {p.city}
                 </text>

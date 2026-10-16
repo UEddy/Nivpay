@@ -8,9 +8,16 @@ import { copy } from "../copy.ts";
  * edges), so the first line is a short form that fits, "Ending 7bC1" or
  * "You", and the second carries only the detail.
  */
-export function mapLines(p: { account: Address; city: string; me: boolean; name: string }, named: boolean, withName: string, alone: string): { city: string; sub: string } {
-  if (p.city) return { city: p.city, sub: withName };
-  return { city: p.me ? copy.youCap : named ? p.name : copy.mapEnding(p.account), sub: alone };
+export function mapLines(
+  p: { account: Address; city: string; me: boolean; name: string; timeZone?: string },
+  named: boolean,
+  withName: string,
+  alone: string,
+): { city: string; sub: string; where: { city?: string; timeZone?: string } } {
+  // Where they are on the world: the city, else their phone's time zone (lib/worldmap.ts).
+  const where = { city: p.city || undefined, timeZone: p.timeZone || undefined };
+  if (p.city) return { city: p.city, sub: withName, where };
+  return { city: p.me ? copy.youCap : named ? p.name : copy.mapEnding(p.account), sub: alone, where };
 }
 
 /**

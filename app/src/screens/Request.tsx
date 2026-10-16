@@ -47,7 +47,8 @@ export function peopleOf(info: PotInfo, state: PotState, me: Address): Who[] {
     ? info.people
     : state.deciders.map((a) => ({ account: a, name: copy.accountEnding(a), city: "", timeZone: "" }));
   const list = labelled.map((p) => ({ ...p, me: isAddressEqual(p.account, me) }));
-  if (!list.some((p) => p.me)) list.push({ account: me, name: copy.youCap, city: "", timeZone: "", me: true });
+  // Someone looking who isn't named in the link: their own phone's time zone places them.
+  if (!list.some((p) => p.me)) list.push({ account: me, name: copy.youCap, city: "", timeZone: phoneTimeZone(), me: true });
   return list;
 }
 

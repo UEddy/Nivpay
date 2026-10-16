@@ -11,7 +11,11 @@
   --chip: #f6e6d2;
   --divider: #efe0cc;
   --map-paper: #f4e3cb;
-  --map-grid: #ebd4b5;
+  /* The pot map's world, as on the film: a teal sea, sand land with a darker edge. */
+  --map-sea: #3e9c95;
+  --map-sea-line: #5aaba5;
+  --map-land: #eed9b7;
+  --map-land-edge: #d9bb8e;
   --route-empty: #c9ad8c;
   --pot-clay: #e7c29c;
   --pot-lid: #c8744a;
@@ -67,7 +71,10 @@
     --chip: #3b2a20;
     --divider: #3a2b22;
     --map-paper: #2e211a;
-    --map-grid: #3e2f25;
+    --map-sea: #1b3a37;
+    --map-sea-line: #244744;
+    --map-land: #4a3a2c;
+    --map-land-edge: #33271e;
     --route-empty: #75604f;
     --pot-clay: #c99f78;
     --pot-lid: #c8744a;

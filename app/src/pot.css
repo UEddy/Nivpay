@@ -387,7 +387,7 @@
 .map-card {
   position: relative;
   border-radius: 22px;
-  background: var(--map-paper);
+  background: var(--map-sea);
   overflow: hidden;
   flex-shrink: 0;
   view-transition-name: pot-map;
@@ -404,9 +404,44 @@
   height: auto;
 }
 
-.map-grid path {
-  stroke: var(--map-grid);
-  stroke-width: 1;
+/* The world under the map (lib/worldmap.ts): it glides when people's places change. */
+.map-sea-line {
+  fill: none;
+  stroke: var(--map-sea-line);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 8;
+}
+
+.map-land-at {
+  transition: transform 600ms var(--ease-out, ease-out);
+}
+
+.map-land {
+  fill: var(--map-land);
+  stroke: var(--map-land-edge);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-land-edge {
+  fill: var(--map-land-edge);
+}
+
+/* A person's label, in a box edged in their colour. */
+.map-tag {
+  fill: var(--map-paper);
+  stroke-width: 1.5;
+}
+
+/* Words on the map keep a halo of paper, so they read over sea or land. */
+.map-labels text,
+.coin-label,
+.map-share {
+  paint-order: stroke;
+  stroke: var(--map-paper);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
 }
 
 .map-fade {
