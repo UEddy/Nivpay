@@ -9,7 +9,7 @@ import { BANNER_MS, currentPlatform, InstallStore, installWay, onInstallChange, 
 import { dateLocale } from "../lib/locale.ts";
 import { cleanName, NAME_MAX } from "../lib/accounts.ts";
 import { namesSyncOn, PendingNames, saveName } from "../lib/displayName.ts";
-import { reloadOnce } from "../lib/reloadOnce.ts";
+import { isLoadFailure, reloadOnce } from "../lib/reloadOnce.ts";
 import type { Address } from "viem";
 
 export type Notice = { tone: "ok" | "bad"; text: string; code?: number };
@@ -401,18 +401,23 @@ export function HowThisWorks(props: { children: ReactNode }) {
   );
 }
 
-/**
- * If a screen fails, while loading its code or while drawing, this shows
- * Something went wrong with Back to Home and Get help with a code, never a
- * blank page. Back to Home opens the app again on Home: a fresh load when
- * online (a screen whose code failed to load stays failed until the page
- * loads again), else everything inside is drawn again from the start.
- */
-export class ScreenBoundary extends Component<{ children: ReactNode }, { failed: boolean; round: number }> {
-  state = { failed: false, round: 0 };
+type BoundaryState = { failed: boolean; round: number; detail: string; retriedAt: number };
 
-  static getDerivedStateFromError(): Partial<{ failed: boolean }> {
-    return { failed: true };
+/**
+ * If a screen fails, while loading its code or while drawing, this never
+ * leaves a blank page. A drawing error is first tried once more, quietly; if
+ * it fails again, it shows Something went wrong, the error's first line in
+ * small type (for a screenshot to support), Get help with Code 98, and a way
+ * back: `back` (such as Back to Profile, drawing its part again from the
+ * start, the tab bar still there), else Back to Home. Code that couldn't be
+ * downloaded, often because a new version went live while the app was open,
+ * reloads the app instead, when online.
+ */
+export class ScreenBoundary extends Component<{ children: ReactNode; back?: { label: string; go?: () => void } }, BoundaryState> {
+  state: BoundaryState = { failed: false, round: 0, detail: "", retriedAt: 0 };
+
+  static getDerivedStateFromError(error: unknown): Partial<BoundaryState> {
+    return { failed: true, detail: String((error as Error | undefined)?.message ?? error).split("\n")[0]!.slice(0, 160) };
   }
 
   componentDidCatch(error: unknown, info: ErrorInfo): void {
@@ -422,12 +427,27 @@ export class ScreenBoundary extends Component<{ children: ReactNode }, { failed:
     } catch {
       // Storage refused: Get help still carries the code.
     }
+    // Once, quietly: draw it again. A second failure soon after is shown.
+    if (!isLoadFailure(error) && Date.now() - this.state.retriedAt > 10_000) {
+      this.setState((s) => ({ failed: false, round: s.round + 1, retriedAt: Date.now() }));
+    }
   }
+
+  private again = (): void => {
+    const back = this.props.back;
+    if (back) {
+      back.go?.();
+      if (!isLoadFailure(this.state.detail) || !navigator.onLine) return this.setState((s) => ({ failed: false, round: s.round + 1 }));
+    }
+    history.replaceState(null, "", location.pathname);
+    if (navigator.onLine) location.reload();
+    else this.setState((s) => ({ failed: false, round: s.round + 1 }));
+  };
 
   render(): ReactNode {
     if (!this.state.failed) return <div key={this.state.round} className="boundary-round">{this.props.children}</div>;
     return (
-      <div className="page">
+      <div className={this.props.back ? undefined : "page"}>
         <section className="card screen-failed" role="alert">
           <h2>{copy.screenFailedTitle}</h2>
           <p className="hint">{copy.screenFailedLine}</p>
@@ -437,16 +457,9 @@ export class ScreenBoundary extends Component<{ children: ReactNode }, { failed:
               {copy.getHelp}
             </button>
           </p>
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => {
-              history.replaceState(null, "", location.pathname);
-              if (navigator.onLine) location.reload();
-              else this.setState((s) => ({ failed: false, round: s.round + 1 }));
-            }}
-          >
-            {copy.backToHome}
+          {this.state.detail && <p className="meta screen-failed-detail">{this.state.detail}</p>}
+          <button type="button" className="btn primary" onClick={this.again}>
+            {this.props.back?.label ?? copy.backToHome}
           </button>
         </section>
       </div>

@@ -369,6 +369,7 @@ export const es: Dictionary = {
   screenFailedTitle: "Algo salió mal",
   screenFailedLine: "Esta pantalla no se abrió. No se movió nada.",
   backToHome: "Volver a Inicio",
+  backToProfile: "Volver a Perfil",
   usernameCheckFailed: "No se pudo comprobar tu usuario.",
   history: "Historial",
   historySent: (who: string) => `Enviado a ${who}`,

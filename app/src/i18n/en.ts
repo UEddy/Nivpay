@@ -381,6 +381,7 @@ export const en = {
   screenFailedTitle: "Something went wrong",
   screenFailedLine: "This screen didn't open. Nothing moved.",
   backToHome: "Back to Home",
+  backToProfile: "Back to Profile",
   usernameCheckFailed: "Couldn't check your username.",
   history: "History",
   historySent: (who: string) => `Sent to ${who}`,

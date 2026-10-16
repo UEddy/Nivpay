@@ -2614,3 +2614,10 @@ button.avatar {
   gap: 12px;
   margin-top: 24px;
 }
+
+/* The error's first line, small, for a screenshot to support. */
+.screen-failed-detail {
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}

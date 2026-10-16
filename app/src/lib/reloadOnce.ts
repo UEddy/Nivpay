@@ -22,3 +22,8 @@ export function reloadOnce<T>(load: () => Promise<T>, deps: ReloadDeps = browser
     return new Promise<T>(() => {});
   });
 }
+
+/** A part of the app that couldn't be downloaded, in Chrome's, Safari's or Firefox's words. */
+export function isLoadFailure(error: unknown): boolean {
+  return /dynamically imported module|Importing a module script failed|error loading dynamically imported|Failed to fetch/i.test(String((error as Error | undefined)?.message ?? error));
+}

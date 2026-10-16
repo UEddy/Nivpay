@@ -1288,6 +1288,8 @@ function Home(props: {
         </Suspense>
       )}
       {details && (
+        // A failure here stays in Profile, with the tab bar, and Back to Profile draws it again from its main list.
+        <ScreenBoundary back={{ label: copy.backToProfile }}>
         <Suspense fallback={null}>
           <ProfilePage
             account={account}
@@ -1309,6 +1311,7 @@ function Home(props: {
             onMuted={() => setNotes(notesStore.get())}
           />
         </Suspense>
+        </ScreenBoundary>
       )}
       <TabBar tab={props.tab} onTab={props.onTab} account={account} waiting={waitingCount} />
     </>
