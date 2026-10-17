@@ -25,11 +25,12 @@ export function changeData(call: ChangeCall): Hex {
 }
 
 /** Every change open on a pot, and whether each payee has been removed, at one block. */
-export async function readChanges(client: Reader, pots: Address, potId: bigint, payees: number, at: bigint): Promise<{ changes: PotChange[]; removed: boolean[] }> {
+export async function readChanges(client: Reader, pots: Address, potId: bigint, payees: number, at: bigint): Promise<{ changes: PotChange[]; removed: boolean[]; exitWindow: bigint }> {
   const block = { blockNumber: at } as const;
-  const [ids, removed] = await Promise.all([
+  const [ids, removed, exitWindow] = await Promise.all([
     client.readContract({ address: pots, abi: POTS_V2_ABI, functionName: "openChanges", args: [potId], ...block }),
     Promise.all(Array.from({ length: payees }, (_, i) => client.readContract({ address: pots, abi: POTS_V2_ABI, functionName: "isRemoved", args: [potId, BigInt(i)], ...block }))),
+    client.readContract({ address: pots, abi: POTS_V2_ABI, functionName: "EXIT_WINDOW", ...block }),
   ]);
   const infos = await Promise.all(ids.map((id) => client.readContract({ address: pots, abi: POTS_V2_ABI, functionName: "changeInfo", args: [id], ...block })));
   const named = (v: unknown): ChangeInfo => {
@@ -42,7 +43,7 @@ export async function readChanges(client: Reader, pots: Address, potId: bigint, 
     }
     return { ...info, label };
   };
-  return { changes: infos.map((v, i) => fromChain(ids[i]!, named(v))), removed };
+  return { changes: infos.map((v, i) => fromChain(ids[i]!, named(v))), removed, exitWindow };
 }
 
 /** The code for a change the contract refused as a call. */
@@ -54,6 +55,10 @@ export function changeRefusalFor(errorName: string | undefined): AppError {
       return new AppError(copy.errAlreadyClosed, ERROR_CODES.POT_ALREADY_CLOSED);
     case "TooManyOpenChanges":
       return new AppError(copy.errTooManyChanges, ERROR_CODES.CHANGE_REFUSED);
+    case "TooManyOpenChangesFromYou":
+      return new AppError(copy.errTooManyFromYou, ERROR_CODES.CHANGE_REFUSED);
+    case "ClosesBeforeItApplies":
+      return new AppError(copy.errClosesBeforeItApplies, ERROR_CODES.CHANGE_REFUSED);
     case "ChangeNotReady":
       return new AppError(copy.errChangeNotReady, ERROR_CODES.CHANGE_NOT_READY);
     case "ChangeNotPending":

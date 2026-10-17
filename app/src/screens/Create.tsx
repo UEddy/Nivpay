@@ -486,7 +486,7 @@ export function CreateScreen(props: {
 
         <div className={`lock-note enter${made ? " locked" : ""}`} style={{ animationDelay: "360ms" }}>
           {made && <Icon name="lock" />}
-          <span>{made ? copy.lockAfter : copy.lockBefore}</span>
+          <span>{made ? (made.onV2 ? copy.lockAfterV2 : copy.lockAfter) : NEW_POTS_ON_V2 ? copy.lockBeforeV2 : copy.lockBefore}</span>
         </div>
 
         {!made && (
@@ -628,7 +628,7 @@ export function CreateScreen(props: {
       )}
       {sheet === "confirm" && (
         <Sheet title={copy.checkBeforeYouMakeIt} onClose={() => setSheet(null)}>
-          <p className="lede">{copy.noneCanChange}</p>
+          <p className="lede">{NEW_POTS_ON_V2 ? copy.noneCanChangeV2 : copy.noneCanChange}</p>
           <div className="list">
             {people.map((p, i) => (
               <div className="list-row" key={p.account}>
@@ -970,7 +970,7 @@ function PayeesSheet(props: {
 
   return (
     <Sheet title={copy.poursOnlyTo} onClose={props.onClose}>
-      <p className="lede">{copy.payeesLede}</p>
+      <p className="lede">{NEW_POTS_ON_V2 ? copy.payeesLedeV2 : copy.payeesLede}</p>
       <div className="list">
         {draft.payees.map((p) => (
           <div className="list-row stacked" key={p.slot}>

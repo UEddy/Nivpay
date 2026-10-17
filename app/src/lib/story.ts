@@ -33,7 +33,8 @@ export type RowKind =
   | "change-agreed"
   | "change-made"
   | "change-withdrawn"
-  | "change-lapsed";
+  | "change-lapsed"
+  | "change-overridden";
 
 export type StoryRow = {
   key: string;
@@ -129,6 +130,7 @@ export function storyRows(events: PotEvent[], n: StoryNames): StoryRow[] {
     if (e.name === "ChangeApplied") c.ended = copy.changeApplied;
     else if (e.name === "ChangeWithdrawn") c.ended = copy.changeWithdrawn;
     else if (e.name === "ChangeLapsed") c.ended = copy.changeLapsed;
+    else if (e.name === "ChangeOverridden") c.ended = copy.changeOverridden;
   }
 
   const rows: StoryRow[] = [];
@@ -261,6 +263,11 @@ export function storyRows(events: PotEvent[], n: StoryNames): StoryRow[] {
       case "ChangeLapsed": {
         const c = changes.get(e.args.changeId as bigint);
         if (c) add(e, "change-lapsed", copy.storyChangeLapsed(changeWhat(c, words)), "", null);
+        break;
+      }
+      case "ChangeOverridden": {
+        const c = changes.get(e.args.changeId as bigint);
+        if (c) add(e, "change-overridden", copy.storyChangeOverridden(changeWhat(c, words)), copy.changeOverridden, null);
         break;
       }
     }

@@ -1,7 +1,8 @@
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { getAddress, type Address } from "viem";
-import { approvedNote, CHANGE_KINDS, CHANGE_STATUSES, changeStatusLine, changeTitle, changeWhat, choicesFor, fromChain, isComing, limitWithRoom, openChanges, widens, type PotChange } from "./changes.ts";
+import { waitText, approvedNote, CHANGE_KINDS, CHANGE_STATUSES, changeStatusLine, changeTitle, changeWhat, choicesFor, fromChain, isComing, limitWithRoom, openChanges, widens, type PotChange } from "./changes.ts";
 import { changeRefusalFor } from "./changesLive.ts";
 import { ERROR_CODES } from "../copy.ts";
 
@@ -39,7 +40,16 @@ function change(over: Partial<PotChange>): PotChange {
 test("the kinds and statuses are in the contract's order", () => {
   // NivPayPotsV2.ChangeKind and ChangeStatus: a wrong order would show one change as another.
   assert.deepEqual(CHANGE_KINDS, ["add", "raise", "later", "lower", "remove"]);
-  assert.deepEqual(CHANGE_STATUSES, ["pending", "waiting", "ready", "applied", "withdrawn", "expired", "lapsed"]);
+  assert.deepEqual(CHANGE_STATUSES, ["pending", "waiting", "ready", "applied", "withdrawn", "expired", "lapsed", "overridden"]);
+  // The contract's own enum, read from its source, in the same order.
+  const src = readFileSync(new URL("../../../src/NivPayPotsV2.sol", import.meta.url), "utf8");
+  const names = (block: string) => {
+    const start = src.indexOf(`enum ${block} {`);
+    const body = src.slice(start, src.indexOf("}", start));
+    return [...body.matchAll(/^\s*([A-Z]\w+),?\s*$/gm)].map((m) => (m[1] ?? "").toLowerCase());
+  };
+  assert.deepEqual(names("ChangeStatus"), [...CHANGE_STATUSES]);
+  assert.deepEqual(names("ChangeKind"), ["addpayee", "raiselimit", "laterclose", "lowerlimit", "removepayee"]);
   assert.deepEqual(CHANGE_KINDS.filter(widens), ["add", "raise", "later"]);
 });
 
@@ -125,4 +135,16 @@ test("every refusal has a neutral code and says nothing was sent", () => {
   }
   assert.equal(changeRefusalFor("ChangeNotReady").code, ERROR_CODES.CHANGE_NOT_READY);
   assert.equal(changeRefusalFor("TooManyOpenChanges").code, ERROR_CODES.CHANGE_REFUSED);
+});
+
+test("the wait reads as the contract has it: 72 hours for real, minutes for a staging copy", () => {
+  assert.equal(waitText(259_200n, "en-GB"), "72 hours");
+  assert.equal(waitText(300n, "en-GB"), "5 minutes");
+  assert.equal(waitText(259_200n, "fr-FR").replace(/\s/gu, " "), "72 heures");
+  assert.equal(waitText(90n, "en-GB"), "90 seconds");
+});
+
+test("the refusals the review added say what to do", () => {
+  assert.match(changeRefusalFor("TooManyOpenChangesFromYou").message, /You already have 2 changes/);
+  assert.match(changeRefusalFor("ClosesBeforeItApplies").message, /closes before this change could take effect/);
 });

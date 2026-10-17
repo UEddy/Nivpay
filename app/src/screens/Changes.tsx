@@ -3,7 +3,7 @@ import { getAddress, isAddressEqual, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import { cleanName } from "../lib/accounts.ts";
 import { liveWriteChain } from "../lib/chain.ts";
-import { changeLabel, changeStatusLine, changeTitle, choicesFor, isComing, openChanges, widens, type ChangeKind, type ChangeWords, type PotChange } from "../lib/changes.ts";
+import { changeLabel, changeStatusLine, changeTitle, choicesFor, isComing, openChanges, waitText, widens, type ChangeKind, type ChangeWords, type PotChange } from "../lib/changes.ts";
 import { changeData, changeRefusalOf, type ChangeCall } from "../lib/changesLive.ts";
 import type { Contact } from "../lib/contacts.ts";
 import { confirmsAccount, parseAccountId } from "../lib/draft.ts";
@@ -24,8 +24,8 @@ import { AmountUnderstood, NoticeLine, Sheet, STOPPED, useCancellable, type Noti
 
 const changeWhen = new Intl.DateTimeFormat(dateLocale(), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
-/** A time in seconds as "Mon 20 Oct, 09:00", in the phone's own time. */
-export const whenText = (seconds: bigint) => changeWhen.format(new Date(Number(seconds) * 1000));
+/** A time in seconds as "Mon 20 Oct, 09:00", in the phone's own time, as Who controls this pot writes dates. */
+export const whenText = (seconds: bigint) => changeWhen.format(new Date(Number(seconds) * 1000)).replace(",", "");
 
 /** How a pot's changes are told: its payees by name, its dollar, and dates as "Mon 20 Oct, 09:00". */
 export function changeWordsFor(state: Pick<PotState, "payees" | "decimals">): ChangeWords {
@@ -153,7 +153,10 @@ function useChangeWrites(me: Address, pots: Address, potId: bigint, onChanged: (
       void notifyChangeTx(write.hash, people.current);
       rememberReceipt(write.address, write.hash);
       setResult({ tone: "ok", text: done });
+      // Read again a little later too: the public RPC's nodes don't all reach the same finalized block at once.
       changed.current();
+      setTimeout(() => alive.current && changed.current(), 3000);
+      setTimeout(() => alive.current && changed.current(), 8000);
     } else if (outcome.kind === "reverted") setResult({ tone: "bad", text: copy.requestDidNotGoThrough, code: ERROR_CODES.REVERTED });
     else if (outcome.kind === "superseded") setResult({ tone: "bad", text: copy.requestDidNotGoThrough, code: ERROR_CODES.SUPERSEDED });
     else setResult(outcome.refused ? { tone: "bad", text: copy.requestTurnedDown, code: ERROR_CODES.REFUSED } : { tone: "bad", text: copy.stuck, code: ERROR_CODES.STUCK });
@@ -255,8 +258,12 @@ function ProposeChangeSheet(props: { state: PotState; potId: bigint; contacts: C
     return Number.isFinite(t) ? BigInt(Math.floor(t / 1000)) : null;
   }, [dateText, timeText]);
 
+  // A change that adds to spending applies only after its wait: if the pot closes first, it never can.
+  const tooLate = state.endTime < state.now + state.exitWindow;
+
   // What the contract would refuse, said before anything is sent.
   const problem: string | null = (() => {
+    if (widens(kind) && tooLate) return copy.changeClosesTooSoon(waitText(state.exitWindow, dateLocale()));
     if (kind === "add") {
       if (!cleanName(name)) return copy.changeNameMissing;
       if (!fitsText32(cleanName(name))) return copy.changeNameTooLong;
@@ -384,7 +391,8 @@ function ProposeChangeSheet(props: { state: PotState; potId: bigint; contacts: C
         </div>
       )}
 
-      <p className="hint">{widens(kind) ? copy.changeWidensHint : copy.changeNarrowsHint}</p>
+      {widens(kind) && tooLate && <p className="hint">{copy.changeClosesTooSoon(waitText(state.exitWindow, dateLocale()))}</p>}
+      <p className="hint">{widens(kind) ? copy.changeWidensHint(waitText(state.exitWindow, dateLocale())) : copy.changeNarrowsHint}</p>
       {problem && (limitText || name || idText || kind === "later") && <p className="hint">{problem}</p>}
       {writes.result && <NoticeLine notice={writes.result} />}
       <button

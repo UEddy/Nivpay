@@ -90,6 +90,8 @@ export type PotState = {
   removed: boolean[];
   /** The changes open on the pot (lib/changes.ts). Always empty on NivPayPots. */
   changes: PotChange[];
+  /** How long a widening change waits, in seconds (NivPayPotsV2.EXIT_WINDOW). 0 on NivPayPots. */
+  exitWindow: bigint;
 };
 
 export async function readPotState(onV2: boolean, potId: bigint, accounts: Address[], me: Address): Promise<PotState> {
@@ -104,7 +106,7 @@ export async function readPotState(onV2: boolean, potId: bigint, accounts: Addre
   ]);
   const unique = [...new Map(accounts.map((a) => [a.toLowerCase(), a])).values()];
   // A V2 pot's changes and removed payees, at the same block as everything else.
-  const v2 = onV2 ? await readChanges(readClient, POTS, potId, destinations.length, block.number) : { changes: [], removed: destinations.map(() => false) };
+  const v2 = onV2 ? await readChanges(readClient, POTS, potId, destinations.length, block.number) : { changes: [], removed: destinations.map(() => false), exitWindow: 0n };
   const [decimals, myBalance, ...infos] = await Promise.all([
     readClient.readContract({ address: asset, abi: ERC20_READ_ABI, functionName: "decimals", ...at }),
     readClient.readContract({ address: asset, abi: ERC20_READ_ABI, functionName: "balanceOf", args: [me], ...at }),

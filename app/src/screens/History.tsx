@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Address, Log } from "viem";
 import { copy } from "../copy.ts";
 import { BlockTimes, timesFor } from "../lib/blockTimes.ts";
-import { CTK, POTS_AUSD, POTS_TESTUSD } from "../lib/config.ts";
+import { ALL_POTS, CTK } from "../lib/config.ts";
 import { DEPLOYMENT } from "../lib/deployment.ts";
 import { detailFrom, type HistoryDetail, type HistoryEntry } from "../lib/history.ts";
 import { dateLocale } from "../lib/locale.ts";
@@ -19,7 +19,8 @@ const OPEN_KEY = "nivpay.historyopen.v1";
 const times = new BlockTimes(localStorage, DEPLOYMENT);
 const rowTime = new Intl.DateTimeFormat(dateLocale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const fullTime = new Intl.DateTimeFormat(dateLocale(), { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-const POTS_ALL = [POTS_AUSD, POTS_TESTUSD];
+/** Every pots contract, V2 included once it is set: money to or from any of them is a pot's. */
+const POTS_ALL = ALL_POTS;
 
 const money = (e: HistoryEntry, amount = e.amount) => (e.symbol === "$" ? formatAmount(amount, e.decimals, "cents") : formatCurrency(amount, e.decimals, e.symbol));
 

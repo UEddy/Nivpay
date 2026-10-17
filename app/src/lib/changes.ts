@@ -17,7 +17,7 @@ export const CHANGE_KINDS = ["add", "raise", "later", "lower", "remove"] as cons
 export type ChangeKind = (typeof CHANGE_KINDS)[number];
 
 /** In the contract's order (NivPayPotsV2.ChangeStatus). */
-export const CHANGE_STATUSES = ["pending", "waiting", "ready", "applied", "withdrawn", "expired", "lapsed"] as const;
+export const CHANGE_STATUSES = ["pending", "waiting", "ready", "applied", "withdrawn", "expired", "lapsed", "overridden"] as const;
 export type ChangeStatus = (typeof CHANGE_STATUSES)[number];
 
 export const widens = (kind: ChangeKind) => kind === "add" || kind === "raise" || kind === "later";
@@ -120,6 +120,13 @@ export function changeWhat(c: Pick<PotChange, "kind" | "destIndex" | "label" | "
 /** The same, starting a line: "Add DJ, up to $300". */
 export const changeTitle = (c: Pick<PotChange, "kind" | "destIndex" | "label" | "limit" | "endTime">, w: ChangeWords) => capFirst(changeWhat(c, w));
 
+/** A wait, as "72 hours" or "5 minutes", in the language in use: a pot's EXIT_WINDOW is set when its contract is deployed. */
+export function waitText(seconds: bigint, locale: string): string {
+  const s = Number(seconds);
+  const [value, unit] = s % 3600 === 0 ? [s / 3600, "hour"] : s % 60 === 0 ? [s / 60, "minute"] : [s, "second"];
+  return new Intl.NumberFormat(locale, { style: "unit", unit, unitDisplay: "long" }).format(value);
+}
+
 export function capFirst(s: string): string {
   return s.charAt(0).toLocaleUpperCase() + s.slice(1);
 }
@@ -141,6 +148,8 @@ export function changeStatusLine(c: PotChange, w: ChangeWords): string {
       return copy.changeExpired;
     case "lapsed":
       return copy.changeLapsed;
+    case "overridden":
+      return copy.changeOverridden;
   }
 }
 

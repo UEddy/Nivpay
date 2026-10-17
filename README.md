@@ -132,8 +132,22 @@ about V2 shows.
 | Lower a payee's limit, never below what it was paid (`proposeLowerLimit`) | a decider | the rule | with the yes that agrees it | applies | refused |
 | Remove a payee (`proposeRemovePayee`) | a decider | the rule | with the yes that agrees it | applies | refused |
 
+* **72 hours and 7 days are set when the contract is deployed**, as
+  `EXIT_WINDOW` and `APPLY_PERIOD` (each from 1 minute to 30 days). The real
+  deployment's script fixes them at 72 hours and 7 days, reads them back, and
+  `test/DeployPotsV2.t.sol` fails if either is ever anything else. Only the
+  staging copy below is shorter.
 * **Exits are never blocked**, during the wait or at any other time:
   `exit` and `claim` are V1's, unchanged.
+* **Nothing is agreed that could never apply.** A change that adds to
+  spending is refused when proposed, and again when agreed, if the pot closes
+  before its wait ends (`ClosesBeforeItApplies`), and when agreed if it no
+  longer fits the pot (a raise that no longer raises, no room for a payee).
+  Funders are only ever told of a change that can happen.
+* **A narrowing undoes nothing later.** Lowering a payee's limit ends every
+  raise of that payee still open, agreed or not; removing a payee ends every
+  change of that payee still open (`ChangeOverridden`). A raise agreed after
+  the lowering is a fresh decision, and applies.
 * **A change waiting to apply gives nothing.** A payment checks the payee
   and limit as they are when it pays: a payee not yet added has no index, a
   raise not yet applied leaves the old limit, and a payee removed meanwhile
@@ -147,7 +161,8 @@ about V2 shows.
   there must still be room for a new payee (10 in all, removed ones
   included), and a payee removed meanwhile takes no change.
 * **At most 5 changes are open on a pot** at once (`MAX_OPEN_CHANGES`),
-  agreed and waiting ones included. One that expired or lapsed frees its
+  agreed and waiting ones included, and at most 2 from any one decider
+  (`MAX_OPEN_PER_PROPOSER`), so no one decider can take every place. One that expired or lapsed frees its
   place at the next proposal, or at once with `lapseChange`, which anyone
   may call.
 * **The proposer can withdraw a change** until it applies, during the wait
@@ -156,7 +171,12 @@ about V2 shows.
   a payee's address, and anything about another pot.
 * **Events** for every step: `ChangeProposed`, `ChangeYes`,
   `ChangeYesRevoked`, `ChangeApproved` (with when it applies and lapses),
-  `ChangeApplied`, `ChangeWithdrawn` and `ChangeLapsed`.
+  `ChangeApplied`, `ChangeWithdrawn`, `ChangeLapsed` and `ChangeOverridden`.
+* **What a determined minority can still do**, by design: any one decider can
+  pause the pot, which stops changes that add to spending from applying (as
+  V1 lets one decider stop payments); and three or more deciders together,
+  short of the rule, can keep all 5 places filled with changes nobody agrees,
+  each expiring after 7 days. Neither moves money or stops anyone leaving.
 
 **What the app does with it.** On a V2 pot's screen the deciders get Propose
 a change, and everyone sees the changes on their way with how many yeses
@@ -459,32 +479,36 @@ All of this is visible before anyone puts money in, but only if they look:
 ### NivPayPotsV2, each claim and the line that proves it
 
 Checked on 17 Oct 2026 against `src/NivPayPotsV2.sol` at this commit. Not
-deployed yet. Everything in the V1 table above holds for V2 as well, at
-the same functions; the lines below are V2's.
+deployed yet (its staging copy, below, runs this exact source). Everything
+in the V1 table above holds for V2 as well, at the same functions; the lines
+below are V2's.
 
 | Claim | Where |
 | --- | --- |
 | Still no owner, admin, role or upgrade | imports at lines 4 to 8 are V1's: `IERC20`, `IERC20Permit`, `SafeERC20`, `ReentrancyGuard`, `Math` only; no `owner`, no `delegatecall`, no assembly |
-| Tokens still leave only to a listed payee, to a funder redeeming their own shares, or as fees | the only transfers out are `_redeem` (531), `_executePayout` (705) and `collectFees` (1035); no change function moves a token |
-| A pot's payees, limits and closing date change only by an applied change | outside `createPot` (407 to 427), they are written only in `_apply`: a payee added (913), the closing date (916), a limit (921, 925), a payee removed (927); `d.spent` only by a payment (690) |
-| The deciders, the rule and the name never change | `pot.threshold`, `pot.purpose` and `_approvers` are written only in `createPot` (407 to 418) |
-| Only the pot's deciders propose and agree changes | `_openChange` (855) and `approveChange` (786) need `_isApprover` |
-| The same yeses as a payment | a change is agreed when its yeses reach `pot.threshold` (798, 887), as a payment is |
-| A widening change waits 72 hours from the yes that agrees it | `EXIT_WINDOW = 72 hours` (88); `_agree` stamps the time (890 onwards); `_changeStatus` keeps it `Waiting` until then (978); `applyChange` needs `Ready` (831 onwards) |
-| No yes after it is agreed, so the wait can't move | `approveChange` needs `Pending` (789) |
-| It lapses 7 days after its wait | `APPLY_PERIOD = 7 days` (92); `Ready` only until then (979), then `Lapsed` |
-| Narrowing applies with its yes | `_agree` calls `_apply` at once for a lowering or a removal (890 onwards, `_widens` 983) |
-| Checked again when it applies | `_apply` (906 onwards): room for a payee (911), a later date (915), a raise still raises (920), a lowering still lowers (923) and stays above what was paid (924), a removed payee takes nothing (`_livePayee` 989) |
-| A paused pot applies nothing that widens | `applyChange` refuses while frozen (836) |
-| A closed pot takes no change | refused when proposing (854), agreeing (790) and applying (835) |
-| At most 5 open | `MAX_OPEN_CHANGES = 5` (96), checked when proposing (857), after ended ones are swept (`_sweep` 942) |
-| Only the proposer withdraws | `withdrawChange` (817) |
-| A removed payee is paid nothing | refused when asking (555) and when paying (671) |
-| Exits during the wait | `exit` and `_redeem` (505 to 531) are V1's, with no check on changes, a freeze or a close |
+| Tokens still leave only to a funder redeeming their own part, a listed payee, or as fees | the only transfers out are `_redeem` (570), `_executePayout` (744) and `collectFees` (1117); no change function moves a token |
+| A pot's payees, limits and closing date change only by an applied change | outside `createPot` (426 onwards) they are written only in `_apply`: a payee added (958), the closing date (960), a limit (964, 968), a payee removed (970); what a payee was paid only by a payment (729) |
+| The deciders, the rule and the name never change | `pot.purpose`, `pot.threshold` and `_approvers` are written only in `createPot` (446 to 457) |
+| 72 hours and 7 days are fixed at deployment | `EXIT_WINDOW` and `APPLY_PERIOD` are immutables (126, 130), each between 1 minute and 30 days (408, 409); `script/DeployPotsV2.s.sol` passes 72 hours and 7 days and reads them back, and `test/DeployPotsV2.t.sol` fails on anything else |
+| Only the pot's deciders propose and agree changes | `_openChange` (894) and `approveChange` (825) need `_isApprover` |
+| The same yeses as a payment | agreed when its yeses reach `pot.threshold` (837, 928), as a payment is |
+| A widening change waits `EXIT_WINDOW` from the yes that agrees it | `_agree` (931 onwards) stamps the time; `_changeStatus` keeps it `Waiting` until then (1058); `applyChange` (870 onwards) needs `Ready` |
+| No yes after it is agreed, so the wait can't move | `approveChange` needs `Pending` (828); taking a yes back refuses too (843) |
+| It lapses `APPLY_PERIOD` after its wait | `Ready` only until then (1059), then `Lapsed` |
+| Nothing is agreed that could never apply | refused when proposed (898) and when agreed (938) if the pot closes before the wait ends; `_checkWidening` (982) at agreement and again when applied |
+| Narrowing applies with its yes, and ends what it made moot | `_agree` applies a lowering or removal at once (`_widens`, 1065); `_override` (993) ends that payee's open raises, or all its open changes on a removal |
+| Checked again when it applies | `_apply` (951 onwards): `_checkWidening` for room, a later date and a raise that still raises; a lowering still lowers and stays above what was paid; a removed payee takes nothing (`_livePayee`, 1071) |
+| A paused pot applies nothing that widens | `applyChange` refuses while frozen (875) |
+| A closed pot takes no change | refused when proposing (893), agreeing (829) and applying (874) |
+| At most 5 open, at most 2 from one decider | `MAX_OPEN_CHANGES` (99) checked at 896, `MAX_OPEN_PER_PROPOSER` (103) at 897, after ended ones are swept (`_sweep`, 1021) |
+| Only the proposer withdraws | `withdrawChange` (856) |
+| A removed payee is paid nothing | refused when asking (594) and when paying (710) |
+| Exits during the wait | `exit` and `_redeem` (544 onwards, 556 onwards) are V1's, with no check on changes, a pause or a close |
 
 The suites that check this: `test/PotsChanges.t.sol` (every rule, one at a
 time), `test/PotsChangesFuzz.t.sol`, `test/PotsChangesInvariant.t.sol` with
-`test/handlers/PotsV2Handler.sol`, and every V1 suite again on V2
+`test/handlers/PotsV2Handler.sol`, `test/DeployPotsV2.t.sol`,
+`test/PotsForkV2.t.sol` on the real AUSD, and every V1 suite again on V2
 (`test/PotsOnV2.t.sol`). See [Tests](#tests).
 
 ### Outside this contract: Agora's Instant Settlement
@@ -1784,6 +1808,39 @@ Foundry's own revert counter stays low because the attacks catch their own
 reverts in order to count them, so the `blocked` ghost variables are the real
 measure, not `reverts:` in the run summary.
 
+### Before deploying NivPayPotsV2
+
+Every check below was run on the final source (the one the staging copy
+runs), on 17 Oct 2026:
+
+* **Deep runs.** `$env:FOUNDRY_PROFILE = "deep"; forge test --force`: ten
+  times the usual runs, at the same depth. Fuzz 5,120 runs each, invariants
+  2,560 runs at depth 96 (about 246,000 calls each). **424 tests passed, 0
+  failed**, in 20.5 minutes, the live testnet fork tests included.
+* **Coverage** of `src/NivPayPotsV2.sol` (the `forge coverage` command below):
+  **100% of lines and functions, 141 of 143 branches.** The two left are
+  V1's two unreachable guards, explained below; every new branch is covered.
+* **Static analysis**: Slither, below. None High; both Mediums false
+  positives; three findings fixed in the source.
+* **Mutation testing**: 48 mutants of the new rules, all killed, below.
+* **Real AUSD**: `test/PotsForkV2.t.sol` forks Monad testnet: a pot made,
+  money in, a payment, a raise proposed and agreed, a payment past the old
+  limit refused during the window, someone taking their part out a day in,
+  the change refused one second early and applied at 72 hours by someone
+  who doesn't decide, the bigger payment, and every unit accounted for.
+* **Live staging run**, on a staging copy with 5 minute windows, in the real
+  app with throwaway accounts: see the staging section under Deploying the
+  contracts.
+* **Independent review.** A separate agent, which had not seen this work,
+  reviewed `NivPayPotsV2.sol` and its tests three times, looking for a way to
+  pay someone not agreed, block an exit, or apply a change early. Round 1
+  found nothing above Low and three Lows: one decider could take every open
+  place (now at most 2 each), a raise agreed before a lowering could undo it
+  (a narrowing now ends it), and a change that could never apply could still
+  be agreed and announced (now refused). Round 2 found one more Low, a pot
+  closing exactly as a wait ended, now refused too. Round 3 found nothing.
+  What it left as by design is in the rules above.
+
 ### Mutation testing
 
 A passing suite proves nothing about a suite's ability to fail. Six deliberate
@@ -1833,31 +1890,70 @@ Both mutants now die by both routes.
 
 #### NivPayPotsV2's new rules
 
-The same way: fourteen deliberate bugs in the change rules, one at a time,
-each run against the V2 suites (`test/PotsChanges*.t.sol`), then reverted.
-None was committed.
+Every new rule broken on purpose, one at a time: 48 mutants, each run
+against the V2 suites (`test/PotsChanges*.t.sol` and
+`test/DeployPotsV2.t.sol`) with `forge test --force`, then reverted. None
+was committed. **All 48 are killed.**
+
+The forced rebuild matters. Tests deploy the contract from the build folder,
+and without `--force` a mutant's run was once seen to use the previous
+mutant's build. That is also how the run found that V1's three constructor
+tests (`test_constructor_reverts*`) had never been able to fail: `new` runs
+here as a cheatcode, so `vm.expectRevert` before it doesn't watch the
+constructor itself. They now go through an external call
+(`PotsTestBase.newPotsCall`), and deleting the fee check now fails
+`test_constructor_revertsAboveMaxFeeBps`, as it should have all along.
 
 | Mutant | Result | Caught by |
 | --- | --- | --- |
-| 1. apply a widening change inside its exit window | killed, 7 tests failed | `invariant_noWideningBeforeItsWindow`, `test_widening_waitsSeventyTwoHours` and five more |
-| 2. treat raising a limit as narrowing, so it applies at once | killed, 8 | `test_pay_aRaiseNotYetAppliedGivesNothing`, `test_widening_notWhileFrozen` and six more |
-| 3. pay a payee that was removed | killed, 2 | `test_pay_aPendingPaymentToAPayeeRemovedMeanwhileIsRefused`, and `invariant_paymentsOnlyUseWhatHadApplied` on the default profile |
-| 4. apply a widening change while paused | killed, 2 | `test_widening_notWhileFrozen`, `invariant_noWideningBeforeItsWindow` |
-| 5. take changes on a closed pot | killed, 2 | `test_closed_takesNoChange`, `invariant_closedPotsTakeNoChange` |
-| 6. count yeses after a change is agreed, restarting its wait | killed, 1 | `test_noYesCountsOnceAgreed` |
-| 7. never let an agreed change lapse | killed, 3 | `test_widening_lapsesSevenDaysAfterItsWait` and two more |
-| 8. lower a limit below what was paid when it applies | killed, 2 | `test_lower_thatNoLongerFitsWaitsForItsYes`, `invariant_potsAreExactlyWhatWasApplied` |
-| 9. allow six open changes | killed, 2 | `test_open_atMostFive`, `test_open_agreedAndWaitingStillCounts` |
-| 10. let anyone withdraw a change | killed, 1 | `test_withdraw_onlyTheProposerAndOnlyWhileOpen` |
-| 11. apply a raise that no longer raises | killed, 1 | `test_raise_thatNoLongerRaisesIsRefused` |
-| 12. agree a change one yes short | killed, 2 | `test_yeses_aThreeOfThreePotNeedsAllThree`, `test_revoke_takesAYesBack` |
-| 13. let someone who doesn't decide propose a change | killed, 2 | `test_propose_onlyDecidersMay`, `test_propose_aFunderWhoIsNotADeciderMayNot` |
-| 14. apply a raise to a payee removed meanwhile | killed, 2 | `test_raise_ofAPayeeRemovedMeanwhileIsRefused` and one more |
-
-The first run left mutants 3, 4, 5 and 12 caught by one unit test each. A
-3 of 3 pot test, the handler counting any apply on a paused or closed pot,
-and payments whose second yes comes later (so a change can land between)
-were added; mutant 3 now also fails the payments invariant by name.
+| 1. apply a widening change inside its exit window | killed, 8 | `invariant_noWideningBeforeItsWindow`, `invariant_onlyThePotsOwnDecidersAndNoUndoing` and 6 more |
+| 2. the window one second short | killed, 3 | `test_widening_lapsesSevenDaysAfterItsWait`, `test_widening_theWaitIsFromTheYesThatAgreedIt` and 1 more |
+| 3. ignore the exit window given at deployment | killed, 9 | `test_constants`, `test_theRealDeploymentAppliesForSevenDays` and 7 more |
+| 4. accept a window below the minimum | killed, 1 | `test_theWindowIsBounded` |
+| 5. accept a window above the maximum | killed, 1 | `test_theWindowIsBounded` |
+| 6. ignore the apply period given at deployment | killed, 8 | `test_constants`, `test_lapsed_onceRecordedStaysLapsed` and 6 more |
+| 7. accept an apply period below the minimum | killed, 1 | `test_theApplyPeriodIsBounded` |
+| 8. accept an apply period above the maximum | killed, 1 | `test_theApplyPeriodIsBounded` |
+| 9. never let an agreed change lapse | killed, 4 | `test_lapsed_onceRecordedStaysLapsed`, `test_open_expiredAndLapsedFreeTheirPlaces` and 2 more |
+| 10. lapse a second early | killed, 1 | `test_widening_lapsesSevenDaysAfterItsWait` |
+| 11. let an unagreed change never expire | killed, 4 | `test_expired_neitherLapsesNorWithdraws`, `test_open_expiredAndLapsedFreeTheirPlaces` and 2 more |
+| 12. treat raising a limit as narrowing, so it applies at once | killed, 17 | `test_agree_aWideningChangeThatCouldNeverApplyIsRefused`, `test_closed_byItsDateTakesNoChange` and 15 more |
+| 13. treat lowering a limit as widening, so it waits | killed, 12 | `test_expiry_theLastSecondStillTakesAYes`, `test_handlerReachesEveryRule` and 10 more |
+| 14. agree a change one yes short | killed, 2 | `test_revoke_takesAYesBack`, `test_yeses_aThreeOfThreePotNeedsAllThree` |
+| 15. agree at proposal whatever the rule | killed, 50 | `test_addPayee_refusedOnceThePotHasTenPayees`, `test_add_whenTheLastPlaceWasTakenMeanwhileIsRefused` and 48 more |
+| 16. count yeses after a change is agreed, restarting its wait | killed, 1 | `test_noYesCountsOnceAgreed` |
+| 17. count the same decider's yes twice | killed, 1 | `test_approve_onlyDecidersAndOnlyOnce` |
+| 18. take back a yes after agreement | killed, 1 | `test_noYesCountsOnceAgreed` |
+| 19. take back a yes without lowering the count | killed, 3 | `invariant_yesCountsAreTheYeses`, `test_events_proposedAndEachYes` and 1 more |
+| 20. let a non-decider propose a change | killed, 5 | `invariant_onlyThePotsOwnDecidersAndNoUndoing`, `invariant_potsAreExactlyWhatWasApplied` and 3 more |
+| 21. let a non-decider say yes to a change | killed, 5 | `invariant_onlyThePotsOwnDecidersAndNoUndoing`, `invariant_potsAreExactlyWhatWasApplied` and 3 more |
+| 22. take changes on a closed pot | killed, 2 | `invariant_closedPotsTakeNoChange`, `test_closed_takesNoChange` |
+| 23. take a yes on a closed pot | killed, 2 | `invariant_closedPotsTakeNoChange`, `test_closed_takesNoChange` |
+| 24. apply a change on a closed pot | killed, 2 | `test_closed_byItsDateTakesNoChange`, `test_closed_takesNoChange` |
+| 25. apply a widening change while frozen | killed, 2 | `invariant_noWideningBeforeItsWindow`, `test_widening_notWhileFrozen` |
+| 26. agree a widening change the close would beat | killed, 2 | `test_widening_agreedExactlyTooLateIsRefused`, `test_widening_thatTheCloseWouldBeatIsRefused` |
+| 27. propose a widening change the close would beat | killed, 2 | `test_widening_closesExactlyWhenItWouldApplyIsRefused`, `test_widening_thatTheCloseWouldBeatIsRefused` |
+| 28. agree one closing exactly at the wait's end | killed, 1 | `test_widening_agreedExactlyTooLateIsRefused` |
+| 29. allow six open changes | killed, 2 | `test_open_agreedAndWaitingStillCounts`, `test_open_atMostFive` |
+| 30. allow three from one decider | killed, 2 | `invariant_atMostTwoFromOneDecider`, `test_open_atMostTwoFromOneDecider` |
+| 31. never free an expired change's place | killed, 3 | `test_expired_neitherLapsesNorWithdraws`, `test_open_expiredAndLapsedFreeTheirPlaces` and 1 more |
+| 32. keep an applied change's place | killed, 5 | `test_addPayee_refusedOnceThePotHasTenPayees`, `test_add_whenTheLastPlaceWasTakenMeanwhileIsRefused` and 3 more |
+| 33. keep a withdrawn change's place | killed, 2 | `test_open_atMostFive`, `test_open_atMostTwoFromOneDecider` |
+| 34. let anyone withdraw a change | killed, 1 | `test_withdraw_onlyTheProposerAndOnlyWhileOpen` |
+| 35. withdraw an applied change | killed, 5 | `test_expired_neitherLapsesNorWithdraws`, `test_lapsed_onceRecordedStaysLapsed` and 3 more |
+| 36. lower a limit below what was paid when it applies | killed, 1 | `test_lower_thatNoLongerFitsWaitsForItsYes` |
+| 37. lower a limit that no longer lowers | killed, 1 | `test_lower_thatWouldNowRaiseIsRefused` |
+| 38. apply a raise that no longer raises | killed, 2 | `test_agree_aWideningChangeThatCouldNeverApplyIsRefused`, `test_raise_thatNoLongerRaisesIsRefused` |
+| 39. apply a later close that is no longer later | killed, 1 | `test_laterClose_thatIsNoLongerLaterIsRefused` |
+| 40. add an eleventh payee | killed, 1 | `test_add_whenTheLastPlaceWasTakenMeanwhileIsRefused` |
+| 41. apply a raise to a payee removed meanwhile | killed, 1 | `test_remove_appliesAtOnceAndThePayeeIsPaidNothingMore` |
+| 42. remove a payee in name only | killed, 7 | `invariant_paymentsOnlyUseWhatHadApplied`, `invariant_potsAreExactlyWhatWasApplied` and 5 more |
+| 43. let a lowering leave an agreed raise standing | killed, 3 | `test_lower_endsEveryOpenRaiseOfThatPayeeOnly`, `test_raise_ofAPayeeRemovedMeanwhileIsOverridden` and 1 more |
+| 44. let a lowering end raises of other payees too | killed, 2 | `test_lower_endsEveryOpenRaiseOfThatPayeeOnly`, `test_remove_endsEveryOpenChangeOfThatPayee` |
+| 45. let a lowering end changes other than raises | killed, 1 | `test_lower_thatWouldNowRaiseIsRefused` |
+| 46. pay a removed payee | killed, 1 | `test_pay_aPendingPaymentToAPayeeRemovedMeanwhileIsRefused` |
+| 47. ask to pay a removed payee | killed, 1 | `test_remove_appliesAtOnceAndThePayeeIsPaidNothingMore` |
+| 48. show a removed payee as payable | killed, 1 | `test_removedPayee_showsNothingLeft` |
 
 ### Coverage
 
@@ -1906,6 +2002,29 @@ Medium.** Every one is listed here; none is suppressed and no
 | 7 | `timestamp` | `proposalInfo`, expiry status | Inherent, and it is a view. |
 | 8 | `pragma` | 0.8.28 here against OpenZeppelin's `^0.8.20` | Expected. Everything compiles under the single pinned 0.8.28. |
 | 9 | `cyclomatic-complexity` | `createPot` scores 13 | Accepted. Every branch is one validation of one parameter that can never be changed afterwards. Splitting it would add indirection to the one function where the checks most deserve to be read in a single place. |
+
+#### NivPayPotsV2
+
+```powershell
+python -m slither src/NivPayPotsV2.sol --solc-remaps "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/" --exclude-dependencies --checklist
+```
+
+Three findings of the first run were changed in the source rather than
+argued with: `changeInfo` now sets `appliesAt` and `lapsesAt` to 0 where it
+declares them (`uninitialized-local`, twice; harmless, now explicit), and
+`_widens` reads the kind's place in the enum instead of three equalities
+(`incorrect-equality`). On the final source Slither 0.11.6 reports **20
+findings: none High, and both Mediums are false positives.** None is
+suppressed and no `slither-disable` comment appears in the source.
+
+| # | Detector | Where | Assessment |
+| --- | --- | --- | --- |
+| 1, 2 | `incorrect-equality` (Medium) | `_dropOpen` (`open[i] == changeId`) and `_override` (`id == byChangeId`, `o.destIndex == index`) | **False positives.** The detector is about strict equality on a balance or a timestamp that someone could nudge; these compare change ids and payee indexes, which is the point of both functions. |
+| 3 | `reentrancy-benign` (Low) | `fundWithPermit` | V1's, unchanged; see the table above. |
+| 4 to 16 | `timestamp` (Low) | V1's six (`approve`, `createPot`, `closePot`, `_propose`, `proposalInfo`, `_isClosed`); `_changeStatus`, `_openChange` and `_agree`; `_widens`, `_openBy`, `_dropOpen` and `_override` | Inherent where time is read: a change's wait and lapse, and whether the pot closes before the wait ends, are judged against the block's time, coarse enough that validator drift changes nothing. `_widens`, `_openBy`, `_dropOpen` and `_override` read no time at all; Slither attributes it to them, as with V1's `_propose`. |
+| 17 | `pragma` | 0.8.28 against OpenZeppelin's `^0.8.20` | Expected, as for V1. |
+| 18 | `cyclomatic-complexity` | `createPot` | V1's, unchanged. |
+| 19, 20 | `naming-convention` | `EXIT_WINDOW` and `APPLY_PERIOD`, immutables in capitals | Kept on purpose: they were constants, and keeping the names keeps the getters the app and the deploy script read. |
 
 ## Deploying the contracts
 
@@ -2291,9 +2410,10 @@ forge verify-contract `
 touched. `script/DeployPotsV2.s.sol` takes no fee settings from the
 environment: it reads the token, `feeBps`, `feeCap` and `feeRecipient` off
 the live NivPayPots for that token, refuses any chain but `10143` and any
-token but the one expected, deploys, and reads every setting and rule back
-(the 72 hour window, the 7 days, the 5 open changes). Use the same
-`nivpay-deployer` keystore.
+token but the one expected, deploys with an exit window of exactly 72 hours
+and an apply period of exactly 7 days (fixed in the script, not read from
+the environment, and pinned by `test/DeployPotsV2.t.sol`), and reads every
+setting and rule back. Use the same `nivpay-deployer` keystore.
 
 ```powershell
 $env:FOUNDRY_PROFILE = "deploy"
@@ -2319,8 +2439,9 @@ forge script script/DeployPotsV2.s.sol:DeployPotsV2 `
     --broadcast
 ```
 
-The dry run against the live chain, on 17 Oct 2026, reports **4,711,662
-gas** for each, about **0.96 MON** at a 203 gwei max fee. Note each
+The dry run against the live chain, on 17 Oct 2026, on the final source,
+reports **5,024,967 gas** for each, about **1.02 MON** at a 203 gwei max
+fee, and logs `exit window s 259200` and `apply period s 604800`. Note each
 `NivPayPotsV2` address it prints and the block of its transaction. Then, in
 `app/src/lib/config.ts`, set `POTS_V2` to `{ ausd: "<AUSD one>", testusd:
 "<TESTUSD one>" }` and `POTS_V2_DEPLOY_BLOCK` to their blocks, and the same
@@ -2337,9 +2458,51 @@ forge verify-contract `
     --chain 10143 `
     --verifier sourcify `
     --verifier-url https://sourcify-api-monad.blockvision.org/ `
-    --constructor-args (cast abi-encode "constructor(address,uint256,uint256,address)" <token> 50 50000000 0x7EAf7f3e330ac388A0e951e80957B7274597297c)
+    --constructor-args (cast abi-encode "constructor(address,uint256,uint256,address,uint256,uint256)" <token> 50 50000000 0x7EAf7f3e330ac388A0e951e80957B7274597297c 259200 604800)
 ```
 
+
+### NivPayPotsV2 STAGING copy: unused, not the real deployment
+
+> **Staging only. Do not use, do not point the app at it.** Monad testnet
+> `0x5a6121611867B238530cE4C6d55F1327AABB05aF`, deployed in transaction
+> `0xa3d646ce6cac7ce31b33a36e5e6ddd2cabf1c4d3c3ee0caa9f131018dc04eee7`,
+> block 71,868,354, by a throwaway key, from
+> `script/DeployPotsV2Staging.s.sol`: a **5 minute** exit window, a **5
+> minute** apply period, no fees, on real AUSD. It exists only so a change's
+> whole life could be run end to end in minutes. Nothing in this repository
+> points at it, and it is left unused.
+
+On 17 Oct 2026 it was run end to end with throwaway accounts, in the real app
+at localhost, built with `POTS_V2` pointed at it for that run only (never
+committed), in a headless Chromium with a virtual passkey for each person:
+
+1. Ana made a pot ("Staging party", 1 of 1, Caterer up to $300) through Make
+   a pot; Ana put in $1,000 and Ben, from the pot's link, $500.
+2. Ana paid the caterer $200, within the limit.
+3. Ana proposed raising the caterer to $600: agreed at once (1 of 1), waiting
+   5 minutes. The pot screen said so; applying it early was refused
+   (`ChangeNotReady`).
+4. Ben's bell said "Staging party: change agreed: raise Caterer's limit to
+   $600. Takes effect Sat 17 Oct, 17:48. If you disagree, take your part out
+   before then.", with Take my part out. Ben took his $433.33 out, two
+   minutes into the window.
+5. After the window, Ana made the change, and paid the caterer $350 more,
+   $550 in all, past the old limit.
+6. Ana proposed adding a DJ, up to $100; agreed, nobody applied it, and 10
+   minutes later it had lapsed: the chain reports it Lapsed, applying it is
+   refused, the pot no longer lists it, and once anyone recorded the lapse
+   the story says "Change lapsed: add DJ, up to $100.00".
+7. The money, to the unit: $1,500 in = $550 paid + $0 fees + $433.333333
+   taken out + $516.666667 held, which is exactly the contract's AUSD
+   balance.
+
+The run found and fixed five things in the app before this commit: a render
+loop on Home once V2 is set, a pot screen that didn't refresh after a change
+landed (the RPC's nodes don't all reach the same finalized block at once),
+money into a V2 pot shown in History as sent to an account, three lines on
+Make a pot saying nothing could ever change, and dates written "Sat, 17 Oct"
+where the rest of the app writes "Sat 17 Oct".
 
 ### Broadcast receipts are committed on purpose
 

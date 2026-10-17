@@ -7,7 +7,7 @@ import { AccountStore, cleanName, NAME_MAX, shownName, type StoredAccount } from
 import { nameAtStart, PendingNames, readSavedName } from "./lib/displayName.ts";
 import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
-import { AUSD, AUSD_FAUCET, CTK, LOG_PAGE_BLOCKS, POTS_AUSD, POTS_TESTUSD, SETTLEMENT_PAIR, TESTUSD } from "./lib/config.ts";
+import { ALL_POTS, AUSD, AUSD_FAUCET, CTK, LOG_PAGE_BLOCKS, POTS_AUSD, POTS_TESTUSD, SETTLEMENT_PAIR, TESTUSD } from "./lib/config.ts";
 import { DEPLOYMENT, POTS, POTS_DEPLOY_BLOCK, POTS_V2_DEPLOY_BLOCK_HERE, POTS_V2_HERE, potsOf } from "./lib/deployment.ts";
 import { DraftStore, newDraft } from "./lib/draft.ts";
 import { EMPTY_SCAN, findPots, ScanStore, type FoundPot, type Role, type ScanState } from "./lib/discover.ts";
@@ -1361,7 +1361,7 @@ function Home(props: {
       {props.tab === "home" && (
         <Suspense fallback={null}>
           <HistoryCard
-            entries={historyFrom(Object.values(historyIn), historyOut ? [historyOut] : [], { me: owner, pots: [POTS_AUSD, POTS_TESTUSD], pair: SETTLEMENT_PAIR, faucets: [AUSD_FAUCET], desk })}
+            entries={historyFrom(Object.values(historyIn), historyOut ? [historyOut] : [], { me: owner, pots: ALL_POTS, pair: SETTLEMENT_PAIR, faucets: [AUSD_FAUCET], desk })}
             since={notes.startedAt}
             who={(a) => nameOf(a) ?? copy.accountEnding(a)}
             potName={(key) => {
@@ -1697,19 +1697,26 @@ function keyedV2(f: Found): Found {
 function useAllFoundPots(account: Address, connection: ReturnType<typeof useConnection>): Found {
   const v1 = useFoundPots(account, connection, V1_NET);
   const v2raw = useFoundPots(account, connection, V2_NET);
-  if (!V2_NET) return v1;
-  const v2 = keyedV2(v2raw);
-  const ended = v1.asks.ended || v2.asks.ended ? { ended: [...(v1.asks.ended ?? []), ...(v2.asks.ended ?? [])] } : {};
-  return {
-    scan: { ...v1.scan, found: [...v2.scan.found, ...v1.scan.found], decimals: v1.scan.decimals ?? v2.scan.decimals },
-    failed: v1.failed || v2.failed,
-    answered: [...v1.answered, ...v2.answered].sort((a, b) => b.answeredAt - a.answeredAt),
-    asks: { ...v1.asks, open: [...v1.asks.open, ...v2.asks.open], ...ended },
-    starts: { ...v1.starts, ...v2.starts },
-    makers: { ...v1.makers, ...v2.makers },
-    fundings: [...v1.fundings, ...v2.fundings],
-    coming: v2.coming,
-  };
+  // Merged only when a read changes: Home's notes effect runs on each new scan
+  // and asks, so a merge made fresh on every render would run it in a loop.
+  const { scan: s1, failed: f1, answered: a1, asks: q1, starts: t1, makers: m1, fundings: d1 } = v1;
+  const { scan: s2, failed: f2, answered: a2, asks: q2, starts: t2, makers: m2, fundings: d2, coming: c2 } = v2raw;
+  const merged = useMemo((): Found | null => {
+    if (!V2_NET) return null;
+    const v2 = keyedV2({ scan: s2, failed: f2, answered: a2, asks: q2, starts: t2, makers: m2, fundings: d2, coming: c2 });
+    const ended = q1.ended || v2.asks.ended ? { ended: [...(q1.ended ?? []), ...(v2.asks.ended ?? [])] } : {};
+    return {
+      scan: { ...s1, found: [...v2.scan.found, ...s1.found], decimals: s1.decimals ?? v2.scan.decimals },
+      failed: f1 || v2.failed,
+      answered: [...a1, ...v2.answered].sort((a, b) => b.answeredAt - a.answeredAt),
+      asks: { ...q1, open: [...q1.open, ...v2.asks.open], ...ended },
+      starts: { ...t1, ...v2.starts },
+      makers: { ...m1, ...v2.makers },
+      fundings: [...d1, ...v2.fundings],
+      coming: v2.coming,
+    };
+  }, [s1, f1, a1, q1, t1, m1, d1, s2, f2, a2, q2, t2, m2, d2, c2]);
+  return merged ?? v1;
 }
 
 
