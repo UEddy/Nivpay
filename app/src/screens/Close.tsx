@@ -23,6 +23,7 @@ import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { mapLines } from "./mapNames.ts";
 import { PotMap, type Coin, type MapPayee, type MapPerson } from "./PotMap.tsx";
+import { MoneyCards } from "./MoneyCards.tsx";
 import { layersOf, peopleOf } from "./Request.tsx";
 import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, STOPPED, useCancellable, type Notice } from "./ui.tsx";
 import { beforePasskey } from "../lib/cancel.ts";
@@ -391,10 +392,28 @@ export function CloseScreen(props: {
             </div>
             <div className="share-amount">{fmt(tookAmount ?? myWorth)}</div>
             {tookAmount === null && <div className="share-why">{fraction ? copy.shareBecause(fmt(myPut, "auto"), fraction) : copy.shareFromShares}</div>}
+            {tookAmount === null && take.action && <div className="share-why">{copy.youdGetNow(fmt(myWorth))}</div>}
             {tookAmount === null && take.action === "exit" && (
               <div className="share-why">{waitingPayment ? `${copy.exitWarning} ${copy.exitWithPaymentWaiting}` : copy.exitWarning}</div>
             )}
           </div>
+        )}
+
+        {state.closed && events && (
+          <MoneyCards
+            events={events}
+            complete={complete}
+            decimals={d}
+            held={state.held}
+            payeeNames={state.payees.map((p) => p.name)}
+            me={me}
+            nameOf={nameOf}
+            onStale={() =>
+              void read()
+                .then((s) => alive.current && setState(s))
+                .catch(() => {})
+            }
+          />
         )}
 
         {!state.closed && split.rows.length > 0 && (

@@ -23,6 +23,8 @@ import { AskSheet, useAskFlow, WaitingRequests } from "./Ask.tsx";
 import { usePayMotion } from "./payMotion.ts";
 import { PotMap, type Coin, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { WhoControls } from "./WhoControls.tsx";
+import { MoneyCards } from "./MoneyCards.tsx";
+import { anyPaymentMade } from "../lib/ledger.ts";
 import { ContactStore } from "../lib/contacts.ts";
 import { ScanStore } from "../lib/discover.ts";
 import { matchName, VOICE_CAP, withinVoiceCap, type VoiceCommand } from "../lib/voice.ts";
@@ -623,6 +625,16 @@ export function ChipInScreen(props: {
             {copy.askForPayment}
           </button>
         )}
+        <MoneyCards
+          events={events}
+          complete={complete}
+          decimals={decimals}
+          held={state.held}
+          payeeNames={state.payees.map((p) => p.name)}
+          me={me}
+          nameOf={nameOf}
+          onStale={() => void refresh()}
+        />
         <div className="foot-row">
           <button type="button" className="text-btn story-link" onClick={props.onOpenStory}>
             {copy.openStory}
@@ -664,6 +676,7 @@ export function ChipInScreen(props: {
           <>
             {result && <NoticeLine notice={result} />}
             {blocked && <p className="foot-hint">{state.closed ? copy.potClosedNote : copy.potPausedNote}</p>}
+            {!blocked && complete && anyPaymentMade(events) && <p className="foot-hint">{copy.paymentsAlreadyMade}</p>}
             {slowLine && (
               <p className="foot-hint" role="status">
                 {slowLine}

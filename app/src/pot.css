@@ -1330,6 +1330,79 @@
   white-space: nowrap;
 }
 
+/* Where your money went: a card per person who put money in (screens/MoneyCards.tsx). */
+.money-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.money-cards .eyebrow {
+  margin: 4px 0 0;
+}
+.money-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.money-card-who {
+  margin: 0;
+  font-weight: 600;
+}
+.money-row-btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  /* A 44px target on one line that takes no more room than the rows around it, on one line or two. */
+  margin: -12px 0;
+  padding: 12px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+.money-row-btn > span:first-child {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.money-paid-to {
+  color: var(--muted);
+}
+.money-parts {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  border-left: 2px solid var(--card-border);
+}
+.money-parts li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.money-parts li span {
+  color: var(--muted);
+}
+.money-total {
+  border-top: 1px solid var(--card-border);
+  padding-top: 8px;
+}
+.money-rows > .money-total span:first-child {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .vote-row {
   display: flex;
   align-items: center;

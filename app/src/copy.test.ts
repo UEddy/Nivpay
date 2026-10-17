@@ -20,13 +20,13 @@ test("the checker catches every banned word, plurals and phrases included", () =
     "crypto", "cryptos", "Blockchain", "blocks", "chain", "on-chain", "onchain", "wallets", "Token", "gas",
     "Monad", "testnet", "networks", "address", "addresses", "hash", "hashes", "contract", "stablecoins",
     "seed", "mnemonic", "private key", "Private keys", "0x1234", "1 MON", "MONs", "a \u2014 b", "1\u20132",
-    "swap", "Swapped", "approve", "approval", "Approving", "whitelist", "whitelisted", "allowlist",
+    "swap", "Swapped", "approve", "approval", "Approving", "whitelist", "whitelisted", "allowlist", "100 shares", "Shares",
   ];
   for (const c of cases) assert.ok(bannedIn(`see ${c} here`).length > 0, c);
 });
 
 test("the checker leaves ordinary words alone", () => {
-  for (const ok of ["Closed Mon 14 Dec", "blocked", "unblock", "tokenless", "chained", "10x faster", "addressed", "contractor", "money", "Agora", "AUSD", "Settled in 0.7s", "one-time setup"]) {
+  for (const ok of ["Closed Mon 14 Dec", "blocked", "unblock", "tokenless", "chained", "10x faster", "addressed", "contractor", "money", "Agora", "AUSD", "Settled in 0.7s", "one-time setup", "your share", "Share the pot", "shared"]) {
     assert.deepEqual(bannedIn(ok), [], ok);
   }
 });

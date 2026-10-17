@@ -789,6 +789,41 @@ new funding. Every funder can still exit at that point. This is documented in
 the contract rather than papered over, because resetting the supply instead
 would silently detach per funder balances from the total.
 
+## Where your money went
+
+A pot's screen has a card for each person who put money in, yours first
+(`app/src/lib/ledger.ts`, `app/src/screens/MoneyCards.tsx`):
+
+    You put in                     $500.00
+    Your part of payments made    -$300.00  (Caterer)
+    Your part of fees               -$1.50
+    Taken out                        $0.00
+    Left for you                   $198.50
+
+Tapping "Your part of payments made" lists each payment with your part of it.
+The card is worked out by replaying the pot's finalized events with the
+contract's own numbers, as described under Accounting: each payment and its
+fee are divided by everyone's shares at that moment (virtual shares included),
+so someone who joined after a payment shows nothing for it, and someone who
+had already taken their part out shows nothing for what came after. "Left for
+you" is the contract's own number, `funderInfo`'s `redeemable`, read at the
+same finalized block; until the replay agrees with it, the cards wait. The
+lines are in whole cents and always add up exactly: a payment total is rounded
+once and its items take whole cents that add up to it, and whatever the cents
+leave over shows as a Rounding line (at most 2 cents across 400 random pots
+in the tests), never as lines that don't add up. `ledger.test.ts` checks that
+against a separate model of the contract, with late joiners, early exits,
+several payments, top ups and pots spent to nothing, and ties the model to
+the contract itself: `test/vectors/ledger.json` holds 27 pots recorded from
+NivPayPots, which `test/PotsLedger.t.sol` replays on the contract (every share
+minted, exit, claim, fee and `funderInfo`) and `ledger.test.ts` replays
+through the model and the cards.
+
+Chip in says "Payments already made don't come out of your money." once a
+payment has been made; Take my share out says "You'd get $198.50 now. That's
+your part of what hasn't been spent."; and a closed pot's summary shows the
+same cards.
+
 ## Fees
 
 Fee basis points, the per payout fee cap and the fee recipient are set in the

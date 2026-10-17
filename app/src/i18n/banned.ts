@@ -29,6 +29,8 @@ export const BANNED: [string, RegExp][] = [
   ["swap", /\bswap(s|ped|ping)?\b/i],
   ["approve", /\bapprov(e|es|ed|al|als|ing)\b/i],
   ["whitelist", /\b(white|allow)list(s|ed|ing)?\b/i],
+  // The contract counts money in a pot as shares. On screen it's "your part".
+  ["shares", /\bshares\b/i],
   // Typography rule, not a crypto word: no em or en dashes anywhere.
   ["em dash", /\u2014/],
   ["en dash", /\u2013/],
