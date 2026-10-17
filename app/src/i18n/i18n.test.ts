@@ -97,3 +97,20 @@ for (const [lang, dict] of langs) {
 test("English is back after the checks above", () => {
   assert.equal(copy.storyAdded("account ending 8C9D", "$1"), "Account ending 8C9D added $1");
 });
+
+test("a date shortened with a dot ends its sentence with one dot, not two", async () => {
+  const { fr } = await import("./fr.ts");
+  const { pt } = await import("./pt.ts");
+  try {
+    useDictionary(fr);
+    assert.equal(copy.closedEarlyLine("17 oct.", "Ana", "Ben"), "Fermée le 17 oct. Ana l'a demandé, Ben a dit oui.");
+    assert.equal(copy.closesAt("sam. 17 oct."), "Ferme le sam. 17 oct.");
+    useDictionary(pt);
+    assert.ok(!copy.closesAt("17 de out.").includes(".."), copy.closesAt("17 de out."));
+    useDictionary(en);
+    assert.equal(copy.closesAt("Sat 17 Oct"), "Closes Sat 17 Oct.");
+    assert.equal(copy.voiceHeard("…"), en.voiceHeard("…"), "an ellipsis is left alone");
+  } finally {
+    useDictionary(en);
+  }
+});

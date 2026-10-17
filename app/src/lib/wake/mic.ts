@@ -15,7 +15,7 @@ const WORKLET_URL = "/wake/capture.js";
 
 let model: Promise<WakeModel> | null = null;
 
-/** The model, fetched once (about 1.5 MB, only when listening is on) and kept for the page. */
+/** The model, fetched once (2.1 MB, only when listening is on) and kept for the page. */
 export function loadModel(): Promise<WakeModel> {
   model ??= fetch(MODEL_URL)
     .then((r) => {

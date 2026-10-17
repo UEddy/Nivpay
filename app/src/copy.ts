@@ -34,12 +34,21 @@ export function sentenceStarts(text: string): string {
   return text.replace(new RegExp(`(^|[.!?]\\s+)${escape(ending)}`, "g"), `$1${upper}`);
 }
 
+/**
+ * A date whose month is shortened with a dot ("17 oct." in French, "17 de
+ * out." in Portuguese) ends a sentence with one dot, not two: "Fermée le 17
+ * oct. Ana l'a demandé", never "17 oct.. Ana".
+ */
+export function oneFullStop(text: string): string {
+  return text.replace(/(\p{L})\.\.(?=\s|$)/gu, "$1.");
+}
+
 /** These make the name itself, which goes in the middle of sentences too. */
 const NAME_MAKERS = new Set(["accountEnding", "mapEnding", "withUsername"]);
 
 function withSentenceStarts(words: Dictionary): Dictionary {
   return Object.fromEntries(
-    Object.entries(words).map(([k, v]) => [k, typeof v === "function" && !NAME_MAKERS.has(k) ? (...a: unknown[]) => sentenceStarts((v as (...x: unknown[]) => string)(...a)) : v]),
+    Object.entries(words).map(([k, v]) => [k, typeof v === "function" && !NAME_MAKERS.has(k) ? (...a: unknown[]) => sentenceStarts(oneFullStop((v as (...x: unknown[]) => string)(...a))) : v]),
   ) as Dictionary;
 }
 

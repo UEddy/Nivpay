@@ -63,9 +63,17 @@ test("incoming payments are read from finalized logs filtered to this account, n
 test("Receive never reads further back than its floor, and keeps what it had", async () => {
   const saved = { cursor: 50n, events: [{ name: "Transfer", block: 40n, logIndex: 0, tx: "0x01" as Hex, args: {} }] };
   const inner: FeedStore = { load: async () => saved, save: async () => {} };
-  assert.deepEqual(await withFloor(inner, 1_000n).load(), { cursor: 1_000n, events: saved.events });
-  assert.deepEqual(await withFloor(inner, 10n).load(), saved);
+  assert.deepEqual(await withFloor(inner, 1_000n).load(), { cursor: 1_000n, events: saved.events, gaps: [] });
+  assert.deepEqual(await withFloor(inner, 10n).load(), { ...saved, gaps: [] });
   assert.equal(await withFloor({ load: async () => undefined, save: async () => {} }, 5n).load(), undefined);
+});
+
+test("a list left before it had filled carries on above the floor, and nothing below it is read", async () => {
+  const saved = { cursor: 500n, events: [], gaps: [[300n, 499n], [100n, 199n], [20n, 60n]] as [bigint, bigint][] };
+  const inner: FeedStore = { load: async () => saved, save: async () => {} };
+  assert.deepEqual((await withFloor(inner, 150n).load())?.gaps, [[300n, 499n], [150n, 199n]]);
+  assert.deepEqual((await withFloor(inner, 10n).load())?.gaps, saved.gaps);
+  assert.deepEqual((await withFloor(inner, 600n).load())?.gaps, []);
 });
 
 test("a payment from a pot is told as from a pot, never as an account ending", () => {

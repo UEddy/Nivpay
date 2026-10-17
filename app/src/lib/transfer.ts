@@ -102,13 +102,17 @@ export const RECEIVE_BACKLOG_BLOCKS = 2_000n;
  * Keeps what was received before but never reads further back than `floor`,
  * so opening Receive after a long time away doesn't page through hours of
  * blocks 100 at a time. The balance is always right; only the list is short.
+ * What was still to fill above the floor is kept, so a list left before it
+ * had filled carries on where it stopped (savedFeedState); below the floor it
+ * is dropped.
  */
 export function withFloor(store: FeedStore, floor: bigint): FeedStore {
   return {
     load: async () => {
       const saved = await store.load();
       if (!saved) return undefined;
-      return { cursor: saved.cursor > floor ? saved.cursor : floor, events: saved.events } satisfies FeedState;
+      const gaps = (saved.gaps ?? []).flatMap(([from, to]): [bigint, bigint][] => (to < floor ? [] : [[from > floor ? from : floor, to]]));
+      return { cursor: saved.cursor > floor ? saved.cursor : floor, events: saved.events, gaps } satisfies FeedState;
     },
     save: (s) => store.save(s),
   };
