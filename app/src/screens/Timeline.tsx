@@ -5,7 +5,7 @@ import { isAddressEqual, type Address } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
 import { BlockTimes, timesFor } from "../lib/blockTimes.ts";
-import { DEPLOYMENT } from "../lib/deployment.ts";
+import { DEPLOYMENT, potsOf } from "../lib/deployment.ts";
 import { AppError } from "../lib/errors.ts";
 import type { PotEvent } from "../lib/feed.ts";
 import type { PotLink } from "../lib/invites.ts";
@@ -51,6 +51,7 @@ export function TimelineScreen(props: {
   const me = props.account.address;
   const link = useMemo(() => linkFor(props.pot), [props.pot]);
   const potId = BigInt(props.pot.potId);
+  const onV2 = Boolean(props.pot.onV2);
   const [info, setInfo] = useState<PotInfo | null>(null);
   const [state, setState] = useState<PotState | null>(null);
   const [events, setEvents] = useState<PotEvent[] | null>(null);
@@ -71,7 +72,7 @@ export function TimelineScreen(props: {
   const { motion, run } = usePayMotion();
   const alive = useRef(true);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const askFlow = useAskFlow(me, potId, props.onOpenRequest);
+  const askFlow = useAskFlow(me, potsOf(onV2), potId, props.onOpenRequest);
 
   useEffect(() => {
     alive.current = true;
@@ -97,8 +98,8 @@ export function TimelineScreen(props: {
 
   const read = useCallback(async () => {
     const accounts = info?.labelsOk ? info.people.map((p) => p.account) : [];
-    let s = await readPotState(potId, [...accounts, me], me);
-    if (!info?.labelsOk && s.deciders.some((a) => s.held[a.toLowerCase()] === undefined)) s = await readPotState(potId, [...s.deciders, me], me);
+    let s = await readPotState(onV2, potId, [...accounts, me], me);
+    if (!info?.labelsOk && s.deciders.some((a) => s.held[a.toLowerCase()] === undefined)) s = await readPotState(onV2, potId, [...s.deciders, me], me);
     return s;
   }, [potId, me, info]);
 
@@ -112,7 +113,7 @@ export function TimelineScreen(props: {
   // The pot's events, from its creation block to finalized, 101 blocks a page, its place kept on the phone.
   useEffect(() => {
     if (!info) return;
-    const feed = potFeed(info.potId, info.block);
+    const feed = potFeed(info.onV2, info.potId, info.block);
     feed.start(
       (all, fresh, progress) => {
         if (!alive.current) return;

@@ -7,7 +7,7 @@ import { POTS_ABI } from "../lib/abi.ts";
 import { shownName, type StoredAccount } from "../lib/accounts.ts";
 import { liveWriteChain, waitForFinalized } from "../lib/chain.ts";
 import { createView, type Phase } from "../lib/createStage.ts";
-import { DEPLOYMENT, POTS } from "../lib/deployment.ts";
+import { DEPLOYMENT, POTS, potsAt } from "../lib/deployment.ts";
 import { PotStore, type StoredPot } from "../lib/potstore.ts";
 import {
   allDeciders,
@@ -36,7 +36,7 @@ import { describeFailure, SendFailure } from "../lib/errors.ts";
 import { idbWriteStore } from "../lib/idb.ts";
 import { decodeLink, linkUrl, ROLE, signLabels, type Reply } from "../lib/invites.ts";
 import { amountForField, amountIn, formatAmount } from "../lib/money.ts";
-import { checkCreate, CREATE_LABEL, potFragment, potMadeBy, readCreateTerms, type CreateTerms } from "../lib/pots.ts";
+import { checkCreate, CREATE_LABEL, NEW_POTS, potFragment, potMadeBy, readCreateTerms, type CreateTerms } from "../lib/pots.ts";
 import { acceptReply } from "../lib/replies.ts";
 import { withSigner } from "../lib/passkey.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
@@ -147,14 +147,14 @@ export function CreateScreen(props: {
       const sending = normalizeSending(stored);
       const made = await potMadeBy(hash);
       const signature = labelsFor(sending, hash);
-      const base = { potId: made.potId.toString(), block: made.block.toString() };
+      const base = { potId: made.potId.toString(), block: made.block.toString(), ...(made.onV2 ? { onV2: true } : {}) };
       // The names are signed over the transaction that landed. If this phone
       // has no signature for it, the creator signs them again before sharing.
       const record = signature
-        ? { ...base, fragment: potFragment(made.potId, made.block, sending.people, sharesOf(sending.shares), signature) }
+        ? { ...base, fragment: potFragment(made.potId, made.block, sending.people, sharesOf(sending.shares), signature, made.onV2) }
         : { ...base, fragment: "", unsigned: { createdIn: hash, people: sending.people, shares: sending.shares } };
       update((d) => ({ ...d, sending: undefined, made: record }));
-      if (record.fragment) rememberPot(record.potId, record.block, record.fragment);
+      if (record.fragment) rememberPot(record.potId, record.block, record.fragment, made.onV2);
       if (!alive.current) return;
       setStep(null);
       setStuck(false);
@@ -271,7 +271,7 @@ export function CreateScreen(props: {
 
   const decimals = terms?.decimals ?? null;
   const amount = (cap: string) => (decimals === null ? "…" : formatAmount(BigInt(cap), decimals, "auto"));
-  const check = terms ? checkDraft(draft, terms, nowSeconds(), POTS) : null;
+  const check = terms ? checkDraft(draft, terms, nowSeconds(), NEW_POTS) : null;
   const view = createView({ draft, step, stuck, unconfirmed, ready: Boolean(check?.args), phase });
   const made = view.made ? draft.made : undefined;
   const locked = !view.editable;
@@ -280,7 +280,7 @@ export function CreateScreen(props: {
 
   const make = async (retry: boolean) => {
     if (!terms) return;
-    const { args } = checkDraft(draft, terms, nowSeconds(), POTS);
+    const { args } = checkDraft(draft, terms, nowSeconds(), NEW_POTS);
     if (!args) return;
     setSheet(null);
     setResult(null);
@@ -290,13 +290,13 @@ export function CreateScreen(props: {
     const shares = signedShares(draft);
     const call = {
       from: account.address,
-      to: POTS,
+      to: NEW_POTS,
       data: encodeFunctionData({ abi: POTS_ABI, functionName: "createPot", args }),
       label: writeLabel(draft),
       onStep: setStep,
       // The pot's labels are signed with the pot, in the same passkey step.
       cosign: async (signer: Parameters<typeof signLabels>[0], hash: Hex) => {
-        const labelsSignature = await signLabels(signer, POTS, hash, signedPeople, shares);
+        const labelsSignature = await signLabels(signer, NEW_POTS, hash, signedPeople, shares);
         const asText = shares.map((s) => ({ account: s.account, amount: s.amount.toString() }));
         // Saved before anything is broadcast, next to any earlier attempt's.
         update((d) => ({ ...d, sending: withAttempt(d.sending, signedPeople, asText, { hash, labelsSignature }) }));
@@ -365,10 +365,11 @@ export function CreateScreen(props: {
     setStep("confirm");
     try {
       const shares = sharesOf(unsigned.shares);
-      const signature = await withSigner(account.address, (signer) => signLabels(signer, POTS, unsigned.createdIn, unsigned.people, shares));
-      const fragment = potFragment(BigInt(made.potId), BigInt(made.block), unsigned.people, shares, signature);
-      update((d) => ({ ...d, made: d.made && { potId: d.made.potId, block: d.made.block, fragment } }));
-      rememberPot(made.potId, made.block, fragment);
+      const onV2 = Boolean(made.onV2);
+      const signature = await withSigner(account.address, (signer) => signLabels(signer, potsAt(onV2), unsigned.createdIn, unsigned.people, shares));
+      const fragment = potFragment(BigInt(made.potId), BigInt(made.block), unsigned.people, shares, signature, onV2);
+      update((d) => ({ ...d, made: d.made && { potId: d.made.potId, block: d.made.block, fragment, ...(onV2 ? { onV2 } : {}) } }));
+      rememberPot(made.potId, made.block, fragment, onV2);
     } catch (e) {
       setResult({ tone: "bad", ...describeFailure(e) });
     } finally {
@@ -377,8 +378,8 @@ export function CreateScreen(props: {
   };
 
   /** Lists the made pot on Home, and returns it for opening. */
-  function rememberPot(potId: string, block: string, fragment: string): StoredPot {
-    const pot = { deployment: DEPLOYMENT, potId, block, fragment, name: drafts.get(draftId)?.name ?? "", addedAt: Date.now() };
+  function rememberPot(potId: string, block: string, fragment: string, onV2: boolean): StoredPot {
+    const pot = { deployment: DEPLOYMENT, potId, block, fragment, name: drafts.get(draftId)?.name ?? "", addedAt: Date.now(), ...(onV2 ? { onV2 } : {}) };
     potStore.put(pot);
     return pot;
   }
@@ -523,7 +524,7 @@ export function CreateScreen(props: {
               {copy.shareThePot}
             </button>
             <CopyLinkButton onCopy={() => share(potUrl, copy.shareText(draft.name), "copy")} />
-            <button type="button" className="pill-btn" onClick={() => props.onOpenPot(rememberPot(made.potId, made.block, made.fragment))}>
+            <button type="button" className="pill-btn" onClick={() => props.onOpenPot(rememberPot(made.potId, made.block, made.fragment, Boolean(made.onV2)))}>
               {view.primary.label}
             </button>
           </>

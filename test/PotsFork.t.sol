@@ -54,7 +54,16 @@ contract PotsForkTest is Test {
         assertEq(block.chainid, MONAD_TESTNET_CHAIN_ID, "forked the wrong chain");
 
         (idara, idaraKey) = makeAddrAndKey("idara");
-        pots = new NivPayPots(ausd, 100, 50 * ONE, feeRecipient);
+        pots = _newPots(ausd, 100, 50 * ONE, feeRecipient);
+    }
+
+    /// @notice The pots contract under test. test/PotsOnV2.t.sol runs this suite against NivPayPotsV2.
+    function _newPots(IERC20 token_, uint256 feeBps_, uint256 feeCap_, address feeRecipient_)
+        internal
+        virtual
+        returns (NivPayPots)
+    {
+        return new NivPayPots(token_, feeBps_, feeCap_, feeRecipient_);
     }
 
     modifier onlyForked() {

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { formatAbiItem } from "viem/utils";
 import type { Abi, AbiEvent, AbiFunction, AbiParameter } from "viem";
-import { NAMES_ABI, POTS_ABI } from "./abi.ts";
+import { NAMES_ABI, POTS_ABI, POTS_V2_ABI } from "./abi.ts";
 
 const build = (name: string) => new URL(`../../../out/${name}.sol/${name}.json`, import.meta.url);
 
@@ -37,6 +37,11 @@ function matchesBuild(contract: string, ours: readonly Item[]) {
 
 test("the pots ABI the app uses matches the Foundry build", { skip: !existsSync(build("NivPayPots")) && "no forge build output" }, () => {
   matchesBuild("NivPayPots", POTS_ABI as readonly Item[]);
+});
+
+test("the V2 pots ABI the app uses matches the Foundry build, and keeps every V1 item as it is", { skip: !existsSync(build("NivPayPotsV2")) && "no forge build output" }, () => {
+  matchesBuild("NivPayPotsV2", POTS_V2_ABI as readonly Item[]);
+  matchesBuild("NivPayPots", POTS_V2_ABI.filter((i) => POTS_ABI.some((v1) => v1.type === i.type && v1.name === i.name)) as readonly Item[]);
 });
 
 test("the usernames ABI the app uses matches the Foundry build", { skip: !existsSync(build("NivPayNames")) && "no forge build output" }, () => {

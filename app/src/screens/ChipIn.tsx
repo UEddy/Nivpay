@@ -4,7 +4,7 @@ import { isAddressEqual, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
 import { liveWriteChain } from "../lib/chain.ts";
-import { DEPLOYMENT, POTS } from "../lib/deployment.ts";
+import { DEPLOYMENT, POTS_V2_HERE, potsOf } from "../lib/deployment.ts";
 import type { Person } from "../lib/draft.ts";
 import { AppError, describeFailure, SendFailure } from "../lib/errors.ts";
 import type { PotEvent } from "../lib/feed.ts";
@@ -13,7 +13,7 @@ import type { PotLink } from "../lib/invites.ts";
 import { amountForField, amountIn, formatAmount } from "../lib/money.ts";
 import { MAX_DRAWN_PEOPLE } from "../lib/potmap.ts";
 import { NO_DATA, POUR_GAS_HINT, POUR_LABEL, pourData, readPermitTerms, type PermitTerms } from "../lib/pour.ts";
-import { linkFor, type StoredPot } from "../lib/potstore.ts";
+import { linkFor, potKey, type StoredPot } from "../lib/potstore.ts";
 import { openPot, potFeed, putIn, readPotState, type PotInfo, type PotState } from "../lib/potview.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { rememberReceipt } from "../lib/receipts.ts";
@@ -89,6 +89,8 @@ export function ChipInScreen(props: {
   const me = account.address;
   const link = useMemo(() => linkFor(props.pot), [props.pot]);
   const potId = BigInt(props.pot.potId);
+  const onV2 = Boolean(props.pot.onV2);
+  const POTS = potsOf(onV2);
 
   const [info, setInfo] = useState<PotInfo | null>(null);
   const [state, setState] = useState<PotState | null>(null);
@@ -117,7 +119,7 @@ export function ChipInScreen(props: {
   // The feed's handler reads the numbers on screen without restarting the feed when they change.
   const stateRef = useRef<PotState | null>(null);
   stateRef.current = state;
-  const askFlow = useAskFlow(me, potId, props.onOpenRequest);
+  const askFlow = useAskFlow(me, POTS, potId, props.onOpenRequest);
   const photosOn = usePhotosOn();
   // Where people are, shared with this pot only (lib/cityShare.ts): read with the link's key, none without a link.
   const [sharedCities, setSharedCities] = useState<Record<string, SharedCity>>({});
@@ -174,7 +176,7 @@ export function ChipInScreen(props: {
     if (seenName && seenName !== props.pot.name) onName(seenName);
   }, [seenName, props.pot.name, onName]);
 
-  const read = useCallback(() => readPotState(potId, accounts.length ? accounts : [me], me), [potId, accounts, me]);
+  const read = useCallback(() => readPotState(onV2, potId, accounts.length ? accounts : [me], me), [potId, accounts, me]);
 
   // Open the pot: check the link against its PotCreated event, then read its numbers.
   useEffect(() => {
@@ -271,7 +273,7 @@ export function ChipInScreen(props: {
   // One event feed for this pot, from its creation block, up to finalized.
   useEffect(() => {
     if (!info) return;
-    const feed = potFeed(info.potId, info.block);
+    const feed = potFeed(info.onV2, info.potId, info.block);
     feed.start((all, fresh, progress) => {
       if (!alive.current) return;
       setEvents(all);
@@ -382,7 +384,7 @@ export function ChipInScreen(props: {
         },
       };
       const write = retry ? await retryStuckWrite(call) : await sendWrite(call);
-      spendSent(me, write, "pour", amount, potId);
+      spendSent(me, write, "pour", amount, potKey({ potId, onV2 }));
       await land(write);
     } catch (e) {
       // Stopped by X: the screen already says so.
@@ -579,11 +581,17 @@ export function ChipInScreen(props: {
               setVoiceNote(null);
               // Only pots this account is already in: this one if it is in it, the others from Home's list.
               const amIn = iDecide || state.payees.some((p) => isAddressEqual(p.to, me)) || (state.held[me.toLowerCase()] ?? 0n) > 0n;
-              const others = new ScanStore(localStorage, DEPLOYMENT, me).load().found.filter((p) => p.potId !== potId.toString());
-              const options = [...(amIn ? [{ name: state.name, potId: potId.toString() }] : []), ...others.map((p) => ({ name: p.name, potId: p.potId }))];
+              // By key (potstore.ts potKey), so a V1 pot and a V2 pot with the same number are never taken for each other.
+              const here = potKey({ potId, onV2 });
+              const listed = [
+                ...new ScanStore(localStorage, DEPLOYMENT, me).load().found.map((p) => ({ name: p.name, potId: p.potId })),
+                ...(POTS_V2_HERE ? new ScanStore(localStorage, `${DEPLOYMENT}.v2`, me).load().found.map((p) => ({ name: p.name, potId: potKey({ potId: p.potId, onV2: true }) })) : []),
+              ];
+              const others = listed.filter((p) => p.potId !== here);
+              const options = [...(amIn ? [{ name: state.name, potId: here }] : []), ...others];
               const found = matchName(cmd.pot, options);
               if (!found.length) return setVoiceNote({ tone: "bad", text: copy.voiceNoSuchPot(cmd.pot) });
-              if (found[0]!.potId !== potId.toString()) return setVoiceNote({ tone: "bad", text: copy.voiceOtherPot(found[0]!.name) });
+              if (found[0]!.potId !== here) return setVoiceNote({ tone: "bad", text: copy.voiceOtherPot(found[0]!.name) });
               if (!withinVoiceCap(cmd.amount)) return setVoiceNote({ tone: "bad", text: copy.errVoiceCap, code: ERROR_CODES.VOICE_OVER_CAP });
               setAmount(cmd.amount);
               setVoice({ heard, amount: cmd.amount });

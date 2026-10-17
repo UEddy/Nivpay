@@ -8,7 +8,28 @@ import { decodeLink, type PotLink } from "./invites.ts";
  * A pot matched to an answered invite (invited.ts) opens with an empty
  * fragment: no names, so people show as "account ending".
  */
-export type StoredPot = { deployment: Deployment; potId: string; block: string; fragment: string; name: string; addedAt: number };
+export type StoredPot = {
+  deployment: Deployment;
+  potId: string;
+  block: string;
+  fragment: string;
+  name: string;
+  addedAt: number;
+  /** On NivPayPotsV2. Absent on every pot stored before V2, which are all on NivPayPots. */
+  onV2?: boolean;
+};
+
+/** A pot's number is only unique within its contract: pot 3 on V1 and pot 3 on V2 are different pots. */
+export const samePot = (a: { potId: string; onV2?: boolean }, b: { potId: string; onV2?: boolean }) => a.potId === b.potId && Boolean(a.onV2) === Boolean(b.onV2);
+
+/** A key for a pot in this phone's stores: its number on V1, as always, and "v2:" and its number on V2. */
+export const potKey = (pot: { potId: string | bigint; onV2?: boolean }) => (pot.onV2 ? `v2:${pot.potId}` : String(pot.potId));
+
+/** The pot a key names, as potKey wrote it. Null for anything else. */
+export function parseKey(key: string): { potId: string; onV2: boolean } | null {
+  const m = /^(v2:)?(\d{1,20})$/.exec(key);
+  return m ? { potId: m[2]!, onV2: Boolean(m[1]) } : null;
+}
 
 type KeyValue = Pick<Storage, "getItem" | "setItem">;
 const POTS_KEY = "nivpay.pots.v1";
@@ -32,8 +53,8 @@ export class PotStore {
     }
   }
 
-  get(deployment: Deployment, potId: string): StoredPot | undefined {
-    return this.all(deployment).find((p) => p.potId === potId);
+  get(deployment: Deployment, potId: string, onV2 = false): StoredPot | undefined {
+    return this.all(deployment).find((p) => samePot(p, { potId, onV2 }));
   }
 
   /** Adds the pot, or refreshes its link and name. */
@@ -45,7 +66,7 @@ export class PotStore {
     } catch {
       all = [];
     }
-    const old = all.find((p) => p.deployment === pot.deployment && p.potId === pot.potId);
+    const old = all.find((p) => p.deployment === pot.deployment && samePot(p, pot));
     const others = all.filter((p) => p !== old);
     this.kv.setItem(POTS_KEY, JSON.stringify([...others, { ...pot, addedAt: old?.addedAt ?? pot.addedAt }]));
   }
@@ -58,10 +79,18 @@ export class PotStore {
  * and takes the newer link.
  */
 export function rememberPotLink(store: PotStore, link: PotLink, fragment: string, now: number): StoredPot {
-  const pot: StoredPot = { deployment: link.deployment, potId: link.potId.toString(), block: link.block.toString(), fragment, name: "", addedAt: now };
-  const known = store.get(link.deployment, pot.potId);
+  const pot: StoredPot = {
+    deployment: link.deployment,
+    potId: link.potId.toString(),
+    block: link.block.toString(),
+    fragment,
+    name: "",
+    addedAt: now,
+    ...(link.onV2 ? { onV2: true } : {}),
+  };
+  const known = store.get(link.deployment, pot.potId, link.onV2);
   store.put({ ...pot, name: known?.name ?? "" });
-  return store.get(link.deployment, pot.potId) ?? pot;
+  return store.get(link.deployment, pot.potId, link.onV2) ?? pot;
 }
 
 /**
@@ -73,7 +102,7 @@ export function rememberPotLink(store: PotStore, link: PotLink, fragment: string
 export function linkFor(pot: StoredPot): PotLink | null {
   if (!pot.fragment) {
     if (!/^\d+$/.test(pot.block)) return null;
-    return { kind: "pot", version: 2, deployment: pot.deployment, potId: BigInt(pot.potId), block: BigInt(pot.block), people: [], shares: [], signature: "0x" };
+    return { kind: "pot", version: 2, deployment: pot.deployment, onV2: Boolean(pot.onV2), potId: BigInt(pot.potId), block: BigInt(pot.block), people: [], shares: [], signature: "0x" };
   }
   try {
     const l = decodeLink(pot.fragment);

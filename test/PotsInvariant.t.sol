@@ -18,7 +18,7 @@ contract PotsInvariantTest is Test {
 
     function setUp() public {
         token = new MockAUSD();
-        pots = new NivPayPots(IERC20(address(token)), 100, 50_000000, feeRecipient);
+        pots = _newPots(IERC20(address(token)), 100, 50_000000, feeRecipient);
         handler = new PotsHandler(pots, token);
 
         targetContract(address(handler));
@@ -39,6 +39,15 @@ contract PotsInvariantTest is Test {
         selectors[12] = PotsHandler.executePayoutCycle.selector;
         selectors[13] = PotsHandler.attackSweep.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
+    }
+
+    /// @notice The pots contract under test. test/PotsOnV2.t.sol runs this suite against NivPayPotsV2.
+    function _newPots(IERC20 token_, uint256 feeBps_, uint256 feeCap_, address feeRecipient_)
+        internal
+        virtual
+        returns (NivPayPots)
+    {
+        return new NivPayPots(token_, feeBps_, feeCap_, feeRecipient_);
     }
 
     /// @notice The contract is never short of what it owes: its token balance

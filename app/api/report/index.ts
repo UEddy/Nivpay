@@ -79,7 +79,8 @@ export async function handleReport(
   }
   const { deployment, potId, photo, reason } = (body ?? {}) as Record<string, unknown>;
   if (typeof deployment !== "string" || !(DEPLOYMENTS as readonly string[]).includes(deployment)) return json(400, { error: "unknown deployment" });
-  const aboutPot = typeof potId === "string" && /^\d{1,20}$/.test(potId);
+  // A pot on NivPayPotsV2 comes as "v2:" and its number.
+  const aboutPot = typeof potId === "string" && /^(v2:)?\d{1,20}$/.test(potId);
   const aboutPhoto = typeof photo === "string" && /^0x[0-9a-fA-F]{40}$/.test(photo);
   if (aboutPot === aboutPhoto) return json(400, { error: "report a pot number or a photo's account, one of them" });
   if (typeof reason !== "string" || !(REASONS as readonly string[]).includes(reason)) return json(400, { error: "unknown reason" });

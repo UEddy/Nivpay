@@ -64,6 +64,21 @@ export const DEPLOY_BLOCK = {
 } as const;
 
 /**
+ * NivPayPotsV2, pots whose deciders can change payees, limits and the
+ * closing date, with a 72 hour exit window before any change that widens
+ * spending (README, "Pots that can change"). One per token, next to the
+ * NivPayPots above, which stays exactly as it is.
+ *
+ * Null until deployed: every V2 feature is hidden and new pots are made on
+ * NivPayPots, as before. Once set, new pots are made on V2; pots already made
+ * on NivPayPots keep working there, exactly as now. Set both addresses and
+ * their blocks from the receipts under broadcast/DeployPotsV2.s.sol/10143/.
+ */
+export const POTS_V2 = null as Record<Deployment, Address> | null;
+/** The blocks the two NivPayPotsV2 were deployed in. Null with POTS_V2. */
+export const POTS_V2_DEPLOY_BLOCK = null as Record<Deployment, bigint> | null;
+
+/**
  * NivPayNames, the username registry (README, "Usernames for accounts"), one
  * for both deployments. Deployed in transaction 0x9bf29091dbe3167dfd72f6602a1f4d4d32f06039b6d001f7c1199f74df4d949e
  * (broadcast/DeployNames.s.sol/10143/). Set to null and every username

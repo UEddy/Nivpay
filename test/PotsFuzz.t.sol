@@ -249,7 +249,7 @@ contract PotsFuzzTest is PotsTestBase {
         cap = bound(cap, 0, MAX_FUND);
         amount = bound(amount, MIN_FUND, MAX_FUND);
 
-        NivPayPots p = new NivPayPots(IERC20(address(token)), bps, cap, feeRecipient);
+        NivPayPots p = _newPots(IERC20(address(token)), bps, cap, feeRecipient);
         uint256 fee = p.feeOn(amount);
 
         assertLe(fee, cap, "never above the per payout cap");
@@ -264,7 +264,7 @@ contract PotsFuzzTest is PotsTestBase {
         cap = bound(cap, 0, MAX_FUND);
         amount = bound(amount, MIN_FUND, MAX_FUND / 2);
 
-        NivPayPots p = new NivPayPots(IERC20(address(token)), bps, cap, feeRecipient);
+        NivPayPots p = _newPots(IERC20(address(token)), bps, cap, feeRecipient);
         vm.prank(alice);
         token.approve(address(p), type(uint256).max);
         vm.prank(bob);

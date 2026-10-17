@@ -8,9 +8,9 @@ import { nameAtStart, PendingNames, readSavedName } from "./lib/displayName.ts";
 import { ERC20_READ_ABI, TEST_DOLLAR_ABI } from "./lib/abi.ts";
 import { liveWriteChain } from "./lib/chain.ts";
 import { AUSD, AUSD_FAUCET, CTK, LOG_PAGE_BLOCKS, POTS_AUSD, POTS_TESTUSD, SETTLEMENT_PAIR, TESTUSD } from "./lib/config.ts";
-import { DEPLOYMENT, POTS, POTS_DEPLOY_BLOCK } from "./lib/deployment.ts";
+import { DEPLOYMENT, POTS, POTS_DEPLOY_BLOCK, POTS_V2_DEPLOY_BLOCK_HERE, POTS_V2_HERE, potsOf } from "./lib/deployment.ts";
 import { DraftStore, newDraft } from "./lib/draft.ts";
-import { findPots, ScanStore, type FoundPot, type Role, type ScanState } from "./lib/discover.ts";
+import { EMPTY_SCAN, findPots, ScanStore, type FoundPot, type Role, type ScanState } from "./lib/discover.ts";
 import { askReader, creatorReader, fundingsReader, makerReader, potsReader } from "./lib/discoverLive.ts";
 import { FundingsCursor, memberCache, readFundings } from "./lib/fundings.ts";
 import { ContactStore, nameOnPhone } from "./lib/contacts.ts";
@@ -19,7 +19,7 @@ import { lastLine, PotLastStore, timeAgo, type PotLast } from "./lib/potLast.ts"
 import { rememberLast } from "./lib/potview.ts";
 import { learnPotMakers, PotChoiceStore, PotMakers, sortFound, type HiddenPot, type SortFacts } from "./lib/potSort.ts";
 import { REASONS, sendReport, type Reason } from "./lib/report.ts";
-import { AskScanStore, findOpenRequests, learnPotBlocks, needingMyYes, PotBlocks, type AskScan } from "./lib/waiting.ts";
+import { AskScanStore, EMPTY_ASK_SCAN, findOpenRequests, learnPotBlocks, needingMyYes, PotBlocks, type AskScan } from "./lib/waiting.ts";
 import { AppError, describeFailure, SendFailure } from "./lib/errors.ts";
 import { openedPotMeta, ROLE_TEXT } from "./lib/potRow.ts";
 import { addDollarsField, checkClaim, claimData, cooldownIn, readFaucetTerms, secondsUntil, type FaucetTerms } from "./lib/faucet.ts";
@@ -30,7 +30,7 @@ import { amountForField, amountIn, formatAmount } from "./lib/money.ts";
 import { hostCheck } from "./lib/passkeyHost.ts";
 import { readClient } from "./lib/rpc.ts";
 import { prefersReducedMotion } from "./lib/reduced.ts";
-import { PotStore, rememberPotLink, type StoredPot } from "./lib/potstore.ts";
+import { parseKey, potKey, PotStore, rememberPotLink, type StoredPot } from "./lib/potstore.ts";
 import type { Step } from "./lib/send.ts";
 import { latestReceipt, receiptUrl, rememberReceipt } from "./lib/receipts.ts";
 import { CURRENCY_LABEL } from "./lib/settle.ts";
@@ -94,12 +94,19 @@ const lastUsed = new LastUsedStore(localStorage);
 /** The dollar this deployment pays in, for notifications of money coming in. */
 const DOLLAR_FOR_NOTES: Address = DEPLOYMENT === "ausd" ? AUSD : TESTUSD;
 
-/** A pot to open by its number: its link on this phone, else its creation block alone. Null if neither is known yet. */
-function potToOpen(potId: string): StoredPot | null {
-  const known = pots.get(DEPLOYMENT, potId);
+/**
+ * A pot to open by its key (lib/potstore.ts potKey): its link on this phone,
+ * else its creation block alone. Null if neither is known yet, or if it is a
+ * V2 pot on a build without V2.
+ */
+function potToOpen(key: string): StoredPot | null {
+  const at = parseKey(key);
+  const net = at && (at.onV2 ? V2_NET : V1_NET);
+  if (!at || !net) return null;
+  const known = pots.get(DEPLOYMENT, at.potId, at.onV2);
   if (known) return known;
-  const block = potBlocks.get(potId);
-  return block ? { deployment: DEPLOYMENT, potId, block, fragment: "", name: "", addedAt: 0 } : null;
+  const block = net.potBlocks.get(at.potId);
+  return block ? { deployment: DEPLOYMENT, potId: at.potId, block, fragment: "", name: "", addedAt: 0, ...(at.onV2 ? { onV2: true } : {}) } : null;
 }
 
 type Screen =
@@ -123,9 +130,9 @@ function storedFromLink(link: PotLink, fragment: string): StoredPot {
  * signed names, or else one with no link, read from the chain alone.
  */
 function potForRequest(link: AskLink): StoredPot {
-  const known = pots.get(link.deployment, link.potId.toString());
+  const known = pots.get(link.deployment, link.potId.toString(), link.onV2);
   if (known && known.block === link.block.toString()) return known;
-  return { deployment: link.deployment, potId: link.potId.toString(), block: link.block.toString(), fragment: "", name: "", addedAt: Date.now() };
+  return { deployment: link.deployment, potId: link.potId.toString(), block: link.block.toString(), fragment: "", name: "", addedAt: Date.now(), ...(link.onV2 ? { onV2: true } : {}) };
 }
 
 /**
@@ -374,7 +381,7 @@ function Screens() {
       const pot = storedFromLink(link, fragment);
       // Opening a pot's link brings it back to Home if it was hidden.
       const opener = accounts.active();
-      if (opener) new PotChoiceStore(localStorage, DEPLOYMENT, opener.address).unhide(pot.potId);
+      if (opener) new PotChoiceStore(localStorage, DEPLOYMENT, opener.address).unhide(potKey(pot));
       if (accounts.active()) go({ kind: "pot", pot });
       else setPendingPot(pot);
     },
@@ -504,7 +511,7 @@ function Screens() {
   if (active && !switching && screen.kind === "pot") {
     return shell(
       <ChipInScreen
-        key={screen.pot.potId + active.address}
+        key={potKey(screen.pot) + active.address}
         account={active}
         pot={screen.pot}
         banner={banner}
@@ -515,7 +522,7 @@ function Screens() {
         onOpenClose={() => go({ kind: "close", pot: screen.pot })}
         onClose={() => go({ kind: "home" })}
         onHide={(name) => {
-          new PotChoiceStore(localStorage, DEPLOYMENT, active.address).hide(screen.pot.potId, name, Date.now());
+          new PotChoiceStore(localStorage, DEPLOYMENT, active.address).hide(potKey(screen.pot), name, Date.now());
           go({ kind: "home" }, { tone: "ok", text: copy.potHiddenFromHome });
         }}
       />
@@ -524,7 +531,7 @@ function Screens() {
   if (active && !switching && screen.kind === "story") {
     return shell(
       <TimelineScreen
-        key={screen.pot.potId + ":" + active.address}
+        key={potKey(screen.pot) + ":" + active.address}
         account={active}
         pot={screen.pot}
         banner={banner}
@@ -545,7 +552,7 @@ function Screens() {
   if (active && !switching && screen.kind === "close") {
     return shell(
       <CloseScreen
-        key={screen.pot.potId + ":" + active.address}
+        key={potKey(screen.pot) + ":" + active.address}
         account={active}
         pot={screen.pot}
         banner={banner}
@@ -557,7 +564,7 @@ function Screens() {
   if (active && !switching && screen.kind === "request") {
     return shell(
       <RequestScreen
-        key={screen.pot.potId + ":" + screen.proposalId + ":" + active.address}
+        key={potKey(screen.pot) + ":" + screen.proposalId + ":" + active.address}
         account={active}
         pot={screen.pot}
         proposalId={screen.proposalId}
@@ -1349,7 +1356,12 @@ function Home(props: {
             entries={historyFrom(Object.values(historyIn), historyOut ? [historyOut] : [], { me: owner, pots: [POTS_AUSD, POTS_TESTUSD], pair: SETTLEMENT_PAIR, faucets: [AUSD_FAUCET], desk })}
             since={notes.startedAt}
             who={(a) => nameOf(a) ?? copy.accountEnding(a)}
-            potName={(potId) => pots.get(DEPLOYMENT, potId)?.name || new ScanStore(localStorage, DEPLOYMENT, owner).load().found.find((f) => f.potId === potId)?.name || null}
+            potName={(key) => {
+              const at = parseKey(key);
+              if (!at) return null;
+              const ns = at.onV2 ? `${DEPLOYMENT}.v2` : DEPLOYMENT;
+              return pots.get(DEPLOYMENT, at.potId, at.onV2)?.name || new ScanStore(localStorage, ns, owner).load().found.find((f) => f.potId === at.potId)?.name || null;
+            }}
           />
         </Suspense>
       )}
@@ -1480,27 +1492,83 @@ const liveFundings = fundingsReader(readClient, POTS);
 const potMembers = memberCache();
 
 /**
+ * A pots contract as Home reads it: NivPayPots, and NivPayPotsV2 once
+ * config.ts sets it. Each keeps its own stores on the phone, under its own
+ * name, with pot numbers as that contract has them. Home tells pots apart by
+ * key (lib/potstore.ts potKey), so a NivPayPots pot is keyed as it always was.
+ */
+type Net = {
+  onV2: boolean;
+  /** The name this contract's stores live under on the phone. */
+  ns: string;
+  deployBlock: bigint;
+  pots: ReturnType<typeof potsReader>;
+  creators: ReturnType<typeof creatorReader>;
+  asks: ReturnType<typeof askReader>;
+  makers: ReturnType<typeof makerReader>;
+  fundings: ReturnType<typeof fundingsReader>;
+  potBlocks: PotBlocks;
+  potMakers: PotMakers;
+};
+
+const V1_NET: Net = {
+  onV2: false,
+  ns: DEPLOYMENT,
+  deployBlock: POTS_DEPLOY_BLOCK,
+  pots: livePots,
+  creators: liveCreators,
+  asks: liveAsks,
+  makers: liveMakers,
+  fundings: liveFundings,
+  potBlocks,
+  potMakers,
+};
+const V2_NET: Net | null =
+  POTS_V2_HERE && POTS_V2_DEPLOY_BLOCK_HERE !== null
+    ? {
+        onV2: true,
+        ns: `${DEPLOYMENT}.v2`,
+        deployBlock: POTS_V2_DEPLOY_BLOCK_HERE,
+        pots: potsReader(readClient, POTS_V2_HERE),
+        creators: creatorReader(readClient, POTS_V2_HERE),
+        asks: askReader(readClient, POTS_V2_HERE),
+        makers: makerReader(readClient, POTS_V2_HERE),
+        fundings: fundingsReader(readClient, POTS_V2_HERE),
+        potBlocks: new PotBlocks(localStorage, `${DEPLOYMENT}.v2`),
+        potMakers: new PotMakers(localStorage, `${DEPLOYMENT}.v2`),
+      }
+    : null;
+
+/**
  * Pots this account is named on, found from the chain (lib/discover.ts), so
  * a pot appears on every phone of everyone in it even if its link never
  * arrived. Read when Home opens, which is also when the app opens, when the
  * app comes back to the front, and every few seconds while Home stays open. What was found is remembered, so it shows
  * at once next time. After each read, answered invites still waiting are
  * matched against what was found (lib/invited.ts).
+ *
+ * One contract at a time (Net), with its own pot numbers, and only the
+ * invites answered for it. Null reads nothing, so Home can always ask for V2
+ * and gets nothing while V2 is off.
  */
-function useFoundPots(account: Address, connection: ReturnType<typeof useConnection>) {
-  const store = useMemo(() => new ScanStore(localStorage, DEPLOYMENT, account), [account]);
-  const [scan, setScan] = useState<ScanState>(() => store.load());
+function useFoundPots(account: Address, connection: ReturnType<typeof useConnection>, net: Net | null) {
+  const ns = net?.ns ?? `${DEPLOYMENT}.none`;
+  const onV2 = net?.onV2 ?? false;
+  const rowsHere = useCallback((rows: AnsweredInvite[]) => (net ? rows.filter((r) => Boolean(r.onV2) === onV2) : []), [net, onV2]);
+  const store = useMemo(() => new ScanStore(localStorage, ns, account), [ns, account]);
+  const [scan, setScan] = useState<ScanState>(() => (net ? store.load() : EMPTY_SCAN));
   const [failed, setFailed] = useState(false);
-  const [answeredInvites, setAnswered] = useState<AnsweredInvite[]>(() => invited.forAccount(DEPLOYMENT, account, Date.now()));
-  const askStore = useMemo(() => new AskScanStore(localStorage, DEPLOYMENT, account), [account]);
-  const [asks, setAsks] = useState<AskScan>(() => askStore.load());
-  const [starts, setStarts] = useState<Record<string, string>>(() => potBlocks.all());
-  const [makers, setMakers] = useState<Record<string, Address>>(() => potMakers.all());
+  const [answeredInvites, setAnswered] = useState<AnsweredInvite[]>(() => rowsHere(invited.forAccount(DEPLOYMENT, account, Date.now())));
+  const askStore = useMemo(() => new AskScanStore(localStorage, ns, account), [ns, account]);
+  const [asks, setAsks] = useState<AskScan>(() => (net ? askStore.load() : EMPTY_ASK_SCAN));
+  const [starts, setStarts] = useState<Record<string, string>>(() => net?.potBlocks.all() ?? {});
+  const [makers, setMakers] = useState<Record<string, Address>>(() => net?.potMakers.all() ?? {});
   // Money put into this account's own pots by the people in them, since the poll before (lib/fundings.ts).
   const [fundings, setFundings] = useState<Funding[]>([]);
-  const cursor = useMemo(() => new FundingsCursor(localStorage, DEPLOYMENT, account), [account]);
+  const cursor = useMemo(() => new FundingsCursor(localStorage, ns, account), [ns, account]);
   const { track } = connection;
   useEffect(() => {
+    if (!net) return;
     let live = true;
     let state = store.load();
     let askState = askStore.load();
@@ -1511,13 +1579,13 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
       if (running) return;
       running = true;
       try {
-        const next = await track(findPots(livePots, state, account));
+        const next = await track(findPots(net.pots, state, account));
         if (!live) return;
         // Read up to the same block as the totals, so a rise and who caused it arrive together.
         if (next.at) {
-          const made = potMakers.all();
+          const made = net.potMakers.all();
           const mine = next.found.filter((p) => made[p.potId]?.toLowerCase() === account.toLowerCase() && !p.closed).map((p) => p.potId);
-          const read = await readFundings(liveFundings, account, mine, cursor.get(), BigInt(next.at), LOG_PAGE_BLOCKS, potMembers).catch(() => null);
+          const read = await readFundings(net.fundings, account, mine, cursor.get(), BigInt(next.at), LOG_PAGE_BLOCKS, potMembers).catch(() => null);
           if (!live) return;
           if (read) {
             cursor.set(read.readTo);
@@ -1528,26 +1596,26 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
         store.save(next);
         setScan(next);
         setFailed(false);
-        const rows = invited.forAccount(DEPLOYMENT, account, Date.now());
+        const rows = rowsHere(invited.forAccount(DEPLOYMENT, account, Date.now()));
         setAnswered(rows);
-        const matched = await track(matchInvites(rows, next.found, liveCreators, POTS_DEPLOY_BLOCK));
+        const matched = await track(matchInvites(rows, next.found, net.creators, net.deployBlock));
         if (!live) return;
         for (const row of matched) invited.put(row);
-        setAnswered(invited.forAccount(DEPLOYMENT, account, Date.now()));
+        setAnswered(rowsHere(invited.forAccount(DEPLOYMENT, account, Date.now())));
         // Requests waiting for this account's yes, on pots it decides on: no link needed.
         const decides = new Set(next.found.filter((p) => p.roles.includes("decides")).map((p) => p.potId));
-        const nextAsks = await track(findOpenRequests(liveAsks, askState, decides));
+        const nextAsks = await track(findOpenRequests(net.asks, askState, decides));
         if (!live) return;
         askState = nextAsks;
         askStore.save(nextAsks);
         setAsks(nextAsks);
         // So every pot found opens with no link: its creation block, found once.
-        await learnPotBlocks(potBlocks, next.found.map((p) => p.potId), liveCreators, POTS_DEPLOY_BLOCK).catch(() => {});
+        await learnPotBlocks(net.potBlocks, next.found.map((p) => p.potId), net.creators, net.deployBlock).catch(() => {});
         // Who made each, from its creation event, so Home can tell pots from people you know (lib/potSort.ts).
-        await learnPotMakers(potMakers, potBlocks.all(), next.found.map((p) => p.potId), liveMakers).catch(() => {});
+        await learnPotMakers(net.potMakers, net.potBlocks.all(), next.found.map((p) => p.potId), net.makers).catch(() => {});
         if (live) {
-          setStarts(potBlocks.all());
-          setMakers(potMakers.all());
+          setStarts(net.potBlocks.all());
+          setMakers(net.potMakers.all());
         }
       } catch {
         if (live) setFailed(true);
@@ -1565,8 +1633,47 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
       clearInterval(t);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [account, store, askStore, track, cursor]);
+  }, [account, store, askStore, track, cursor, net, rowsHere]);
   return { scan, failed, answered: answeredInvites, asks, starts, makers, fundings };
+}
+
+type Found = ReturnType<typeof useFoundPots>;
+
+/** A V2 contract's finds with every pot number made a key ("v2:" and its number), so they sit beside V1's. */
+function keyedV2(f: Found): Found {
+  const k = (potId: string) => potKey({ potId, onV2: true });
+  const keys = <T,>(r: Record<string, T>): Record<string, T> => Object.fromEntries(Object.entries(r).map(([id, v]) => [k(id), v]));
+  return {
+    ...f,
+    scan: { ...f.scan, found: f.scan.found.map((p) => ({ ...p, potId: k(p.potId) })), named: keys(f.scan.named) },
+    answered: f.answered.map((r) => (r.match ? { ...r, match: { ...r.match, potId: k(r.match.potId) } } : r)),
+    asks: {
+      ...f.asks,
+      open: f.asks.open.map((r) => ({ ...r, potId: k(r.potId) })),
+      ...(f.asks.ended ? { ended: f.asks.ended.map((e) => ({ ...e, potId: k(e.potId) })) } : {}),
+    },
+    starts: keys(f.starts),
+    makers: keys(f.makers),
+    fundings: f.fundings.map((x) => ({ ...x, potId: k(x.potId) })),
+  };
+}
+
+/** Home's finds from both contracts at once, keyed by potKey. With V2 off, exactly V1's. */
+function useAllFoundPots(account: Address, connection: ReturnType<typeof useConnection>): Found {
+  const v1 = useFoundPots(account, connection, V1_NET);
+  const v2raw = useFoundPots(account, connection, V2_NET);
+  if (!V2_NET) return v1;
+  const v2 = keyedV2(v2raw);
+  const ended = v1.asks.ended || v2.asks.ended ? { ended: [...(v1.asks.ended ?? []), ...(v2.asks.ended ?? [])] } : {};
+  return {
+    scan: { ...v1.scan, found: [...v2.scan.found, ...v1.scan.found], decimals: v1.scan.decimals ?? v2.scan.decimals },
+    failed: v1.failed || v2.failed,
+    answered: [...v1.answered, ...v2.answered].sort((a, b) => b.answeredAt - a.answeredAt),
+    asks: { ...v1.asks, open: [...v1.asks.open, ...v2.asks.open], ...ended },
+    starts: { ...v1.starts, ...v2.starts },
+    makers: { ...v1.makers, ...v2.makers },
+    fundings: [...v1.fundings, ...v2.fundings],
+  };
 }
 
 
@@ -1591,12 +1698,13 @@ function usePotLasts(potIds: string[], extraBlocks: string[]) {
   useEffect(() => {
     let live = true;
     void (async () => {
-      for (const id of ids ? ids.split(",") : []) {
-        if (potLasts.all()[id]) continue;
-        const saved = await idbFeedStore(`${POTS}:${id}`)
+      for (const key of ids ? ids.split(",") : []) {
+        const at = parseKey(key);
+        if (!at || potLasts.all()[key]) continue;
+        const saved = await idbFeedStore(`${potsOf(at.onV2)}:${at.potId}`)
           .load()
           .catch(() => undefined);
-        if (saved?.events.length) rememberLast(BigInt(id), saved.events);
+        if (saved?.events.length) rememberLast(key, saved.events);
       }
       if (live) setLasts(potLasts.all());
     })();
@@ -1731,7 +1839,7 @@ function YourPots(props: {
   onOpenPot: (pot: StoredPot) => void;
   onOpenRequest: (pot: StoredPot, proposalId: bigint) => void;
 }) {
-  const { scan, failed, answered, asks, starts, makers, fundings } = useFoundPots(props.account.address, props.connection);
+  const { scan, failed, answered, asks, starts, makers, fundings } = useAllFoundPots(props.account.address, props.connection);
   const owner = props.account.address;
   const contacts = useMemo(() => new ContactStore(localStorage, DEPLOYMENT, owner).list(), [owner]);
   const [reporting, setReporting] = useState<{ potId: string; name: string } | null>(null);
@@ -1739,21 +1847,22 @@ function YourPots(props: {
   const mine = drafts.forOwner(props.account.address).filter((d) => !d.made?.fragment);
   // Pots made before the pot list existed are added to it once.
   for (const d of drafts.forOwner(props.account.address)) {
-    if (d.made?.fragment && !pots.get(DEPLOYMENT, d.made.potId)) {
-      pots.put({ deployment: DEPLOYMENT, potId: d.made.potId, block: d.made.block, fragment: d.made.fragment, name: d.name, addedAt: d.createdAt });
+    if (d.made?.fragment && !pots.get(DEPLOYMENT, d.made.potId, d.made.onV2)) {
+      pots.put({ deployment: DEPLOYMENT, potId: d.made.potId, block: d.made.block, fragment: d.made.fragment, name: d.name, addedAt: d.createdAt, ...(d.made.onV2 ? { onV2: true } : {}) });
     }
   }
+  // Everything below is by key (lib/potstore.ts potKey): a V1 pot's is its number, as always.
   const hiddenIds = new Set(props.choices.hidden().map((h) => h.potId));
-  const opened = pots.all(DEPLOYMENT).filter((p) => !hiddenIds.has(p.potId));
+  const opened = pots.all(DEPLOYMENT).filter((p) => !hiddenIds.has(potKey(p)));
   // Pots whose link is open on this phone show with their names; the rest of what was found shows here.
-  const linked = new Set(opened.map((p) => p.potId));
+  const linked = new Set(opened.map((p) => potKey(p)));
   const waiting = answered.filter((r) => !r.match);
   const matched = answered.filter((r) => r.match && !linked.has(r.match.potId) && !hiddenIds.has(r.match.potId));
   const matchedIds = new Set(matched.map((r) => r.match!.potId));
   // Pots from people you may not know go in their own list, not here (lib/potSort.ts).
   const phoneAccounts = accounts.list().map((a) => a.address);
   const facts: SortFacts = {
-    madeHere: new Set(phoneAccounts.flatMap((a) => drafts.forOwner(a)).flatMap((d) => (d.made ? [d.made.potId] : []))),
+    madeHere: new Set(phoneAccounts.flatMap((a) => drafts.forOwner(a)).flatMap((d) => (d.made ? [potKey(d.made)] : []))),
     opened: linked,
     answered: new Set(answered.flatMap((r) => (r.match ? [r.match.potId] : []))),
     kept: props.choices.kept(),
@@ -1764,12 +1873,14 @@ function YourPots(props: {
   const sorted = sortFound(scan.found, facts);
   const notYours = new Set([...sorted.fresh, ...sorted.hidden].map((p) => p.potId));
   const found = sorted.yours.filter((p) => !linked.has(p.potId) && !matchedIds.has(p.potId));
-  /** The pot to open for a pot number: its link on this phone, else its matched invite, else its creation block alone. */
-  const storedFor = (potId: string): StoredPot | null => {
-    const known = pots.get(DEPLOYMENT, potId);
+  /** The pot to open for a key: its link on this phone, else its matched invite, else its creation block alone. */
+  const storedFor = (key: string): StoredPot | null => {
+    const at = parseKey(key);
+    if (!at) return null;
+    const known = pots.get(DEPLOYMENT, at.potId, at.onV2);
     if (known) return known;
-    const block = answered.find((r) => r.match?.potId === potId)?.match?.block ?? starts[potId];
-    return block ? { deployment: DEPLOYMENT, potId, block, fragment: "", name: "", addedAt: 0 } : null;
+    const block = answered.find((r) => r.match?.potId === key)?.match?.block ?? starts[key];
+    return block ? { deployment: DEPLOYMENT, potId: at.potId, block, fragment: "", name: "", addedAt: 0, ...(at.onV2 ? { onV2: true } : {}) } : null;
   };
   // A pot that is new to you, or hidden, never asks for your yes on Home.
   const waitingMine = needingMyYes(asks, props.account.address).filter((r) => !notYours.has(r.potId));
@@ -1828,7 +1939,7 @@ function YourPots(props: {
           <button
             type="button"
             className="home-pot"
-            key={`ask-${r.proposalId}`}
+            key={`ask-${r.potId}-${r.proposalId}`}
             disabled={!stored}
             onClick={() => stored && props.onOpenRequest(stored, BigInt(r.proposalId))}
           >
@@ -1856,7 +1967,10 @@ function YourPots(props: {
           decimals={scan.decimals}
           line={lineFor(r.match!.potId)}
           waiting={waitingPots.has(r.match!.potId)}
-          onOpen={() => props.onOpenPot({ deployment: DEPLOYMENT, potId: r.match!.potId, block: r.match!.block, fragment: "", name: "", addedAt: r.answeredAt })}
+          onOpen={() => {
+            const at = parseKey(r.match!.potId);
+            if (at) props.onOpenPot({ deployment: DEPLOYMENT, potId: at.potId, block: r.match!.block, fragment: "", name: "", addedAt: r.answeredAt, ...(at.onV2 ? { onV2: true } : {}) });
+          }}
         />
       ))}
       {waiting.map((r) => (
@@ -1867,15 +1981,16 @@ function YourPots(props: {
         return <FoundPotRow key={`found-${p.potId}`} pot={p} decimals={scan.decimals} line={lineFor(p.potId)} waiting={waitingPots.has(p.potId)} onOpen={stored ? () => props.onOpenPot(stored) : undefined} />;
       })}
       {opened.map((p) => {
-        const f = scan.found.find((x) => x.potId === p.potId);
+        const key = potKey(p);
+        const f = scan.found.find((x) => x.potId === key);
         const holds = f && scan.decimals !== null ? formatAmount(BigInt(f.totalAssets), scan.decimals, "auto") : null;
         return (
           <PotRow
-            key={`pot-${p.potId}`}
+            key={`pot-${key}`}
             name={p.name || copy.unnamedPot}
             holds={holds}
-            line={lineFor(p.potId)}
-            tag={waitingPots.has(p.potId) ? "yes" : f?.closed ? "closed" : "live"}
+            line={lineFor(key)}
+            tag={waitingPots.has(key) ? "yes" : f?.closed ? "closed" : "live"}
             onClick={() => props.onOpenPot(p)}
           />
         );

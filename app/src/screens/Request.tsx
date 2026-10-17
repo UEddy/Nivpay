@@ -4,7 +4,7 @@ import { isAddressEqual, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
 import { liveWriteChain } from "../lib/chain.ts";
-import { POTS } from "../lib/deployment.ts";
+import { potsOf } from "../lib/deployment.ts";
 import type { Person } from "../lib/draft.ts";
 import { AppError, describeFailure, SendFailure } from "../lib/errors.ts";
 import { idbWriteStore } from "../lib/idb.ts";
@@ -77,6 +77,8 @@ export function RequestScreen(props: {
   const { proposalId } = props;
   const link = useMemo(() => linkFor(props.pot), [props.pot]);
   const potId = BigInt(props.pot.potId);
+  const onV2 = Boolean(props.pot.onV2);
+  const POTS = potsOf(onV2);
 
   const [info, setInfo] = useState<PotInfo | null>(null);
   const [state, setState] = useState<PotState | null>(null);
@@ -126,9 +128,9 @@ export function RequestScreen(props: {
   const read = useCallback(async () => {
     const r = await readRequest(readClient, POTS, potId, proposalId, me);
     const accounts = info?.labelsOk ? info.people.map((p) => p.account) : [];
-    let s = await readPotState(potId, [...accounts, me], me);
+    let s = await readPotState(onV2, potId, [...accounts, me], me);
     // Without names the deciders are only known from this read: read their shares too.
-    if (!info?.labelsOk && s.deciders.some((a) => s.held[a.toLowerCase()] === undefined)) s = await readPotState(potId, [...s.deciders, me], me);
+    if (!info?.labelsOk && s.deciders.some((a) => s.held[a.toLowerCase()] === undefined)) s = await readPotState(onV2, potId, [...s.deciders, me], me);
     return { r, s };
   }, [potId, proposalId, me, info]);
 
@@ -181,7 +183,7 @@ export function RequestScreen(props: {
   // Someone else's yes, a take back, a withdrawal or a payment: read again, and if it paid, show it.
   useEffect(() => {
     if (!info) return;
-    const feed = potFeed(info.potId, info.block);
+    const feed = potFeed(info.onV2, info.potId, info.block);
     feed.start((_, fresh) => {
       if (!alive.current || fresh.length === 0) return;
       const theirs = fresh.filter((e) => e.tx !== myTx.current);
@@ -287,7 +289,7 @@ export function RequestScreen(props: {
     }
   };
 
-  const requestUrl = (block: bigint) => linkUrl(location.origin, { kind: "ask", deployment: props.pot.deployment, potId, block, proposalId });
+  const requestUrl = (block: bigint) => linkUrl(location.origin, { kind: "ask", deployment: props.pot.deployment, onV2: Boolean(props.pot.onV2), potId, block, proposalId });
 
   // X before the passkey stops Say yes (or taking it back) and stays, saying nothing was sent; otherwise it closes.
   const closeOrStop = () => {

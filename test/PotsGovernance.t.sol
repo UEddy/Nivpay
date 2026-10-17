@@ -673,7 +673,7 @@ contract PotsGovernanceTest is PotsTestBase {
     }
 
     function test_zeroFeeDeployment_chargesNothing() public {
-        NivPayPots free = new NivPayPots(IERC20(address(token)), 0, 0, feeRecipient);
+        NivPayPots free = _newPots(IERC20(address(token)), 0, 0, feeRecipient);
         vm.prank(alice);
         token.approve(address(free), type(uint256).max);
 

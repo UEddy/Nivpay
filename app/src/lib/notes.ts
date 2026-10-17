@@ -77,6 +77,13 @@ export const EMPTY_NOTES: NotesState = { startedAt: null, startBlock: null, tota
 /** Money put into one of this account's own pots by someone in it, from its Funded event (fundings.ts). */
 export type Funding = { id: string; potId: string; from: Address; amount: string };
 
+/**
+ * Requests are numbered per pots contract, so a note about one on a V2 pot
+ * (its potId is "v2:" and its number, potstore.ts potKey) says so in its id;
+ * a V1 one keeps the id it always had.
+ */
+const onV2 = (potId: string) => (potId.startsWith("v2:") ? "v2:" : "");
+
 /** The most notes kept, newest first. */
 export const MAX_NOTES = 100;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -158,10 +165,10 @@ export function fromPoll(s: NotesState, i: PollInputs): NotesState {
   for (const r of i.waiting) {
     if (asked.has(r.proposalId)) continue;
     asked.add(r.proposalId);
-    fresh.push({ id: `ask:${r.proposalId}`, kind: r.kind === 1 ? "askClose" : "askYes", at: i.now, read: false, potId: r.potId, proposalId: r.proposalId, amount: r.amount, decimals: DOLLAR_DECIMALS });
+    fresh.push({ id: `ask:${onV2(r.potId)}${r.proposalId}`, kind: r.kind === 1 ? "askClose" : "askYes", at: i.now, read: false, potId: r.potId, proposalId: r.proposalId, amount: r.amount, decimals: DOLLAR_DECIMALS });
   }
   for (const e of i.ended) {
-    if (e.kind === 0 && e.status === 1) fresh.push({ id: `paid:${e.proposalId}`, kind: "paidOut", at: i.now, read: false, potId: e.potId, proposalId: e.proposalId, amount: e.amount, decimals: DOLLAR_DECIMALS });
+    if (e.kind === 0 && e.status === 1) fresh.push({ id: `paid:${onV2(e.potId)}${e.proposalId}`, kind: "paidOut", at: i.now, read: false, potId: e.potId, proposalId: e.proposalId, amount: e.amount, decimals: DOLLAR_DECIMALS });
   }
   // A pot that names this account, made by a contact or one of the accounts on this phone. Strangers' pots are never announced.
   let potsSeen = s.potsSeen;

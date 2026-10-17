@@ -1,8 +1,8 @@
 import { getAddress, numberToHex, pad, parseEventLogs, type Address, type Hex, type Log } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
-import { ERC20_READ_ABI, POTS_ABI, POTS_READ_ABI } from "./abi.ts";
+import { ERC20_READ_ABI, POTS_ABI, POTS_READ_ABI, POTS_V2_ABI } from "./abi.ts";
 import { LOG_PAGE_BLOCKS } from "./config.ts";
-import { DEPLOYMENT, POTS } from "./deployment.ts";
+import { DEPLOYMENT, POTS_V2_HERE, potsAt } from "./deployment.ts";
 import type { Person, Share } from "./draft.ts";
 import { AppError } from "./errors.ts";
 import { PotFeed, refillCutShort, type FeedSource, type PotEvent } from "./feed.ts";
@@ -11,10 +11,13 @@ import { verifyLabels, type PotLink } from "./invites.ts";
 import { readClient } from "./rpc.ts";
 import { shownText32 } from "./text32.ts";
 import { lastOf, PotLastStore } from "./potLast.ts";
+import { potKey } from "./potstore.ts";
 
 /** A pot as opened from its link, checked against its PotCreated event. */
 export type PotInfo = {
   potId: bigint;
+  /** On NivPayPotsV2: its changes can be proposed and shown. */
+  onV2: boolean;
   block: bigint;
   creator: Address;
   /** True only when the names and shares were signed by the pot's creator over its transaction. */
@@ -29,12 +32,13 @@ export type PotInfo = {
  * pot's creator signed them over the transaction that made the pot.
  */
 export async function openPot(link: PotLink): Promise<PotInfo> {
-  if (link.deployment !== DEPLOYMENT) throw new AppError(copy.errPotOtherVersion, ERROR_CODES.POT_OTHER_VERSION);
+  if (link.deployment !== DEPLOYMENT || (link.onV2 && !POTS_V2_HERE)) throw new AppError(copy.errPotOtherVersion, ERROR_CODES.POT_OTHER_VERSION);
+  const pots = potsAt(link.onV2);
   const raw = (await readClient.request({
     method: "eth_getLogs",
     params: [
       {
-        address: POTS,
+        address: pots,
         fromBlock: numberToHex(link.block),
         toBlock: numberToHex(link.block),
         topics: [null, pad(numberToHex(link.potId), { size: 32 })],
@@ -43,9 +47,10 @@ export async function openPot(link: PotLink): Promise<PotInfo> {
   })) as Log[];
   const [created] = parseEventLogs({ abi: POTS_ABI, eventName: "PotCreated", logs: raw }).filter((l) => l.args.potId === link.potId);
   if (!created) throw new AppError(copy.errPotNotFound, ERROR_CODES.POT_NOT_FOUND);
-  const labelsOk = await verifyLabels(POTS, link, created.transactionHash, created.args.creator);
+  const labelsOk = await verifyLabels(pots, link, created.transactionHash, created.args.creator);
   return {
     potId: link.potId,
+    onV2: link.onV2,
     block: link.block,
     creator: getAddress(created.args.creator),
     labelsOk,
@@ -79,7 +84,8 @@ export type PotState = {
   totalShares: bigint;
 };
 
-export async function readPotState(potId: bigint, accounts: Address[], me: Address): Promise<PotState> {
+export async function readPotState(onV2: boolean, potId: bigint, accounts: Address[], me: Address): Promise<PotState> {
+  const POTS = potsAt(onV2);
   const block = await readClient.getBlock({ blockTag: "finalized" });
   const at = { blockNumber: block.number } as const;
   const [pot, deciders, destinations, asset] = await Promise.all([
@@ -115,18 +121,18 @@ export async function readPotState(potId: bigint, accounts: Address[], me: Addre
 }
 
 /** The pot's events from the RPC. potId is the first indexed topic of some events and the second of others. */
-function rpcSource(potId: bigint): FeedSource {
+function rpcSource(pots: Address, potId: bigint): FeedSource {
   const topic = pad(numberToHex(potId), { size: 32 });
   const query = (from: bigint, to: bigint, topics: (Hex | null)[]) =>
     readClient.request({
       method: "eth_getLogs",
-      params: [{ address: POTS, fromBlock: numberToHex(from), toBlock: numberToHex(to), topics }],
+      params: [{ address: pots, fromBlock: numberToHex(from), toBlock: numberToHex(to), topics }],
     }) as Promise<Log[]>;
   return {
     finalized: async () => (await readClient.getBlock({ blockTag: "finalized" })).number,
     async logs(from, to) {
       const [first, second] = await Promise.all([query(from, to, [null, topic]), query(from, to, [null, null, topic])]);
-      const decoded = parseEventLogs({ abi: POTS_ABI, logs: [...first, ...second] });
+      const decoded = parseEventLogs({ abi: POTS_V2_ABI, logs: [...first, ...second] });
       const out = new Map<string, PotEvent>();
       for (const l of decoded) {
         // A topic match alone isn't enough: a proposal id or an account can share the number.
@@ -144,8 +150,9 @@ function rpcSource(potId: bigint): FeedSource {
   };
 }
 
-export function potFeed(potId: bigint, fromBlock: bigint): PotFeed {
-  const feed = new PotFeed(rpcSource(potId), refillCutShort(idbFeedStore(`${POTS}:${potId}`), fromBlock), fromBlock, {
+export function potFeed(onV2: boolean, potId: bigint, fromBlock: bigint): PotFeed {
+  const pots = potsAt(onV2);
+  const feed = new PotFeed(rpcSource(pots, potId), refillCutShort(idbFeedStore(`${pots}:${potId}`), fromBlock), fromBlock, {
     pageSize: LOG_PAGE_BLOCKS,
     parallel: 4,
     everyMs: 1_000,
@@ -154,17 +161,17 @@ export function potFeed(potId: bigint, fromBlock: bigint): PotFeed {
   const start = feed.start.bind(feed);
   feed.start = (onEvents, onError) =>
     start((all, fresh, progress) => {
-      rememberLast(potId, all);
+      rememberLast(potKey({ potId, onV2 }), all);
       onEvents(all, fresh, progress);
     }, onError);
   return feed;
 }
 
 /** Keeps a pot's last event for its row, from events already read. Never throws. */
-export function rememberLast(potId: bigint, events: PotEvent[]): void {
+export function rememberLast(key: string, events: PotEvent[]): void {
   try {
     const last = lastOf(events);
-    if (last) new PotLastStore(localStorage, DEPLOYMENT).put(potId.toString(), last);
+    if (last) new PotLastStore(localStorage, DEPLOYMENT).put(key, last);
   } catch {
     // Storage refused: the row shows what the pot holds.
   }

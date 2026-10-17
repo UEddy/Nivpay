@@ -60,7 +60,8 @@ type KeyValue = Pick<Storage, "getItem" | "setItem">;
 export type HiddenPot = { potId: string; name: string; hiddenAt: number };
 type Choices = { kept: string[]; hidden: HiddenPot[] };
 
-const isPotId = (v: unknown): v is string => typeof v === "string" && /^\d{1,20}$/.test(v);
+/** A pot number, or "v2:" and one for a pot on NivPayPotsV2 (potstore.ts potKey). */
+const isPotId = (v: unknown): v is string => typeof v === "string" && /^(v2:)?\d{1,20}$/.test(v);
 
 /** Keep and Hide, per deployment and per account. A pot is in one list or neither. */
 export class PotChoiceStore {

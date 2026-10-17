@@ -24,11 +24,11 @@ export function checkDailyLimit(account: Address, amount: bigint, now = Date.now
   if (!check.ok) throw new AppError(copy.errDailyLimit(formatAmount(check.left, LIMIT_DECIMALS, "cents")), ERROR_CODES.DAILY_LIMIT);
 }
 
-/** Counts a request from the moment it is sent, by its nonce, so a retry on the same nonce counts once. */
-export function spendSent(account: Address, write: { nonce: number }, kind: SpendKind, amount: bigint, potId?: bigint): void {
+/** Counts a request from the moment it is sent, by its nonce, so a retry on the same nonce counts once. A pot is given by its key (potstore.ts potKey). */
+export function spendSent(account: Address, write: { nonce: number }, kind: SpendKind, amount: bigint, potId?: string): void {
   try {
     store(account).update((s) =>
-      recordSpend(s, { id: String(write.nonce), kind, amount: amount.toString(), at: Date.now(), final: false, ...(potId !== undefined ? { potId: potId.toString() } : {}) }),
+      recordSpend(s, { id: String(write.nonce), kind, amount: amount.toString(), at: Date.now(), final: false, ...(potId !== undefined ? { potId } : {}) }),
     );
   } catch {
     // Storage refused: the limit can't count this one. The payment itself is unaffected.

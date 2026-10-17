@@ -75,6 +75,8 @@ export type PotLink = {
   /** 1: names only. 2: names and suggested shares. Each is signed with its own types. */
   version: 1 | 2;
   deployment: Deployment;
+  /** Made on NivPayPotsV2 (config.ts POTS_V2), not NivPayPots. */
+  onV2: boolean;
   potId: bigint;
   block: bigint;
   people: Person[];
@@ -100,6 +102,8 @@ export type PayLink = {
 export type AskLink = {
   kind: "ask";
   deployment: Deployment;
+  /** The pot is on NivPayPotsV2. */
+  onV2: boolean;
   potId: bigint;
   /** The block the pot was made in, so its PotCreated event is one read. */
   block: bigint;
@@ -143,6 +147,20 @@ function fixedHex(r: LinkReader, bytes: number): Hex {
   return h;
 }
 
+/**
+ * Which pots contract a pot or request link is about, in one number: 0 and 1
+ * are NivPayPots on AUSD and TESTUSD, as every link made before V2 has it; 2
+ * and 3 are NivPayPotsV2 on the same. A phone that predates V2 calls 2 and 3
+ * damaged rather than opening the wrong pot.
+ */
+const potsCode = (deployment: Deployment, onV2: boolean) => (deployment === "ausd" ? 0 : 1) + (onV2 ? 2 : 0);
+
+function readPotsCode(r: LinkReader): { deployment: Deployment; onV2: boolean } {
+  const d = Number(r.uint());
+  if (d < 0 || d > 3) throw new Error("link is damaged");
+  return { deployment: d % 2 === 0 ? "ausd" : "testusd", onV2: d >= 2 };
+}
+
 export function encodeLink(link: Link): string {
   const version = link.kind === "pot" ? link.version : link.kind === "invite" && link.inviter ? INVITE_VERSION : LINK_VERSION;
   const w = new LinkWriter().uint(version).uint(KIND[link.kind]);
@@ -158,7 +176,7 @@ export function encodeLink(link: Link): string {
       w.hex(link.signature);
       break;
     case "pot":
-      w.uint(link.deployment === "ausd" ? 0 : 1).uint(link.potId).uint(link.block).uint(link.people.length);
+      w.uint(potsCode(link.deployment, link.onV2)).uint(link.potId).uint(link.block).uint(link.people.length);
       for (const p of link.people) writePerson(w, p);
       if (link.version === 2) {
         w.uint(link.shares.length);
@@ -170,7 +188,7 @@ export function encodeLink(link: Link): string {
       w.uint(link.deployment === "ausd" ? 0 : 1).account(link.account).text(link.name).uint(link.amount);
       break;
     case "ask":
-      w.uint(link.deployment === "ausd" ? 0 : 1).uint(link.potId).uint(link.block).uint(link.proposalId);
+      w.uint(potsCode(link.deployment, link.onV2)).uint(link.potId).uint(link.block).uint(link.proposalId);
       break;
   }
   return w.toFragment();
@@ -216,8 +234,7 @@ export function decodeLink(fragment: string): Link {
       signature: fixedHex(r, 65),
     };
   } else if (kind === KIND.pot) {
-    const d = Number(r.uint());
-    if (d !== 0 && d !== 1) throw new Error("link is damaged");
+    const where = readPotsCode(r);
     const potId = r.uint();
     const block = r.uint();
     const count = Number(r.uint());
@@ -232,7 +249,8 @@ export function decodeLink(fragment: string): Link {
     link = {
       kind: "pot",
       version: version === POT_LINK_VERSION ? 2 : 1,
-      deployment: d === 0 ? "ausd" : "testusd",
+      deployment: where.deployment,
+      onV2: where.onV2,
       potId,
       block,
       people,
@@ -244,9 +262,8 @@ export function decodeLink(fragment: string): Link {
     if (d !== 0 && d !== 1) throw new Error("link is damaged");
     link = { kind: "pay", deployment: d === 0 ? "ausd" : "testusd", account: getAddress(r.account()), name: checkedText(r), amount: r.uint() };
   } else if (kind === KIND.ask) {
-    const d = Number(r.uint());
-    if (d !== 0 && d !== 1) throw new Error("link is damaged");
-    link = { kind: "ask", deployment: d === 0 ? "ausd" : "testusd", potId: r.uint(), block: r.uint(), proposalId: r.uint() };
+    const where = readPotsCode(r);
+    link = { kind: "ask", deployment: where.deployment, onV2: where.onV2, potId: r.uint(), block: r.uint(), proposalId: r.uint() };
   } else {
     throw new Error("link is damaged");
   }

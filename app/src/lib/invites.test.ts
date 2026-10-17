@@ -85,6 +85,7 @@ test("the pot link's labels are accepted only from the pot's creator, for that p
     kind: "pot",
     version: 2,
     deployment: "ausd",
+    onV2: false,
     potId: 7n,
     block: 47_123_456n,
     people,
@@ -175,7 +176,7 @@ test("links stay chat safe for many realistic people", async () => {
       timeZone: zones[(i * j) % zones.length]!,
     }));
     const shares = people.map((p, j) => ({ account: p.account, amount: BigInt(j + 1) * 123_450_000n }));
-    const link: PotLink = { kind: "pot", version: 2, deployment: i % 2 ? "ausd" : "testusd", potId: BigInt(i * 977), block: 47_000_000n + BigInt(i), people, shares, signature: `0x${"ab".repeat(65)}` };
+    const link: PotLink = { kind: "pot", version: 2, deployment: i % 2 ? "ausd" : "testusd", onV2: i % 3 === 0, potId: BigInt(i * 977), block: 47_000_000n + BigInt(i), people, shares, signature: `0x${"ab".repeat(65)}` };
     assert.deepEqual(decodeLink(encodeLink(link)), link);
     assertChatSafe(linkUrl("https://nivpay.vercel.app", link));
   }
@@ -214,8 +215,10 @@ test("a damaged request to be paid is refused", () => {
 
 test("a payment request link round trips, carries only numbers, and is safe to paste in a chat", () => {
   for (const link of [
-    { kind: "ask", deployment: "ausd", potId: 0n, block: 66_120_345n, proposalId: 0n },
-    { kind: "ask", deployment: "testusd", potId: 4_096n, block: 47_000_000_123n, proposalId: 1_000_000n },
+    { kind: "ask", deployment: "ausd", onV2: false, potId: 0n, block: 66_120_345n, proposalId: 0n },
+    { kind: "ask", deployment: "testusd", onV2: false, potId: 4_096n, block: 47_000_000_123n, proposalId: 1_000_000n },
+    { kind: "ask", deployment: "ausd", onV2: true, potId: 3n, block: 80_000_000n, proposalId: 2n },
+    { kind: "ask", deployment: "testusd", onV2: true, potId: 0n, block: 80_000_001n, proposalId: 0n },
   ] satisfies AskLink[]) {
     const url = linkUrl("https://nivpay.vercel.app", link);
     assertChatSafe(url);
@@ -224,11 +227,29 @@ test("a payment request link round trips, carries only numbers, and is safe to p
 });
 
 test("a damaged payment request link is refused", () => {
-  const good = encodeLink({ kind: "ask", deployment: "ausd", potId: 3n, block: 66_120_345n, proposalId: 9n });
+  const good = encodeLink({ kind: "ask", deployment: "ausd", onV2: false, potId: 3n, block: 66_120_345n, proposalId: 9n });
   assert.throws(() => decodeLink(good.slice(0, -2)), /damaged/);
   assert.throws(() => decodeLink(`${good}aa`), /damaged/);
-  const otherDeployment = new LinkWriter().uint(1).uint(5).uint(2).uint(3).uint(66_120_345n).uint(9).toFragment();
+  // 0 and 1 are NivPayPots, 2 and 3 NivPayPotsV2; nothing else.
+  const otherDeployment = new LinkWriter().uint(1).uint(5).uint(4).uint(3).uint(66_120_345n).uint(9).toFragment();
   assert.throws(() => decodeLink(otherDeployment), /damaged/);
   const asVersion2 = new LinkWriter().uint(2).uint(5).uint(0).uint(3).uint(66_120_345n).uint(9).toFragment();
   assert.throws(() => decodeLink(asVersion2), /damaged/, "payment request links are version 1 only");
+});
+
+test("a link made before V2 opens on NivPayPots, exactly as it did", () => {
+  // Byte for byte what the app wrote before NivPayPotsV2: the contract number is 0 or 1.
+  const before = new LinkWriter().uint(1).uint(5).uint(0).uint(3).uint(66_120_345n).uint(9).toFragment();
+  assert.deepEqual(decodeLink(before), { kind: "ask", deployment: "ausd", onV2: false, potId: 3n, block: 66_120_345n, proposalId: 9n });
+  assert.equal(encodeLink({ kind: "ask", deployment: "ausd", onV2: false, potId: 3n, block: 66_120_345n, proposalId: 9n }), before);
+  const testusd = new LinkWriter().uint(1).uint(5).uint(1).uint(3).uint(66_120_345n).uint(9).toFragment();
+  assert.deepEqual(decodeLink(testusd), { kind: "ask", deployment: "testusd", onV2: false, potId: 3n, block: 66_120_345n, proposalId: 9n });
+});
+
+test("a V2 pot's link says so, so it is never opened as the V1 pot with the same number", () => {
+  const v1 = encodeLink({ kind: "ask", deployment: "ausd", onV2: false, potId: 3n, block: 66_120_345n, proposalId: 9n });
+  const v2 = encodeLink({ kind: "ask", deployment: "ausd", onV2: true, potId: 3n, block: 66_120_345n, proposalId: 9n });
+  assert.notEqual(v1, v2);
+  assert.equal((decodeLink(v2) as AskLink).onV2, true);
+  assert.equal((decodeLink(v1) as AskLink).onV2, false);
 });

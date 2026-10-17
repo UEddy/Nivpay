@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isAddressEqual, type Address } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import { liveWriteChain } from "../lib/chain.ts";
-import { POTS } from "../lib/deployment.ts";
 import { describeFailure, SendFailure } from "../lib/errors.ts";
 import { idbWriteStore } from "../lib/idb.ts";
 import { amountForField, amountIn, formatAmount } from "../lib/money.ts";
@@ -24,7 +23,8 @@ export type Asking = { payee: number; amount: bigint };
  * closed is picked up again from its saved bytes; a stuck one is retried with
  * the same payee and amount, on the same nonce.
  */
-export function useAskFlow(me: Address, potId: bigint, onAsked: (proposalId: bigint) => void) {
+/** `pots` is the contract the pot is on (lib/deployment.ts potsOf). */
+export function useAskFlow(me: Address, POTS: Address, potId: bigint, onAsked: (proposalId: bigint) => void) {
   const [step, setStep] = useState<Step | "landing" | null>(null);
   const [asking, setAsking] = useState<Asking | null>(null);
   const [stuck, setStuck] = useState<Asking | null>(null);
@@ -117,7 +117,7 @@ export function useAskFlow(me: Address, potId: bigint, onAsked: (proposalId: big
     return true;
   };
 
-  return { step, asking, stuck, result, resumable, ask, stop };
+  return { step, asking, stuck, result, resumable, ask, stop, pots: POTS };
 }
 
 /** The ask sheet: one of the pot's payees, an amount, and the fee before the asker's own yes. */
@@ -137,7 +137,7 @@ export function AskSheet(props: {
 
   useEffect(() => {
     let live = true;
-    readFeeTerms(readClient, POTS)
+    readFeeTerms(readClient, flow.pots)
       .then((t) => live && setTerms(t))
       .catch(() => live && setTermsFailed(true));
     return () => {

@@ -22,7 +22,17 @@ abstract contract PotsTestBase is Test {
 
     function setUp() public virtual {
         token = new MockAUSD();
-        pots = new NivPayPots(IERC20(address(token)), FEE_BPS, FEE_CAP, feeRecipient);
+        pots = _newPots(IERC20(address(token)), FEE_BPS, FEE_CAP, feeRecipient);
+    }
+
+    /// @notice Every pots contract these suites make. test/PotsOnV2.t.sol
+    /// overrides it, so the same suites run against NivPayPotsV2 too.
+    function _newPots(IERC20 token_, uint256 feeBps_, uint256 feeCap_, address feeRecipient_)
+        internal
+        virtual
+        returns (NivPayPots)
+    {
+        return new NivPayPots(token_, feeBps_, feeCap_, feeRecipient_);
     }
 
     function _fundAccount(address who, uint256 amount) internal {

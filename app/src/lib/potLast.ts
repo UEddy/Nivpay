@@ -91,7 +91,7 @@ export class PotLastStore {
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
       const out: Record<string, PotLast> = {};
       for (const [potId, v] of Object.entries(raw)) {
-        if (/^\d+$/.test(potId) && v && typeof v.kind === "string" && typeof v.block === "string" && (!("who" in v) || isAddress(String(v.who)))) out[potId] = v;
+        if (/^(v2:)?\d+$/.test(potId) && v && typeof v.kind === "string" && typeof v.block === "string" && (!("who" in v) || isAddress(String(v.who)))) out[potId] = v;
       }
       return out;
     } catch {

@@ -6,7 +6,7 @@ import { BlockTimes, timesFor } from "../lib/blockTimes.ts";
 import { liveWriteChain } from "../lib/chain.ts";
 import { askCloseLabel, closeState, putInBy, shareFraction, splitNow, takeLabel, takeView, totalsOf } from "../lib/close.ts";
 import { askCloseCall, closeRefusalOf, dataOf, takeCall } from "../lib/closeLive.ts";
-import { DEPLOYMENT, POTS } from "../lib/deployment.ts";
+import { DEPLOYMENT, potsOf } from "../lib/deployment.ts";
 import { AppError, describeFailure, SendFailure } from "../lib/errors.ts";
 import type { PotEvent } from "../lib/feed.ts";
 import { idbWriteStore } from "../lib/idb.ts";
@@ -46,6 +46,8 @@ export function CloseScreen(props: {
   const me = props.account.address;
   const link = useMemo(() => linkFor(props.pot), [props.pot]);
   const potId = BigInt(props.pot.potId);
+  const onV2 = Boolean(props.pot.onV2);
+  const POTS = potsOf(onV2);
   const [info, setInfo] = useState<PotInfo | null>(null);
   const [state, setState] = useState<PotState | null>(null);
   const [events, setEvents] = useState<PotEvent[] | null>(null);
@@ -86,8 +88,8 @@ export function CloseScreen(props: {
 
   const read = useCallback(async () => {
     const accounts = info?.labelsOk ? info.people.map((p) => p.account) : [];
-    let s = await readPotState(potId, [...accounts, me], me);
-    if (!info?.labelsOk && s.deciders.some((a) => s.held[a.toLowerCase()] === undefined)) s = await readPotState(potId, [...s.deciders, me], me);
+    let s = await readPotState(onV2, potId, [...accounts, me], me);
+    if (!info?.labelsOk && s.deciders.some((a) => s.held[a.toLowerCase()] === undefined)) s = await readPotState(onV2, potId, [...s.deciders, me], me);
     return s;
   }, [potId, me, info]);
 
@@ -101,7 +103,7 @@ export function CloseScreen(props: {
   // The feed tells the totals, who closed it, and anyone else's change; numbers land at Finalized.
   useEffect(() => {
     if (!info) return;
-    const feed = potFeed(info.potId, info.block);
+    const feed = potFeed(info.onV2, info.potId, info.block);
     feed.start((all, fresh, progress) => {
       if (!alive.current) return;
       setEvents(all);

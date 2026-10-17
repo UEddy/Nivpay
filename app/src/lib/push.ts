@@ -68,15 +68,17 @@ export function parseGo(search: string): Go | null {
   const pot = q.get("pot") ?? "";
   const ask = q.get("ask") ?? "";
   const num = (v: string) => /^\d{1,20}$/.test(v);
+  // A pot on NivPayPotsV2 is "v2:" and its number (potstore.ts potKey).
+  const potNum = (v: string) => /^(v2:)?\d{1,20}$/.test(v);
   switch (q.get("go")) {
     case "receive":
       return { kind: "receive" };
     case "notes":
       return { kind: "notes" };
     case "pot":
-      return num(pot) ? { kind: "pot", potId: pot } : null;
+      return potNum(pot) ? { kind: "pot", potId: pot } : null;
     case "request":
-      return num(pot) && num(ask) ? { kind: "request", potId: pot, proposalId: ask } : null;
+      return potNum(pot) && num(ask) ? { kind: "request", potId: pot, proposalId: ask } : null;
     default:
       return null;
   }

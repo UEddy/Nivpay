@@ -2,7 +2,8 @@ import { useState, type ReactNode } from "react";
 import { stripInvisible } from "../lib/text.ts";
 import { copy } from "../copy.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
-import { DEPLOYMENT, POTS } from "../lib/deployment.ts";
+import { DEPLOYMENT, NEW_POTS_ON_V2, POTS } from "../lib/deployment.ts";
+import { NEW_POTS } from "../lib/pots.ts";
 import { readSince } from "../lib/discoverLive.ts";
 import { describeFailure } from "../lib/errors.ts";
 import { answered, type AnsweredInvite } from "../lib/invited.ts";
@@ -41,9 +42,10 @@ export function JoinScreen(props: {
     try {
       const person = { account: account.address, name: name.trim(), city: city.trim(), timeZone };
       // Read alongside the passkey step. Without it the pot can still be matched, from further back.
-      const since = readSince(readClient, POTS).catch(() => undefined);
+      // The pot will be made where this build makes new pots, so its count is read there.
+      const since = readSince(readClient, NEW_POTS).catch(() => undefined);
       const signed = await withSigner(account.address, (signer) => signReply(signer, POTS, invite, person));
-      props.onAnswered(answered(invite, DEPLOYMENT, account.address, Date.now(), await since));
+      props.onAnswered(answered(invite, DEPLOYMENT, account.address, Date.now(), await since, NEW_POTS_ON_V2));
       setReply(signed);
     } catch (e) {
       setError({ tone: "bad", ...describeFailure(e) });

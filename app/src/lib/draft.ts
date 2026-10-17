@@ -98,6 +98,8 @@ export type Made = {
    * phone. The creator signs them again, over this hash, before sharing.
    */
   unsigned?: { createdIn: Hex; people: Person[]; shares: Sending["shares"] };
+  /** Made on NivPayPotsV2. Absent on pots made before V2, all on NivPayPots. */
+  onV2?: boolean;
 };
 
 /** Someone named on a made pot: every other decider, and every payee with an account. */

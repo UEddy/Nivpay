@@ -147,7 +147,7 @@ contract PotsSecurityTest is PotsTestBase {
 
     function test_reentrancy_guardBlocksReentryOnExit() public {
         ReentrantToken evil = new ReentrantToken();
-        NivPayPots victim = new NivPayPots(IERC20(address(evil)), FEE_BPS, FEE_CAP, feeRecipient);
+        NivPayPots victim = _newPots(IERC20(address(evil)), FEE_BPS, FEE_CAP, feeRecipient);
 
         evil.mint(alice, 1000 * ONE);
         vm.prank(alice);
@@ -177,7 +177,7 @@ contract PotsSecurityTest is PotsTestBase {
 
     function test_reentrancy_guardBlocksReentryOnFund() public {
         ReentrantToken evil = new ReentrantToken();
-        NivPayPots victim = new NivPayPots(IERC20(address(evil)), FEE_BPS, FEE_CAP, feeRecipient);
+        NivPayPots victim = _newPots(IERC20(address(evil)), FEE_BPS, FEE_CAP, feeRecipient);
 
         evil.mint(alice, 1000 * ONE);
         vm.prank(alice);

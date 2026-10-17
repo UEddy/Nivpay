@@ -52,6 +52,12 @@ export type AnsweredInvite = {
   scannedTo?: string;
   /** Pots the slow search saw the inviter make, with their blocks, by pot number. */
   seen?: Record<string, string>;
+  /**
+   * Answered on a build that makes new pots on NivPayPotsV2, so the pot will
+   * be made there, and `since`, matching and every pot number above are V2's.
+   * Absent on every row answered before V2.
+   */
+  onV2?: boolean;
 };
 
 /**
@@ -68,6 +74,7 @@ export function answered(
   account: Address,
   now: number,
   since?: { block: bigint; potCount: number },
+  onV2 = false,
 ): AnsweredInvite {
   return {
     deployment,
@@ -81,6 +88,7 @@ export function answered(
     share: invite.share.toString(),
     answeredAt: now,
     ...(since ? { since: { block: since.block.toString(), potCount: since.potCount } } : {}),
+    ...(onV2 ? { onV2: true } : {}),
   };
 }
 
