@@ -78,6 +78,9 @@ export const POTS_V2 = null as Record<Deployment, Address> | null;
 /** The blocks the two NivPayPotsV2 were deployed in. Null with POTS_V2. */
 export const POTS_V2_DEPLOY_BLOCK = null as Record<Deployment, bigint> | null;
 
+/** Every pots contract there is, so money from any of them shows as from a pot. */
+export const ALL_POTS: Address[] = [POTS_AUSD, POTS_TESTUSD, ...(POTS_V2 ? [POTS_V2.ausd, POTS_V2.testusd] : [])];
+
 /**
  * NivPayNames, the username registry (README, "Usernames for accounts"), one
  * for both deployments. Deployed in transaction 0x9bf29091dbe3167dfd72f6602a1f4d4d32f06039b6d001f7c1199f74df4d949e

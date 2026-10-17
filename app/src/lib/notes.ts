@@ -2,6 +2,7 @@ import { getAddress, isAddress, type Address } from "viem";
 import type { FoundPot } from "./discover.ts";
 import type { Spend } from "./limits.ts";
 import type { EndedRequest, OpenRequest } from "./waiting.ts";
+import type { ChangeKind } from "./changes.ts";
 
 /**
  * In-app notifications, built only from what Home already reads at the
@@ -28,7 +29,15 @@ export type NoteKind =
   | "sent"
   | "potNamesYou"
   | "memberChippedIn"
-  | "request";
+  | "request"
+  /** A change agreed on a NivPayPotsV2 pot this account put money into, that widens spending and isn't in force yet. */
+  | "changeAgreed";
+
+/** What an agreed change does, kept as numbers and names so the note reads in whatever language is in use. */
+export type NoteChange = { kind: ChangeKind; payee: string; label: string; limit: string; endTime: string; appliesAt: string };
+
+/** A change found agreed and on its way, on a pot this account put money into (Home, lib/changesLive.ts readComing). */
+export type Coming = { potId: string; changeId: string; change: NoteChange };
 
 export type Note = {
   id: string;
@@ -50,6 +59,8 @@ export type Note = {
   toName?: string;
   /** The name a requester signed their request with, cleaned (request). */
   fromName?: string;
+  /** The change agreed (changeAgreed). */
+  change?: NoteChange;
 };
 
 export type NotesState = {
@@ -108,6 +119,8 @@ export type PollInputs = {
   trusted?: readonly Address[];
   /** Money put into this account's own pots by the people in them, read up to the same block as `found`. */
   fundings?: Funding[];
+  /** Changes agreed and on their way, on V2 pots this account put money into. */
+  coming?: Coming[];
 };
 
 /** The most pot numbers and funding ids remembered. */
@@ -187,6 +200,10 @@ export function fromPoll(s: NotesState, i: PollInputs): NotesState {
     }
     potsSeen = [...seen];
   }
+  // Each agreed change once: everyone with money in hears of it while there is still time to leave.
+  for (const c of i.coming ?? []) {
+    fresh.push({ id: `change:${c.potId}:${c.changeId}`, kind: "changeAgreed", at: i.now, read: false, potId: c.potId, change: c.change, decimals: DOLLAR_DECIMALS });
+  }
   if (i.raised && i.raised.at >= s.startedAt) fresh.push({ id: `limit:${i.raised.at}`, kind: "limitRaised", at: i.raised.at, read: false, amount: i.raised.limit, decimals: DOLLAR_DECIMALS });
   const withNames = fresh.map((n) => (n.potId !== undefined && names[n.potId] ? { ...n, name: names[n.potId] } : n));
   return add({ ...s, totals, asked: [...asked], poursSeen: [...poursSeen], potsSeen: potsSeen.slice(-MAX_SEEN), fundsSeen: [...fundsSeen].slice(-MAX_SEEN) }, withNames);
@@ -237,7 +254,7 @@ export const markRead = (s: NotesState, id: string): NotesState => ({ ...s, note
 export const markAllRead = (s: NotesState): NotesState => ({ ...s, notes: s.notes.map((n) => ({ ...n, read: true })) });
 
 type KeyValue = Pick<Storage, "getItem" | "setItem">;
-const KINDS: NoteKind[] = ["received", "chippedIn", "askYes", "askClose", "paidOut", "closingSoon", "closedShare", "limitRaised", "sent", "potNamesYou", "memberChippedIn", "request"];
+const KINDS: NoteKind[] = ["received", "chippedIn", "askYes", "askClose", "paidOut", "closingSoon", "closedShare", "limitRaised", "sent", "potNamesYou", "memberChippedIn", "request", "changeAgreed"];
 
 export class NotesStore {
   private readonly kv: KeyValue;

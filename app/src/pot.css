@@ -2865,3 +2865,40 @@ button.avatar {
   color: var(--muted);
   overflow-wrap: anywhere;
 }
+
+/* Changes to a pot on NivPayPotsV2 (screens/Changes.tsx). */
+.pot-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.change-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--divider);
+}
+.change-row p {
+  margin: 0;
+}
+.change-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.field-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.limit-room .text-btn {
+  display: inline;
+}
+.copy-pot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}

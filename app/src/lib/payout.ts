@@ -40,7 +40,8 @@ export function ttlDays(ttlSeconds: bigint): number {
   return Number(ttlSeconds / 86_400n);
 }
 
-export type PayeeLimit = { name: string; cap: bigint; spent: bigint };
+/** `removed`: taken off the pot by a change on NivPayPotsV2, and paid nothing more. */
+export type PayeeLimit = { name: string; cap: bigint; spent: bigint; removed?: boolean };
 
 /** What the pot looks like at the finalized block, as far as paying from it goes. */
 export type PotFacts = {
@@ -64,6 +65,7 @@ const refuse = {
   decided: () => new AppError(copy.errRequestDecided, ERROR_CODES.REQUEST_DECIDED),
   other: () => new AppError(copy.errRequestRefused, ERROR_CODES.REQUEST_REFUSED),
   alreadyClosed: () => new AppError(copy.errAlreadyClosed, ERROR_CODES.POT_ALREADY_CLOSED),
+  removed: (payee: PayeeLimit) => new AppError(copy.errPayeeRemoved(payee.name), ERROR_CODES.PAY_OVER_LIMIT),
 };
 
 const isDecider = (pot: PotFacts, me: Address) => pot.deciders.some((d) => isAddressEqual(d, me));
@@ -72,6 +74,7 @@ const isDecider = (pot: PotFacts, me: Address) => pot.deciders.some((d) => isAdd
 function payable(pot: PotFacts, payeeIndex: number, amount: bigint, fee: bigint): AppError | null {
   const payee = pot.payees[payeeIndex];
   if (!payee) return refuse.other();
+  if (payee.removed) return refuse.removed(payee);
   if (payee.spent + amount > payee.cap) return refuse.overLimit(payee, pot.decimals);
   if (amount + fee > pot.totalAssets) return refuse.potShort(pot.totalAssets, pot.decimals);
   return null;
@@ -233,6 +236,10 @@ export function refusalFor(errorName: string | undefined, pot?: PotFacts, reques
       return refuse.stopped();
     case "ProposalExpired":
       return refuse.expired();
+    case "PayeeRemoved": {
+      const payee = pot && request ? pot.payees[request.payee] : undefined;
+      return refuse.removed(payee ?? { name: copy.unnamedPayee, cap: 0n, spent: 0n });
+    }
     case "ProposalNotPending":
     case "AlreadyApproved":
     case "NotApproved":

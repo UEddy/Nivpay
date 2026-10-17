@@ -21,13 +21,16 @@ const TEXTS = pushTexts({ en, es, fr, pt });
 test("a tap goes where the app opens it: the service worker and the app agree for every kind", () => {
   const cases: PushPayload[] = [
     ...PUSH_KINDS.map((k) => ({ k, l: "en", p: "7", r: "3" })),
+    // A pot on NivPayPotsV2.
+    ...PUSH_KINDS.map((k) => ({ k, l: "en", p: "v2:7", r: "3" })),
+    { k: "chippedIn", l: "en", p: "v3:7" },
     { k: "chippedIn", l: "en" },
     { k: "askYes", l: "en", p: "7" },
     { k: "chippedIn", l: "en", p: "7; evil" },
   ];
   for (const p of cases) {
     const url = sw.urlFor(p);
-    const expected = /^\d+$/.test(p.p ?? "") ? goFor(p) : { kind: "notes" as const };
+    const expected = /^(v2:)?\d+$/.test(p.p ?? "") ? goFor(p) : { kind: "notes" as const };
     assert.deepEqual(parseGo(new URL(url, "https://x").search), expected, `${p.k} ${p.p}`);
     assert.equal(url, goUrl(expected));
   }

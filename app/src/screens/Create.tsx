@@ -7,7 +7,8 @@ import { POTS_ABI } from "../lib/abi.ts";
 import { shownName, type StoredAccount } from "../lib/accounts.ts";
 import { liveWriteChain, waitForFinalized } from "../lib/chain.ts";
 import { createView, type Phase } from "../lib/createStage.ts";
-import { DEPLOYMENT, POTS, potsAt } from "../lib/deployment.ts";
+import { DEPLOYMENT, NEW_POTS_ON_V2, POTS, potsAt } from "../lib/deployment.ts";
+import { limitWithRoom } from "../lib/changes.ts";
 import { PotStore, type StoredPot } from "../lib/potstore.ts";
 import {
   allDeciders,
@@ -1040,6 +1041,15 @@ function PayeesSheet(props: {
           </div>
           {name.trim() && !nameOk && <p className="error">{copy.payeeNameTooLong}</p>}
           {limit.trim() && !capOk && <p className="error">{copy.limitInvalid}</p>}
+          {/* On V2 a limit can be raised later, but only after 72 hours: some room now saves asking. */}
+          {NEW_POTS_ON_V2 && nameOk && name.trim() && capOk && cap !== null && decimals !== null && limitWithRoom(cap, decimals) > cap && (
+            <p className="hint limit-room">
+              {copy.limitWithRoomHint(name.trim(), formatAmount(cap, decimals, "auto"), formatAmount(limitWithRoom(cap, decimals), decimals, "auto"))}{" "}
+              <button type="button" className="text-btn" onClick={() => setLimit(amountForField(limitWithRoom(cap, decimals), decimals))}>
+                {copy.useSuggestedLimit(formatAmount(limitWithRoom(cap, decimals), decimals, "auto"))}
+              </button>
+            </p>
+          )}
           <button type="button" className="btn" disabled={!nameOk || !capOk} onClick={add}>
             {copy.add}
           </button>

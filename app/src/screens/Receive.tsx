@@ -4,7 +4,7 @@ import { copy, ERROR_CODES } from "../copy.ts";
 import { otherCurrencyNote } from "../lib/currencyNote.ts";
 import { shownName, type StoredAccount } from "../lib/accounts.ts";
 import { ERC20_READ_ABI } from "../lib/abi.ts";
-import { CTK, LOG_PAGE_BLOCKS, POTS_AUSD, POTS_TESTUSD, SETTLEMENT_PAIR } from "../lib/config.ts";
+import { ALL_POTS, CTK, LOG_PAGE_BLOCKS, SETTLEMENT_PAIR } from "../lib/config.ts";
 import { DEPLOYMENT, DOLLAR } from "../lib/deployment.ts";
 import { PotFeed } from "../lib/feed.ts";
 import { idbFeedStore } from "../lib/idb.ts";
@@ -52,7 +52,7 @@ function show(currencies: Record<string, Currency>, p: Arrival): string {
 
 /** A payment from a pot, or in another currency from Agora's settlement, is not from a person's account. */
 function fromText(from: Address, usernames: Record<string, string> = {}): string {
-  const kind = senderKind(from, [POTS_AUSD, POTS_TESTUSD], SETTLEMENT_PAIR);
+  const kind = senderKind(from, ALL_POTS, SETTLEMENT_PAIR);
   return kind === "pot" ? copy.fromAPot : kind === "settlement" ? copy.fromAgoraSettlement : withUsernameOf(usernames, from, copy.accountEnding(from));
 }
 
@@ -214,7 +214,7 @@ export function ReceiveScreen(props: { account: StoredAccount; banner: ReactNode
               const isNew = fresh.has(keyOf(p));
               return (
                 <div className={`list-row${isNew ? " arrived" : ""}`} key={keyOf(p)}>
-                  {senderKind(p.from, [POTS_AUSD, POTS_TESTUSD], SETTLEMENT_PAIR) === "account" && <Avatar account={p.from} name={copy.accountEnding(p.from)} size={32} reportable />}
+                  {senderKind(p.from, ALL_POTS, SETTLEMENT_PAIR) === "account" && <Avatar account={p.from} name={copy.accountEnding(p.from)} size={32} reportable />}
                   <div className="grow">
                     <span className="name">+{show(currencies, p)}</span>
                     <span className="meta">{copy.paymentFrom(fromText(p.from, usernames))}</span>

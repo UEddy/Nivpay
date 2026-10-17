@@ -6,7 +6,8 @@ import { BlockTimes, timesFor } from "../lib/blockTimes.ts";
 import { liveWriteChain } from "../lib/chain.ts";
 import { askCloseLabel, closeState, putInBy, shareFraction, splitNow, takeLabel, takeView, totalsOf } from "../lib/close.ts";
 import { askCloseCall, closeRefusalOf, dataOf, takeCall } from "../lib/closeLive.ts";
-import { DEPLOYMENT, potsOf } from "../lib/deployment.ts";
+import { DEPLOYMENT, NEW_POTS_ON_V2, potsOf } from "../lib/deployment.ts";
+import { draftFromPot, type Draft } from "../lib/draft.ts";
 import { AppError, describeFailure, SendFailure } from "../lib/errors.ts";
 import type { PotEvent } from "../lib/feed.ts";
 import { idbWriteStore } from "../lib/idb.ts";
@@ -25,7 +26,7 @@ import { mapLines } from "./mapNames.ts";
 import { PotMap, type Coin, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { MoneyCards } from "./MoneyCards.tsx";
 import { layersOf, peopleOf } from "./Request.tsx";
-import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, shareLink, STOPPED, useCancellable, type Notice } from "./ui.tsx";
+import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, phoneTimeZone, shareLink, STOPPED, useCancellable, type Notice } from "./ui.tsx";
 import { beforePasskey } from "../lib/cancel.ts";
 import { dateLocale } from "../lib/locale.ts";
 
@@ -42,6 +43,8 @@ export function CloseScreen(props: {
   banner: ReactNode;
   onBack: () => void;
   onOpenRequest: (proposalId: bigint) => void;
+  /** Copy this pot: a new draft from this closed one, opened to finish. Only once new pots are made on V2. */
+  onCopy?: (draft: Draft) => void;
 }) {
   const me = props.account.address;
   const link = useMemo(() => linkFor(props.pot), [props.pot]);
@@ -416,6 +419,30 @@ export function CloseScreen(props: {
                 .catch(() => {})
             }
           />
+        )}
+
+        {state.closed && NEW_POTS_ON_V2 && props.onCopy && info && (
+          <div className="copy-pot enter">
+            <button
+              type="button"
+              className="pill-btn outline"
+              onClick={() =>
+                props.onCopy!(
+                  draftFromPot(
+                    me,
+                    phoneTimeZone(),
+                    Date.now(),
+                    (n) => crypto.getRandomValues(new Uint8Array(n)),
+                    { name: state.name, threshold: state.threshold, deciders: state.deciders, people: info.labelsOk ? info.people : [], payees: state.payees, removed: state.removed },
+                    (a) => copy.accountEnding(a),
+                  ),
+                )
+              }
+            >
+              {copy.copyThisPot}
+            </button>
+            <p className="hint">{copy.copyThisPotHint}</p>
+          </div>
         )}
 
         {!state.closed && split.rows.length > 0 && (

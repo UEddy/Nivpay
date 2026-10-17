@@ -11,14 +11,14 @@ import { getAddress, isAddress, type Address } from "viem";
  * only if the person turned on "Show amounts on the lock screen".
  */
 
-export const PUSH_KINDS = ["received", "sent", "chippedIn", "askYes", "request", "potNamesYou"] as const;
+export const PUSH_KINDS = ["received", "sent", "chippedIn", "askYes", "request", "potNamesYou", "changeApproved"] as const;
 export type PushKind = (typeof PUSH_KINDS)[number];
 
 export type PushSettings = { kinds: Record<PushKind, boolean>; amounts: boolean };
 
-/** On at first: money in, money into your pots, a yes asked of you, a request from a person. */
+/** On at first: money in, money into your pots, a yes asked of you, a request from a person, a change agreed to a pot you put money into. */
 export const DEFAULT_SETTINGS: PushSettings = {
-  kinds: { received: true, sent: false, chippedIn: true, askYes: true, request: true, potNamesYou: false },
+  kinds: { received: true, sent: false, chippedIn: true, askYes: true, request: true, potNamesYou: false, changeApproved: true },
   amounts: false,
 };
 
@@ -52,7 +52,7 @@ export type Go = { kind: "receive" } | { kind: "notes" } | { kind: "pot"; potId:
 export function goFor(p: Pick<PushPayload, "k" | "p" | "r">): Go {
   if (p.k === "received") return { kind: "receive" };
   if (p.k === "askYes" && p.p && p.r) return { kind: "request", potId: p.p, proposalId: p.r };
-  if ((p.k === "chippedIn" || p.k === "potNamesYou") && p.p) return { kind: "pot", potId: p.p };
+  if ((p.k === "chippedIn" || p.k === "potNamesYou" || p.k === "changeApproved") && p.p) return { kind: "pot", potId: p.p };
   return { kind: "notes" };
 }
 
@@ -107,6 +107,7 @@ type Dictionary = {
   pushAskYesNoAmount: (pot: string) => string;
   pushRequest: string;
   pushPotNamesYou: (pot: string) => string;
+  pushChangeApproved: (pot: string) => string;
   pushTitle: string;
 };
 
@@ -130,6 +131,8 @@ export function pushTexts(dictionaries: Record<string, Dictionary>): PushTexts {
         requestNoAmount: c.pushRequest,
         potNamesYou: c.pushPotNamesYou(P),
         potNamesYouNoAmount: c.pushPotNamesYou(P),
+        changeApproved: c.pushChangeApproved(P),
+        changeApprovedNoAmount: c.pushChangeApproved(P),
       },
     ]),
   );

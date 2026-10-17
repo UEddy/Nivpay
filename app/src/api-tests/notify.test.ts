@@ -5,7 +5,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import * as server from "../../api/notify/index.ts";
 import { forgetRecent, handleNotify, MAX_AGE_S, payloadFor, type NotifyChain, type PushStore, type Subscription } from "../../api/notify/index.ts";
 import * as config from "../lib/config.ts";
-import { POTS_ABI } from "../lib/abi.ts";
+import { POTS_ABI, POTS_V2_ABI } from "../lib/abi.ts";
 import { requestDigest, requestProof, type PersonRequest } from "../lib/inbox.ts";
 import { DEFAULT_SETTINGS } from "../lib/push.ts";
 
@@ -48,6 +48,7 @@ function chain(logs: Log[], over: Partial<{ block: bigint; finalized: bigint; st
     blockTime: async () => BigInt(NOW / 1000 - (over.age ?? 5)),
     members: async () => ({ deciders: [MAKER, IDARA, PAYER], payees: [UBONG] }),
     potName: async () => "Birthday",
+    shares: async (_pots, _potId, account) => (account === IDARA || account === UBONG ? 5n : 0n),
   };
 }
 
@@ -87,6 +88,7 @@ beforeEach(() => forgetRecent());
 
 test("the server's copies of the addresses match the app's", () => {
   for (const k of ["POTS_AUSD", "POTS_TESTUSD", "TESTUSD", "AUSD", "AUSD_FAUCET", "CTK", "SETTLEMENT_PAIR", "RPC_URL"] as const) assert.equal(server[k], config[k], k);
+  assert.deepEqual(server.POTS_V2, config.POTS_V2, "POTS_V2");
 });
 
 test("money sent: the person paid hears it came in, and the payer's other phones that it went through", async () => {
@@ -162,4 +164,32 @@ test("nothing happens until notifications are set up, and only from this site", 
 test("payloads carry no name and no link", () => {
   const sub = { account: IDARA, endpoint: "e", keys: { p256dh: "x", auth: "y" }, lang: "pt", settings: { ...DEFAULT_SETTINGS, amounts: true }, muted: [], trusted: [], at: 1 } as Subscription;
   assert.equal(payloadFor(sub, { account: IDARA, kind: "chippedIn", pot: "7", potName: "Birthday", amount: 5n, decimals: 6, symbol: "$" }), JSON.stringify({ k: "chippedIn", l: "pt", p: "7", n: "Birthday", a: "5", d: 6, s: "$" }));
+});
+
+test("a change agreed on a V2 pot tells those still holding money in it, checked on the chain, never the one whose yes agreed it", async () => {
+  const V2 = A(0x9902);
+  const d = { pots: config.POTS_AUSD, potsV2: V2, tokens: [{ address: config.AUSD, decimals: 6, symbol: "$" }] };
+  const agreed = (changeId: bigint, potId: bigint, appliesAt: bigint, lapsesAt: bigint) =>
+    log(V2, encodeEventTopics({ abi: POTS_V2_ABI, eventName: "ChangeApproved", args: { changeId, potId } }) as Hex[], encodeAbiParameters([{ type: "uint64" }, { type: "uint64" }], [appliesAt, lapsesAt]));
+  // Widening: waits 72 hours, then 7 days to apply.
+  const wide = await server.whoToTellOn(chain([]), d, [agreed(1n, 4n, 1_000n, 2_000n)], 100n, [IDARA, UBONG, STRANGER, PAYER], PAYER);
+  assert.deepEqual(wide.map((t) => [t.account, t.kind, t.pot]), [
+    [IDARA, "changeApproved", "v2:4"],
+    [UBONG, "changeApproved", "v2:4"],
+  ]);
+  // Narrowing applied with its yes: nothing to warn about.
+  assert.deepEqual(await server.whoToTellOn(chain([]), d, [agreed(2n, 4n, 1_000n, 1_000n)], 100n, [IDARA, UBONG]), []);
+  // The same event from any other address is nobody's change.
+  const elsewhere = log(STRANGER, agreed(1n, 4n, 1_000n, 2_000n).topics as Hex[], agreed(1n, 4n, 1_000n, 2_000n).data);
+  assert.deepEqual(await server.whoToTellOn(chain([]), d, [elsewhere], 100n, [IDARA]), []);
+});
+
+test("a V2 pot's own events go as v2: and its number", async () => {
+  const V2 = A(0x9902);
+  const d = { pots: config.POTS_AUSD, potsV2: V2, tokens: [{ address: config.AUSD, decimals: 6, symbol: "$" }] };
+  const onV2 = { ...funded(7n, PAYER, 50n), address: V2 };
+  const tells = await server.whoToTellOn(chain([]), d, [onV2], 100n);
+  assert.ok(tells.length > 0 && tells.every((t) => t.kind === "chippedIn" && t.pot === "v2:7"));
+  // And with V2 off, the same log is nothing.
+  assert.deepEqual(await server.whoToTellOn(chain([]), { ...d, potsV2: null }, [onV2], 100n), []);
 });

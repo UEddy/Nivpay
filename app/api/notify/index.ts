@@ -14,6 +14,12 @@
 //     * Proposed: "askYes" to the pot's deciders, not the one who asked;
 //     * PotCreated: "potNamesYou" to the people it names, not its maker, and
 //       only those who keep the maker among their contacts.
+//     * ChangeApproved on NivPayPotsV2, for a change that widens spending:
+//       "changeApproved" to everyone who still holds money in the pot at that
+//       block, read with funderInfo, not the one whose yes agreed it. The
+//       caller may name `people` to check, those its phone saw put money in;
+//       a name not holding money in the pot is dropped, so a wrong list can
+//       only leave someone out. A pot on V2 goes as "v2:" and its number.
 //   POST { kind: "request", from, to, time, signature, digest } checks the
 //   requester's proof, as /api/inbox does, and tells `to`, unless they muted
 //   `from`. It never carries the amount or the name: those are sealed.
@@ -41,11 +47,11 @@ export interface PushStore {
   list(prefix: string): Promise<string[]>;
   read(path: string): Promise<Uint8Array | null>;
 }
-export const PUSH_KINDS = ["received", "sent", "chippedIn", "askYes", "request", "potNamesYou"] as const;
+export const PUSH_KINDS = ["received", "sent", "chippedIn", "askYes", "request", "potNamesYou", "changeApproved"] as const;
 export type PushKind = (typeof PUSH_KINDS)[number];
 export type PushSettings = { kinds: Record<PushKind, boolean>; amounts: boolean };
 export const DEFAULT_SETTINGS: PushSettings = {
-  kinds: { received: true, sent: false, chippedIn: true, askYes: true, request: true, potNamesYou: false },
+  kinds: { received: true, sent: false, chippedIn: true, askYes: true, request: true, potNamesYou: false, changeApproved: true },
   amounts: false,
 };
 export function cleanSettings(raw: unknown): PushSettings {
@@ -84,9 +90,11 @@ export const CTK: Address = getAddress("0x7BEb5D9DB0d85cBEa543C04f0dE8c23c2176cd
 export const SETTLEMENT_PAIR: Address = getAddress("0x1Aa8958Aa34cEC8096EF4381cb335effe977b0ae");
 
 type Deployment = "ausd" | "testusd";
-const DEPLOYMENTS: Record<Deployment, { pots: Address; tokens: { address: Address; decimals: number; symbol: string }[] }> = {
-  ausd: { pots: POTS_AUSD, tokens: [{ address: AUSD, decimals: 6, symbol: "$" }, { address: CTK, decimals: 18, symbol: "CTK" }] },
-  testusd: { pots: POTS_TESTUSD, tokens: [{ address: TESTUSD, decimals: 6, symbol: "$" }] },
+export const POTS_V2 = null as Record<Deployment, Address> | null;
+
+const DEPLOYMENTS: Record<Deployment, { pots: Address; potsV2: Address | null; tokens: { address: Address; decimals: number; symbol: string }[] }> = {
+  ausd: { pots: POTS_AUSD, potsV2: POTS_V2?.ausd ?? null, tokens: [{ address: AUSD, decimals: 6, symbol: "$" }, { address: CTK, decimals: 18, symbol: "CTK" }] },
+  testusd: { pots: POTS_TESTUSD, potsV2: POTS_V2?.testusd ?? null, tokens: [{ address: TESTUSD, decimals: 6, symbol: "$" }] },
 };
 
 const EVENTS = [
@@ -94,9 +102,11 @@ const EVENTS = [
   { type: "event", name: "PotCreated", inputs: [{ name: "potId", type: "uint256", indexed: true }, { name: "creator", type: "address", indexed: true }, { name: "purpose", type: "bytes32", indexed: false }, { name: "approvers", type: "address[]", indexed: false }, { name: "threshold", type: "uint8", indexed: false }, { name: "destinations", type: "address[]", indexed: false }, { name: "destinationLabels", type: "bytes32[]", indexed: false }, { name: "destinationCaps", type: "uint256[]", indexed: false }, { name: "endTime", type: "uint64", indexed: false }] },
   { type: "event", name: "Funded", inputs: [{ name: "potId", type: "uint256", indexed: true }, { name: "funder", type: "address", indexed: true }, { name: "assets", type: "uint256", indexed: false }, { name: "sharesMinted", type: "uint256", indexed: false }] },
   { type: "event", name: "Proposed", inputs: [{ name: "proposalId", type: "uint256", indexed: true }, { name: "potId", type: "uint256", indexed: true }, { name: "proposer", type: "address", indexed: true }, { name: "kind", type: "uint8", indexed: false }, { name: "destIndex", type: "uint16", indexed: false }, { name: "amount", type: "uint256", indexed: false }, { name: "expiresAt", type: "uint64", indexed: false }] },
+  { type: "event", name: "ChangeApproved", inputs: [{ name: "changeId", type: "uint256", indexed: true }, { name: "potId", type: "uint256", indexed: true }, { name: "appliesAt", type: "uint64", indexed: false }, { name: "lapsesAt", type: "uint64", indexed: false }] },
 ] as const;
 
 const VIEWS = [
+  { type: "function", name: "funderInfo", stateMutability: "view", inputs: [{ name: "potId", type: "uint256" }, { name: "funder", type: "address" }], outputs: [{ name: "shares", type: "uint256" }, { name: "redeemable", type: "uint256" }] },
   { type: "function", name: "getPot", stateMutability: "view", inputs: [{ name: "potId", type: "uint256" }], outputs: [{ name: "", type: "tuple", components: [{ name: "purpose", type: "bytes32" }, { name: "endTime", type: "uint64" }, { name: "threshold", type: "uint8" }, { name: "approverCount", type: "uint8" }, { name: "destinationCount", type: "uint8" }, { name: "closed", type: "bool" }, { name: "frozen", type: "bool" }, { name: "totalAssets", type: "uint256" }, { name: "totalShares", type: "uint256" }] }] },
   { type: "function", name: "getApprovers", stateMutability: "view", inputs: [{ name: "potId", type: "uint256" }], outputs: [{ name: "", type: "address[]" }] },
   { type: "function", name: "getDestinations", stateMutability: "view", inputs: [{ name: "potId", type: "uint256" }], outputs: [{ name: "", type: "tuple[]", components: [{ name: "to", type: "address" }, { name: "label", type: "bytes32" }, { name: "cap", type: "uint256" }, { name: "spent", type: "uint256" }] }] },
@@ -124,6 +134,8 @@ export interface NotifyChain {
   blockTime(n: bigint): Promise<bigint>;
   members(pots: Address, potId: bigint, at: bigint): Promise<{ deciders: Address[]; payees: Address[] }>;
   potName(pots: Address, potId: bigint, at: bigint): Promise<string>;
+  /** An account's shares in a pot (funderInfo), at that block. */
+  shares(pots: Address, potId: bigint, account: Address, at: bigint): Promise<bigint>;
 }
 
 /** Sends one push. Returns the push service's status. */
@@ -132,17 +144,27 @@ export type Sender = (sub: Subscription, payload: string) => Promise<number>;
 /** Someone to tell, and what. */
 export type Tell = { account: Address; kind: PushKind; pot?: string; potName?: string; ask?: string; amount?: bigint; decimals?: number; symbol?: string; maker?: Address; from?: Address };
 
-/** Who a final receipt affects, from its events alone. */
-export async function whoToTell(chain: NotifyChain, deployment: Deployment, logs: Log[], at: bigint): Promise<Tell[]> {
-  const d = DEPLOYMENTS[deployment];
+/**
+ * Who a final receipt affects, from its events alone. `people` are only
+ * checked, never trusted: for an agreed change, each is told only if they
+ * hold money in the pot at `at`. `sender` is who sent the transaction.
+ */
+export function whoToTell(chain: NotifyChain, deployment: Deployment, logs: Log[], at: bigint, people: Address[] = [], sender?: Address): Promise<Tell[]> {
+  return whoToTellOn(chain, DEPLOYMENTS[deployment], logs, at, people, sender);
+}
+
+/** The same, for a deployment's contracts given here; tests give NivPayPotsV2 an address while POTS_V2 is null. */
+export async function whoToTellOn(
+  chain: NotifyChain,
+  d: { pots: Address; potsV2: Address | null; tokens: { address: Address; decimals: number; symbol: string }[] },
+  logs: Log[],
+  at: bigint,
+  people: Address[] = [],
+  sender?: Address,
+): Promise<Tell[]> {
   const out: Tell[] = [];
-  const names = new Map<string, string>();
-  const nameOf = async (potId: bigint) => {
-    const k = potId.toString();
-    if (!names.has(k)) names.set(k, await chain.potName(d.pots, potId, at).catch(() => ""));
-    return names.get(k)!;
-  };
-  const skipped = (a: Address) => isAddressEqual(a, d.pots) || isAddressEqual(a, SETTLEMENT_PAIR) || isAddressEqual(a, AUSD_FAUCET) || /^0x0{40}$/i.test(a);
+  const isPots = (a: Address) => isAddressEqual(a, d.pots) || (d.potsV2 !== null && isAddressEqual(a, d.potsV2));
+  const skipped = (a: Address) => isPots(a) || isAddressEqual(a, SETTLEMENT_PAIR) || isAddressEqual(a, AUSD_FAUCET) || /^0x0{40}$/i.test(a);
   for (const token of d.tokens) {
     const mine = logs.filter((l) => isAddressEqual(l.address, token.address));
     for (const t of parseEventLogs({ abi: EVENTS, eventName: "Transfer", logs: mine })) {
@@ -150,30 +172,52 @@ export async function whoToTell(chain: NotifyChain, deployment: Deployment, logs
       const amount = { amount: value, decimals: token.decimals, symbol: token.symbol };
       if (!skipped(to)) out.push({ account: getAddress(to), kind: "received", ...amount });
       // Money into a pot is a chip-in, told below; money to the settlement pair is a payment in another currency.
-      if (!skipped(from) && !isAddressEqual(to, d.pots)) out.push({ account: getAddress(from), kind: "sent", ...amount });
+      if (!skipped(from) && !isPots(to)) out.push({ account: getAddress(from), kind: "sent", ...amount });
     }
   }
-  const potLogs = logs.filter((l) => isAddressEqual(l.address, d.pots));
-  for (const f of parseEventLogs({ abi: EVENTS, eventName: "Funded", logs: potLogs })) {
-    const m = await chain.members(d.pots, f.args.potId, at);
-    const potName = await nameOf(f.args.potId);
-    for (const a of [...m.deciders, ...m.payees]) {
-      if (!isAddressEqual(a, f.args.funder)) out.push({ account: getAddress(a), kind: "chippedIn", pot: f.args.potId.toString(), potName, amount: f.args.assets, decimals: 6, symbol: "$" });
-    }
-  }
-  for (const p of parseEventLogs({ abi: EVENTS, eventName: "Proposed", logs: potLogs })) {
-    const m = await chain.members(d.pots, p.args.potId, at);
-    const potName = await nameOf(p.args.potId);
-    for (const a of m.deciders) {
-      if (!isAddressEqual(a, p.args.proposer)) {
-        out.push({ account: getAddress(a), kind: "askYes", pot: p.args.potId.toString(), potName, ask: p.args.proposalId.toString(), ...(p.args.kind === 0 ? { amount: p.args.amount, decimals: 6, symbol: "$" } : {}) });
+  // Each pots contract on its own: NivPayPots, and NivPayPotsV2 once it is set, whose pots go as "v2:" and their number.
+  for (const contract of [{ address: d.pots, v2: false }, ...(d.potsV2 ? [{ address: d.potsV2, v2: true }] : [])]) {
+    const pots = contract.address;
+    const key = (potId: bigint) => (contract.v2 ? `v2:${potId}` : potId.toString());
+    const names = new Map<string, string>();
+    const nameOf = async (potId: bigint) => {
+      const k = potId.toString();
+      if (!names.has(k)) names.set(k, await chain.potName(pots, potId, at).catch(() => ""));
+      return names.get(k)!;
+    };
+    const potLogs = logs.filter((l) => isAddressEqual(l.address, pots));
+    for (const f of parseEventLogs({ abi: EVENTS, eventName: "Funded", logs: potLogs })) {
+      const m = await chain.members(pots, f.args.potId, at);
+      const potName = await nameOf(f.args.potId);
+      for (const a of [...m.deciders, ...m.payees]) {
+        if (!isAddressEqual(a, f.args.funder)) out.push({ account: getAddress(a), kind: "chippedIn", pot: key(f.args.potId), potName, amount: f.args.assets, decimals: 6, symbol: "$" });
       }
     }
-  }
-  for (const c of parseEventLogs({ abi: EVENTS, eventName: "PotCreated", logs: potLogs })) {
-    const potName = await nameOf(c.args.potId);
-    for (const a of [...c.args.approvers, ...c.args.destinations]) {
-      if (!isAddressEqual(a, c.args.creator)) out.push({ account: getAddress(a), kind: "potNamesYou", pot: c.args.potId.toString(), potName, maker: getAddress(c.args.creator) });
+    for (const p of parseEventLogs({ abi: EVENTS, eventName: "Proposed", logs: potLogs })) {
+      const m = await chain.members(pots, p.args.potId, at);
+      const potName = await nameOf(p.args.potId);
+      for (const a of m.deciders) {
+        if (!isAddressEqual(a, p.args.proposer)) {
+          out.push({ account: getAddress(a), kind: "askYes", pot: key(p.args.potId), potName, ask: p.args.proposalId.toString(), ...(p.args.kind === 0 ? { amount: p.args.amount, decimals: 6, symbol: "$" } : {}) });
+        }
+      }
+    }
+    for (const c of parseEventLogs({ abi: EVENTS, eventName: "PotCreated", logs: potLogs })) {
+      const potName = await nameOf(c.args.potId);
+      for (const a of [...c.args.approvers, ...c.args.destinations]) {
+        if (!isAddressEqual(a, c.args.creator)) out.push({ account: getAddress(a), kind: "potNamesYou", pot: key(c.args.potId), potName, maker: getAddress(c.args.creator) });
+      }
+    }
+    if (!contract.v2) continue;
+    // A widening change waits before it applies (lapsesAt after appliesAt); a narrowing one applied with this yes.
+    for (const c of parseEventLogs({ abi: EVENTS, eventName: "ChangeApproved", logs: potLogs })) {
+      if (c.args.lapsesAt <= c.args.appliesAt) continue;
+      const potName = await nameOf(c.args.potId);
+      for (const a of [...new Map(people.map((x) => [x.toLowerCase(), x])).values()].slice(0, MAX_PEOPLE)) {
+        if (sender && isAddressEqual(a, sender)) continue;
+        const held = await chain.shares(pots, c.args.potId, a, at).catch(() => 0n);
+        if (held > 0n) out.push({ account: getAddress(a), kind: "changeApproved", pot: key(c.args.potId), potName });
+      }
     }
   }
   // One of each kind per person and pot.
@@ -294,7 +338,8 @@ export async function handleNotify(
     if (limited(getAddress(receipt.from))) return json(429, { error: "too many, try again in a minute" });
     recent.push({ at: t, account: getAddress(receipt.from) });
     handled.add(key);
-    tells = await whoToTell(chain, deployment, receipt.logs, receipt.blockNumber);
+    const people = Array.isArray(body.people) ? body.people.filter((a): a is string => typeof a === "string" && isAddress(a)).map((a) => getAddress(a)).slice(0, MAX_PEOPLE) : [];
+    tells = await whoToTell(chain, deployment, receipt.logs, receipt.blockNumber, people, receipt.from);
   } else if (body.kind === "request") {
     const { from, to, time, signature, digest } = body;
     if (typeof from !== "string" || !isAddress(from) || typeof to !== "string" || !isAddress(to)) return json(400, { error: "not an account" });
@@ -342,6 +387,10 @@ export function liveChain(): NotifyChain {
     },
     blockTime: async (n) => (await client.getBlock({ blockNumber: n })).timestamp,
     members,
+    async shares(pots, potId, account, at) {
+      const [held] = await client.readContract({ address: pots, abi: VIEWS, functionName: "funderInfo", args: [potId, account], blockNumber: at });
+      return held;
+    },
     async potName(pots, potId, at) {
       const p = await client.readContract({ address: pots, abi: VIEWS, functionName: "getPot", args: [potId], blockNumber: at });
       return hexToString(p.purpose, { size: 32 }).replace(/\u0000+$/u, "").slice(0, 32);

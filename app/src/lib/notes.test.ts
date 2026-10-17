@@ -171,3 +171,19 @@ test("a request from a person: one note, not from a muted account, and gone for 
   assert.equal(withoutRequestsFrom(s, IDARA).notes.length, 0, "muting clears that account's requests");
   assert.deepEqual(fromRequests(EMPTY_NOTES, [asked], []), EMPTY_NOTES, "not before the list starts");
 });
+
+test("a change agreed on a V2 pot you put money into is said once, with the pot's name, and kept on the phone", () => {
+  const coming = [{ potId: "v2:4", changeId: "2", change: { kind: "add" as const, payee: "", label: "DJ", limit: usd(300), endTime: "0", appliesAt: "1800259200" } }];
+  let s = fromPoll(start(EMPTY_NOTES, T, 1n), poll({ found: [pot("v2:4", 500, { roles: ["putIn"] })] }));
+  s = fromPoll(s, poll({ now: T + 1, found: [pot("v2:4", 500, { roles: ["putIn"] })], coming }));
+  s = fromPoll(s, poll({ now: T + 2, found: [pot("v2:4", 500, { roles: ["putIn"] })], coming }));
+  assert.deepEqual(kinds(s), ["changeAgreed"], "once");
+  const n = s.notes[0]!;
+  assert.equal(n.potId, "v2:4");
+  assert.equal(n.name, "Birthday");
+  assert.deepEqual(n.change, coming[0]!.change, "what it does, kept as numbers, so it reads in any language");
+  const kv = new Map<string, string>();
+  const store = new NotesStore({ getItem: (k) => kv.get(k) ?? null, setItem: (k, v) => void kv.set(k, v) }, "ausd", getAddress("0x00000000000000000000000000000000000000a1"));
+  store.set(s);
+  assert.deepEqual(store.get().notes, s.notes, "kept as it was");
+});

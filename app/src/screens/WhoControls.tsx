@@ -8,6 +8,8 @@ import { useUsernames, withUsernameOf } from "./Username.tsx";
 import type { PotState } from "../lib/potview.ts";
 import { dateLocale } from "../lib/locale.ts";
 import { Avatar } from "./Avatar.tsx";
+import { changeStatusLine, changeTitle, openChanges } from "../lib/changes.ts";
+import { changeWordsFor } from "./Changes.tsx";
 
 const whenFormat = new Intl.DateTimeFormat(dateLocale(), { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
@@ -44,7 +46,11 @@ export function WhoControls(props: {
     const shown = name === copy.accountEnding(a) ? name : `${name} · ${copy.accountEnding(a)}`;
     return withUsernameOf(usernames, a, shown);
   };
-  const risks = potRisks({ deciders: state.deciders, threshold: state.threshold, payees: state.payees, maker: props.maker });
+  // On a V2 pot, the changes on the way: who controls it is about to be different (lib/changes.ts).
+  const words = changeWordsFor(state);
+  const changes = openChanges(state.changes);
+  // A removed payee can be paid nothing, so it adds no risk.
+  const risks = potRisks({ deciders: state.deciders, threshold: state.threshold, payees: state.payees.filter((_, i) => !state.removed[i]), maker: props.maker });
   // Lines about the person reading are left out: they know what they can do.
   const others = risks.deciderPayees.filter((a) => !isAddressEqual(a, me));
   const lines = [
@@ -77,10 +83,20 @@ export function WhoControls(props: {
           {state.payees.map((p, i) => (
             <span className="meta with-avatar" key={`p-${i}`}>
               <Avatar account={p.to} name={nameOf(p.to, p.name)} size={24} reportable={p.to !== me} />
-              {who(p.to, p.name)} · {copy.upTo(fmt(p.cap))}
+              {who(p.to, p.name)} · {state.removed[i] ? copy.payeeRemovedTag : copy.upTo(fmt(p.cap))}
             </span>
           ))}
         </div>
+        {changes.length > 0 && (
+          <div className="list-row stacked">
+            <span className="meta">{copy.controlWaitingChanges}</span>
+            {changes.map((c) => (
+              <span className="meta" key={`c-${c.id}`}>
+                {changeTitle(c, words)} · {changeStatusLine(c, words)}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="list-row stacked">
           <span className="name">{state.closed ? copy.potClosedNote : copy.closesAt(whenFormat.format(new Date(Number(state.endTime) * 1000)).replace(",", ""))}</span>
         </div>

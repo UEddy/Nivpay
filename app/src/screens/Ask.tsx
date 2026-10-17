@@ -132,7 +132,8 @@ export function AskSheet(props: {
   const fmt = (v: bigint, style: "auto" | "cents" = "auto") => formatAmount(v, d, style);
   const [terms, setTerms] = useState<FeeTerms | null>(null);
   const [termsFailed, setTermsFailed] = useState(false);
-  const [payee, setPayee] = useState(flow.asking?.payee ?? 0);
+  // A payee a change took off the pot is never offered.
+  const [payee, setPayee] = useState(flow.asking?.payee ?? Math.max(0, facts.payees.findIndex((p) => !p.removed)));
   const [text, setText] = useState(flow.asking ? amountForField(flow.asking.amount, d) : "");
 
   useEffect(() => {
@@ -169,7 +170,7 @@ export function AskSheet(props: {
     <Sheet title={copy.askForPayment} onClose={() => flow.stop() || beforePasskey(flow.step) || props.onClose()}>
       <p className="hint">{copy.askLede}</p>
       <div className="payee-choice" role="radiogroup" aria-label={copy.whoToPay}>
-        {facts.payees.map((p, i) => (
+        {facts.payees.map((p, i) => p.removed ? null : (
           <button
             key={`${p.name}-${i}`}
             type="button"

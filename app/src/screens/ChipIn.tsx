@@ -23,6 +23,7 @@ import { AskSheet, useAskFlow, WaitingRequests } from "./Ask.tsx";
 import { usePayMotion } from "./payMotion.ts";
 import { PotMap, type Coin, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { WhoControls } from "./WhoControls.tsx";
+import { changeWordsFor, fundersOf, PotChanges } from "./Changes.tsx";
 import { MoneyCards } from "./MoneyCards.tsx";
 import { anyPaymentMade } from "../lib/ledger.ts";
 import { ContactStore } from "../lib/contacts.ts";
@@ -614,12 +615,24 @@ export function ChipInScreen(props: {
         </div>
 
         <div className="chips enter" style={{ animationDelay: "300ms" }}>
-          <span className="chip">{copy.chipPoursOnlyTo(orList.format(state.payees.map((p) => p.name)))}</span>
+          <span className="chip">{copy.chipPoursOnlyTo(orList.format(state.payees.filter((_, i) => !state.removed[i]).map((p) => p.name)))}</span>
           <span className="chip">{copy.chipRule(state.threshold, state.deciders.length)}</span>
           <span className="chip">{copy.chipLeftover}</span>
         </div>
         <WhoControls state={state} maker={info.creator} me={me} labels={info.labelsOk ? info.people : []} contacts={contacts} />
         {!info.labelsOk && <p className="hint">{copy.namesUnchecked}</p>}
+        <PotChanges
+          state={state}
+          me={me}
+          potId={potId}
+          pots={POTS}
+          contacts={contacts}
+          words={changeWordsFor(state)}
+          nameOf={nameOf}
+          onTakeOut={props.onOpenClose}
+          onChanged={() => void refresh()}
+          funders={fundersOf(events)}
+        />
         {citiesOn && props.pot.fragment && (
           <CityShare
             account={me}

@@ -42,11 +42,11 @@ export interface PushStore {
 export type Logger = (entry: Record<string, string>) => void;
 
 // A copy of app/src/lib/push.ts
-export const PUSH_KINDS = ["received", "sent", "chippedIn", "askYes", "request", "potNamesYou"] as const;
+export const PUSH_KINDS = ["received", "sent", "chippedIn", "askYes", "request", "potNamesYou", "changeApproved"] as const;
 export type PushKind = (typeof PUSH_KINDS)[number];
 export type PushSettings = { kinds: Record<PushKind, boolean>; amounts: boolean };
 export const DEFAULT_SETTINGS: PushSettings = {
-  kinds: { received: true, sent: false, chippedIn: true, askYes: true, request: true, potNamesYou: false },
+  kinds: { received: true, sent: false, chippedIn: true, askYes: true, request: true, potNamesYou: false, changeApproved: true },
   amounts: false,
 };
 export function cleanSettings(raw: unknown): PushSettings {

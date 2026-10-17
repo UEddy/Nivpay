@@ -115,6 +115,61 @@ open can never pay, and expire on their own 7 days after they were asked.
 The app does not enforce the date. The contract does, on every call above,
 and would do so with the app gone.
 
+### Pots that can change (NivPayPotsV2)
+
+`src/NivPayPotsV2.sol` sits next to `NivPayPots`, which is untouched and
+keeps every pot already made on it. V2 does everything V1 does, the same
+way: every NivPayPots suite runs against V2 too (`test/PotsOnV2.t.sol`).
+What it adds is changes to a pot after it is made. The app makes new pots on
+V2 only once `POTS_V2` in `app/src/lib/config.ts` is set; until then nothing
+about V2 shows.
+
+| Change | Who proposes | Yeses | When it applies | While the pot is paused | Once the pot is closed |
+| --- | --- | --- | --- | --- | --- |
+| Add a payee, with a limit (`proposeAddPayee`) | a decider | the pot's rule, as for a payment | 72 hours after the yes that agrees it (`EXIT_WINDOW`), then by anyone, within 7 days (`APPLY_PERIOD`), or never | can be proposed and agreed, can't be applied | refused, `PotClosed` |
+| Raise a payee's limit (`proposeRaiseLimit`) | a decider | the rule | the same 72 hours, then 7 days | the same | refused |
+| Move the closing date later (`proposeLaterClose`) | a decider | the rule | the same 72 hours, then 7 days; if the pot closes first, never | the same | refused |
+| Lower a payee's limit, never below what it was paid (`proposeLowerLimit`) | a decider | the rule | with the yes that agrees it | applies | refused |
+| Remove a payee (`proposeRemovePayee`) | a decider | the rule | with the yes that agrees it | applies | refused |
+
+* **Exits are never blocked**, during the wait or at any other time:
+  `exit` and `claim` are V1's, unchanged.
+* **A change waiting to apply gives nothing.** A payment checks the payee
+  and limit as they are when it pays: a payee not yet added has no index, a
+  raise not yet applied leaves the old limit, and a payee removed meanwhile
+  is refused (`PayeeRemoved`), even for a payment asked for before.
+* **The wait runs from the yes that agrees it**, and no yes counts after
+  that, so nobody can restart or shorten it. Before then the proposer's yes
+  counts with the proposal, yeses can be taken back, and an unagreed change
+  expires after 7 days, like a payment request.
+* **The pot is checked again when a change applies**: a raise must still
+  raise, a lowering must still lower and stay at or above what was paid,
+  there must still be room for a new payee (10 in all, removed ones
+  included), and a payee removed meanwhile takes no change.
+* **At most 5 changes are open on a pot** at once (`MAX_OPEN_CHANGES`),
+  agreed and waiting ones included. One that expired or lapsed frees its
+  place at the next proposal, or at once with `lapseChange`, which anyone
+  may call.
+* **The proposer can withdraw a change** until it applies, during the wait
+  too (`withdrawChange`).
+* **Never changeable on V2 either**: the deciders, the rule, the pot's name,
+  a payee's address, and anything about another pot.
+* **Events** for every step: `ChangeProposed`, `ChangeYes`,
+  `ChangeYesRevoked`, `ChangeApproved` (with when it applies and lapses),
+  `ChangeApplied`, `ChangeWithdrawn` and `ChangeLapsed`.
+
+**What the app does with it.** On a V2 pot's screen the deciders get Propose
+a change, and everyone sees the changes on their way with how many yeses
+each has. When a change that widens spending is agreed, everyone who put
+money in is told, in the bell and by push: "Change agreed: add DJ, up to
+$300. Takes effect Mon 20 Oct, 09:00. If you disagree, take your part out
+before then.", with Take my part out. (The words say "agreed", not
+"approved": "approve" is on the list of words never shown.) The pot's story
+lists every change, and Who controls this pot shows those on their way and
+the payees removed. When making a pot, a limit gets a suggestion with some
+room ("Caterer quoted $600? Set up to $660 in case prices move."), since a
+raise later waits 72 hours, and a closed pot offers Copy this pot.
+
 **What a share is.** Shares are minted at the value per share when money
 goes in, and a payment lowers the value of every share alike. So a share of
 what is left follows what each person put in only when everyone put in
@@ -400,6 +455,37 @@ All of this is visible before anyone puts money in, but only if they look:
 * **The closing time can be seconds away** if the pot is made outside the
   app; the app itself refuses less than 10 minutes. A closed pot still
   lets everyone take what is left by share.
+
+### NivPayPotsV2, each claim and the line that proves it
+
+Checked on 17 Oct 2026 against `src/NivPayPotsV2.sol` at this commit. Not
+deployed yet. Everything in the V1 table above holds for V2 as well, at
+the same functions; the lines below are V2's.
+
+| Claim | Where |
+| --- | --- |
+| Still no owner, admin, role or upgrade | imports at lines 4 to 8 are V1's: `IERC20`, `IERC20Permit`, `SafeERC20`, `ReentrancyGuard`, `Math` only; no `owner`, no `delegatecall`, no assembly |
+| Tokens still leave only to a listed payee, to a funder redeeming their own shares, or as fees | the only transfers out are `_redeem` (531), `_executePayout` (705) and `collectFees` (1035); no change function moves a token |
+| A pot's payees, limits and closing date change only by an applied change | outside `createPot` (407 to 427), they are written only in `_apply`: a payee added (913), the closing date (916), a limit (921, 925), a payee removed (927); `d.spent` only by a payment (690) |
+| The deciders, the rule and the name never change | `pot.threshold`, `pot.purpose` and `_approvers` are written only in `createPot` (407 to 418) |
+| Only the pot's deciders propose and agree changes | `_openChange` (855) and `approveChange` (786) need `_isApprover` |
+| The same yeses as a payment | a change is agreed when its yeses reach `pot.threshold` (798, 887), as a payment is |
+| A widening change waits 72 hours from the yes that agrees it | `EXIT_WINDOW = 72 hours` (88); `_agree` stamps the time (890 onwards); `_changeStatus` keeps it `Waiting` until then (978); `applyChange` needs `Ready` (831 onwards) |
+| No yes after it is agreed, so the wait can't move | `approveChange` needs `Pending` (789) |
+| It lapses 7 days after its wait | `APPLY_PERIOD = 7 days` (92); `Ready` only until then (979), then `Lapsed` |
+| Narrowing applies with its yes | `_agree` calls `_apply` at once for a lowering or a removal (890 onwards, `_widens` 983) |
+| Checked again when it applies | `_apply` (906 onwards): room for a payee (911), a later date (915), a raise still raises (920), a lowering still lowers (923) and stays above what was paid (924), a removed payee takes nothing (`_livePayee` 989) |
+| A paused pot applies nothing that widens | `applyChange` refuses while frozen (836) |
+| A closed pot takes no change | refused when proposing (854), agreeing (790) and applying (835) |
+| At most 5 open | `MAX_OPEN_CHANGES = 5` (96), checked when proposing (857), after ended ones are swept (`_sweep` 942) |
+| Only the proposer withdraws | `withdrawChange` (817) |
+| A removed payee is paid nothing | refused when asking (555) and when paying (671) |
+| Exits during the wait | `exit` and `_redeem` (505 to 531) are V1's, with no check on changes, a freeze or a close |
+
+The suites that check this: `test/PotsChanges.t.sol` (every rule, one at a
+time), `test/PotsChangesFuzz.t.sol`, `test/PotsChangesInvariant.t.sol` with
+`test/handlers/PotsV2Handler.sol`, and every V1 suite again on V2
+(`test/PotsOnV2.t.sol`). See [Tests](#tests).
 
 ### Outside this contract: Agora's Instant Settlement
 
@@ -1745,6 +1831,34 @@ What kills it:
 
 Both mutants now die by both routes.
 
+#### NivPayPotsV2's new rules
+
+The same way: fourteen deliberate bugs in the change rules, one at a time,
+each run against the V2 suites (`test/PotsChanges*.t.sol`), then reverted.
+None was committed.
+
+| Mutant | Result | Caught by |
+| --- | --- | --- |
+| 1. apply a widening change inside its exit window | killed, 7 tests failed | `invariant_noWideningBeforeItsWindow`, `test_widening_waitsSeventyTwoHours` and five more |
+| 2. treat raising a limit as narrowing, so it applies at once | killed, 8 | `test_pay_aRaiseNotYetAppliedGivesNothing`, `test_widening_notWhileFrozen` and six more |
+| 3. pay a payee that was removed | killed, 2 | `test_pay_aPendingPaymentToAPayeeRemovedMeanwhileIsRefused`, and `invariant_paymentsOnlyUseWhatHadApplied` on the default profile |
+| 4. apply a widening change while paused | killed, 2 | `test_widening_notWhileFrozen`, `invariant_noWideningBeforeItsWindow` |
+| 5. take changes on a closed pot | killed, 2 | `test_closed_takesNoChange`, `invariant_closedPotsTakeNoChange` |
+| 6. count yeses after a change is agreed, restarting its wait | killed, 1 | `test_noYesCountsOnceAgreed` |
+| 7. never let an agreed change lapse | killed, 3 | `test_widening_lapsesSevenDaysAfterItsWait` and two more |
+| 8. lower a limit below what was paid when it applies | killed, 2 | `test_lower_thatNoLongerFitsWaitsForItsYes`, `invariant_potsAreExactlyWhatWasApplied` |
+| 9. allow six open changes | killed, 2 | `test_open_atMostFive`, `test_open_agreedAndWaitingStillCounts` |
+| 10. let anyone withdraw a change | killed, 1 | `test_withdraw_onlyTheProposerAndOnlyWhileOpen` |
+| 11. apply a raise that no longer raises | killed, 1 | `test_raise_thatNoLongerRaisesIsRefused` |
+| 12. agree a change one yes short | killed, 2 | `test_yeses_aThreeOfThreePotNeedsAllThree`, `test_revoke_takesAYesBack` |
+| 13. let someone who doesn't decide propose a change | killed, 2 | `test_propose_onlyDecidersMay`, `test_propose_aFunderWhoIsNotADeciderMayNot` |
+| 14. apply a raise to a payee removed meanwhile | killed, 2 | `test_raise_ofAPayeeRemovedMeanwhileIsRefused` and one more |
+
+The first run left mutants 3, 4, 5 and 12 caught by one unit test each. A
+3 of 3 pot test, the handler counting any apply on a paused or closed pot,
+and payments whose second yes comes later (so a change can land between)
+were added; mutant 3 now also fails the payments invariant by name.
+
 ### Coverage
 
 ```powershell
@@ -2170,6 +2284,62 @@ forge verify-contract `
     --verifier sourcify `
     --verifier-url https://sourcify-api-monad.blockvision.org/
 ```
+
+### NivPayPotsV2, pots that can change
+
+**Not deployed yet.** One per token, next to each NivPayPots, which is not
+touched. `script/DeployPotsV2.s.sol` takes no fee settings from the
+environment: it reads the token, `feeBps`, `feeCap` and `feeRecipient` off
+the live NivPayPots for that token, refuses any chain but `10143` and any
+token but the one expected, deploys, and reads every setting and rule back
+(the 72 hour window, the 7 days, the 5 open changes). Use the same
+`nivpay-deployer` keystore.
+
+```powershell
+$env:FOUNDRY_PROFILE = "deploy"
+
+# Dry runs. Deploy nothing.
+$env:POTS_TOKEN = "ausd"
+forge script script/DeployPotsV2.s.sol:DeployPotsV2 --rpc-url https://testnet-rpc.monad.xyz -g 105
+$env:POTS_TOKEN = "testusd"
+forge script script/DeployPotsV2.s.sol:DeployPotsV2 --rpc-url https://testnet-rpc.monad.xyz -g 105
+
+# Broadcast, one for each token.
+$env:POTS_TOKEN = "ausd"
+forge script script/DeployPotsV2.s.sol:DeployPotsV2 `
+    --rpc-url https://testnet-rpc.monad.xyz `
+    --account nivpay-deployer `
+    -g 105 `
+    --broadcast
+$env:POTS_TOKEN = "testusd"
+forge script script/DeployPotsV2.s.sol:DeployPotsV2 `
+    --rpc-url https://testnet-rpc.monad.xyz `
+    --account nivpay-deployer `
+    -g 105 `
+    --broadcast
+```
+
+The dry run against the live chain, on 17 Oct 2026, reports **4,711,662
+gas** for each, about **0.96 MON** at a 203 gwei max fee. Note each
+`NivPayPotsV2` address it prints and the block of its transaction. Then, in
+`app/src/lib/config.ts`, set `POTS_V2` to `{ ausd: "<AUSD one>", testusd:
+"<TESTUSD one>" }` and `POTS_V2_DEPLOY_BLOCK` to their blocks, and the same
+`POTS_V2` in `app/api/notify/index.ts` (its test fails if the two differ).
+From that build on, new pots are made on V2, and pots on NivPayPots keep
+working there as before.
+
+Verify each, with its constructor arguments read from the NivPayPots next to it:
+
+```powershell
+forge verify-contract `
+    <NivPayPotsV2 address> `
+    src/NivPayPotsV2.sol:NivPayPotsV2 `
+    --chain 10143 `
+    --verifier sourcify `
+    --verifier-url https://sourcify-api-monad.blockvision.org/ `
+    --constructor-args (cast abi-encode "constructor(address,uint256,uint256,address)" <token> 50 50000000 0x7EAf7f3e330ac388A0e951e80957B7274597297c)
+```
+
 
 ### Broadcast receipts are committed on purpose
 

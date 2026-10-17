@@ -48,7 +48,7 @@ stalls shows 51 and can be retried on the same nonce.
 | --- | --- | --- |
 | 22 | This account doesn't decide on this pot (`NotApprover`). | `getApprovers(potId)` |
 | 23 | No amount, or zero (`ZeroAmount`). | |
-| 24 | More than the payee can still be paid: `spent + amount > cap` (`CapExceeded`). The fee doesn't count against the limit. | `getDestinations(potId)` |
+| 24 | More than the payee can still be paid: `spent + amount > cap` (`CapExceeded`). The fee doesn't count against the limit. On a NivPayPotsV2 pot, also a payee a change took off the pot (`PayeeRemoved`): it is paid nothing more. | `getDestinations(potId)`; on V2, `isRemoved(potId, index)` |
 | 25 | The pot can't cover the amount plus its fee (`InsufficientPotAssets`). | `getPot(potId).totalAssets`, `feeOn(amount)` |
 | 26 | The pot is closed or paused (`PotClosed`, `PotFrozen`). | `getPot(potId).closed`, `.frozen` |
 | 27 | The request is past its 7 days (`ProposalExpired`), judged at the finalized block's time. | `proposalInfo(id).expiresAt` |
@@ -68,6 +68,19 @@ a call before anything is signed, so these send nothing.
 | 95 | The pot is already closed (`PotClosed` on `proposeClose` or a closing yes), by request or because its closing date has passed. | `getPot(potId).closed`, `.endTime` |
 | 96 | The pot isn't closed yet (`PotNotClosed`): what's left can be shared out only after close, and its close can be recorded only after its date. Taking your own share out works any time. | `getPot(potId).closed`, `.endTime` |
 | 97 | The contract refused taking a share out for another reason, such as the dollar refusing the transfer to this account. | `eth_call` of `exit` or `claim` from the account |
+
+## Changing a pot (NivPayPotsV2)
+
+Only pots made on NivPayPotsV2 can change, and nothing here shows while
+`POTS_V2` in `app/src/lib/config.ts` is null. Proposing, saying yes to,
+withdrawing and making a change are each run as a call before anything is
+signed, so these send nothing. A change from someone who doesn't decide shows
+22, and one on a closed pot 95, as for payments and closing.
+
+| Code | What happened | Where to look |
+| --- | --- | --- |
+| 79 | The contract refused the change, and the message says which way: 5 changes are already open on the pot (`TooManyOpenChanges`); the change is no longer waiting for a yes, because it was agreed, withdrawn or not agreed within 7 days (`ChangeNotPending`, `ChangeNotOpen`, `ProposalExpired`); the pot is paused, so a change that adds to spending waits (`PotFrozen`); a limit would go below what that payee was already paid (`LimitBelowSpent`); the pot changed since it was proposed and the change no longer raises or lowers what it meant to (`NotWider`, `NotNarrower`); or anything else. | `changeInfo(changeId)`, `openChanges(potId)`, `getPot(potId).frozen`, `getDestination(potId, index)` |
+| 89 | A change that adds to spending can't be made yet: its 72 hours after the yes that agreed it aren't up, or the 7 days after them, when anyone could make it, have passed and it has lapsed (`ChangeNotReady`). Exits were open all the while. | `changeInfo(changeId).appliesAt` and `.lapsesAt` against the finalized block's time |
 
 ## Passkey
 

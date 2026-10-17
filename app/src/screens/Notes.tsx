@@ -1,5 +1,7 @@
 import { copy } from "../copy.ts";
-import { POTS_AUSD, POTS_TESTUSD, SETTLEMENT_PAIR } from "../lib/config.ts";
+import { ALL_POTS, SETTLEMENT_PAIR } from "../lib/config.ts";
+import { changeWhat } from "../lib/changes.ts";
+import { whenText } from "./Changes.tsx";
 import { dateLocale } from "../lib/locale.ts";
 import { formatAmount, formatCurrency } from "../lib/money.ts";
 import type { Address } from "viem";
@@ -19,7 +21,7 @@ function amountOf(n: Note): string {
 
 function fromOf(n: Note): string {
   if (!n.from) return copy.someoneElse;
-  const kind = senderKind(n.from, [POTS_AUSD, POTS_TESTUSD], SETTLEMENT_PAIR);
+  const kind = senderKind(n.from, ALL_POTS, SETTLEMENT_PAIR);
   return kind === "pot" ? copy.fromAPot : kind === "settlement" ? copy.fromAgoraSettlement : copy.accountEnding(n.from);
 }
 
@@ -57,6 +59,14 @@ export function noteText(n: Note, nameOf?: NameOf): string {
       const who = (n.from && nameOf?.(n.from)) || n.fromName || whoOf(n.from, nameOf);
       return n.amount && n.amount !== "0" ? copy.noteRequest(who, amountOf(n)) : copy.noteRequestAny(who);
     }
+    case "changeAgreed": {
+      const c = n.change;
+      if (!c) return pot;
+      const decimals = n.decimals ?? 6;
+      const words = { payeeName: () => c.payee || copy.unnamedPayee, money: (u: bigint) => formatAmount(u, decimals, "auto"), when: whenText };
+      const what = changeWhat({ kind: c.kind, destIndex: 0, label: c.label, limit: BigInt(c.limit), endTime: BigInt(c.endTime) }, words);
+      return copy.noteChangeApproved(pot, what, words.when(BigInt(c.appliesAt)));
+    }
   }
 }
 
@@ -71,6 +81,8 @@ export function NotesSheet(props: {
   onOpen: (n: Note) => void;
   /** A request from a person: Pay opens Send filled in, Ignore drops it, Mute stops that account's requests. */
   onPay: (n: Note) => void;
+  /** An agreed change on a pot this account put money into: Take my part out opens it. */
+  onTakeOut: (n: Note) => void;
   onIgnore: (n: Note) => void;
   onMute: (n: Note) => void;
   onReadAll: () => void;
@@ -104,9 +116,24 @@ export function NotesSheet(props: {
                   </span>
                 </span>
               </div>
+            ) : n.kind === "changeAgreed" ? (
+              <div role="listitem" className={`home-pot note${n.read ? "" : " unread"}`} key={n.id}>
+                <span className="grow">
+                  <span className="name">{noteText(n, props.nameOf)}</span>
+                  <span className="meta">{timeFormat.format(new Date(n.at))}</span>
+                  <span className="note-actions">
+                    <button type="button" className="btn primary small" onClick={() => props.onTakeOut(n)}>
+                      {copy.takeMyPartOut}
+                    </button>
+                    <button type="button" className="btn ghost small" onClick={() => props.onOpen(n)}>
+                      {copy.openThePot}
+                    </button>
+                  </span>
+                </span>
+              </div>
             ) : (
             <button type="button" role="listitem" className={`home-pot note${n.read ? "" : " unread"}`} key={n.id} onClick={() => props.onOpen(n)}>
-              {n.kind === "received" && n.from && senderKind(n.from, [POTS_AUSD, POTS_TESTUSD], SETTLEMENT_PAIR) === "account" && <Avatar account={n.from} name={copy.accountEnding(n.from)} size={32} />}
+              {n.kind === "received" && n.from && senderKind(n.from, ALL_POTS, SETTLEMENT_PAIR) === "account" && <Avatar account={n.from} name={copy.accountEnding(n.from)} size={32} />}
               <span className="grow">
                 <span className="name">{noteText(n, props.nameOf)}</span>
                 <span className="meta">{timeFormat.format(new Date(n.at))}</span>

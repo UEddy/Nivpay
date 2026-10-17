@@ -279,3 +279,34 @@ test("a draft can be deleted until its pot is being made, and a made pot never",
   assert.equal(deleteRefusal({ made: undefined, sending: { attempts: [] } as never }, false), "beingMade", "an attempt still being checked on");
   assert.equal(deleteRefusal({ made: { potId: "1", block: "2", fragment: "" }, sending: undefined }, false), "made");
 });
+
+test("Copy this pot: the same name, the other deciders and rule, the payees still on it; a new closing date to choose", async () => {
+  const { draftFromPot } = await import("./draft.ts");
+  const me = getAddress("0x00000000000000000000000000000000000000a1");
+  const ben = getAddress("0x00000000000000000000000000000000000000b2");
+  const cleo = getAddress("0x00000000000000000000000000000000000000c3");
+  const caterer = getAddress("0x00000000000000000000000000000000000000d4");
+  const hall = getAddress("0x00000000000000000000000000000000000000e5");
+  let n = 0;
+  const random = (k: number) => new Uint8Array(k).map(() => ++n % 256);
+  const draft = draftFromPot(me, "Europe/London", 5, random, {
+    name: "Birthday",
+    threshold: 2,
+    deciders: [me, ben, cleo],
+    people: [{ account: ben, name: "Ben", city: "Uyo", timeZone: "Africa/Lagos" }, { account: me, name: "Ana", city: "London", timeZone: "Europe/London" }],
+    payees: [{ to: caterer, name: "Caterer", cap: 600_000_000n }, { to: hall, name: "Hall", cap: 300_000_000n }],
+    removed: [false, true],
+  }, (a) => `account ending ${a.slice(-4)}`);
+  assert.equal(draft.name, "Birthday");
+  assert.equal(draft.owner, me);
+  assert.equal(draft.closes, "", "chosen again");
+  assert.equal(draft.made, undefined);
+  assert.equal(draft.me.city, "London");
+  assert.deepEqual(draft.deciders.map((d) => [d.account, d.name, d.city]), [[ben, "Ben", "Uyo"], [cleo, `account ending ${cleo.slice(-4)}`, ""]]);
+  assert.equal(draft.threshold, 2);
+  assert.deepEqual(draft.payees.map((p) => [p.name, p.cap, p.account, p.via]), [["Caterer", "600000000", caterer, "pasted"]], "the removed Hall is left out");
+  // A pot copied by someone who wasn't one of its deciders: they decide too, and the rule still fits.
+  const outsider = draftFromPot(caterer, "Europe/London", 5, random, { name: "x", threshold: 3, deciders: [ben, cleo], people: [], payees: [], removed: [] }, () => "?");
+  assert.equal(outsider.deciders.length, 2);
+  assert.equal(outsider.threshold, 3);
+});

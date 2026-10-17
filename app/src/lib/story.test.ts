@@ -162,3 +162,52 @@ test("the replay takes about 7 s however long the story", () => {
   assert.equal(replayStepMs(14), 500);
   assert.ok(replayStepMs(100) * 100 <= 7_000);
 });
+
+test("a V2 pot's story tells its changes: proposed, each yes, agreed with when it takes effect, made, withdrawn and lapsed", () => {
+  const DJ_LABEL = "0x444a000000000000000000000000000000000000000000000000000000000000" as Hex;
+  const when = (s: bigint) => (s === T0 + 259_200n ? "Mon 20 Oct, 09:00" : `t${s}`);
+  const events: PotEvent[] = [
+    ...request(["PotCreated", { creator: IDARA }]),
+    ...request(
+      ["ChangeProposed", { changeId: 0n, proposer: IDARA, kind: 0, destIndex: 0, to: CATERER, label: DJ_LABEL, limit: $(300), endTime: 0n, expiresAt: T0 + TTL }],
+      ["ChangeYes", { changeId: 0n, approver: IDARA, approvals: 1 }],
+    ),
+    ...request(["ChangeYes", { changeId: 0n, approver: UBONG, approvals: 2 }], ["ChangeApproved", { changeId: 0n, appliesAt: T0 + 259_200n, lapsesAt: T0 + 864_000n }]),
+    ...request(["ChangeApplied", { changeId: 0n, kind: 0, destIndex: 2, limit: $(300), endTime: 0n }]),
+    // Lowering the Hall applies with its yes: told once, as made.
+    ...request(
+      ["ChangeProposed", { changeId: 1n, proposer: UBONG, kind: 3, destIndex: 1, to: CATERER, label: "0x" + "0".repeat(64), limit: $(200), endTime: 0n, expiresAt: T0 + TTL }],
+      ["ChangeYes", { changeId: 1n, approver: UBONG, approvals: 1 }],
+    ),
+    ...request(["ChangeYes", { changeId: 1n, approver: IDARA, approvals: 2 }], ["ChangeApproved", { changeId: 1n, appliesAt: T0, lapsesAt: T0 }], ["ChangeApplied", { changeId: 1n, kind: 3, destIndex: 1, limit: $(200), endTime: 0n }]),
+    ...request(
+      ["ChangeProposed", { changeId: 2n, proposer: IDARA, kind: 4, destIndex: 0, to: CATERER, label: "0x" + "0".repeat(64), limit: 0n, endTime: 0n, expiresAt: T0 + TTL }],
+      ["ChangeYes", { changeId: 2n, approver: IDARA, approvals: 1 }],
+    ),
+    ...request(["ChangeWithdrawn", { changeId: 2n, proposer: IDARA }]),
+  ];
+  const n: StoryNames = {
+    me: IDARA,
+    nameOf: (a) => (a === UBONG ? "Ubong" : "someone"),
+    cityOf: () => "",
+    payeeName: (i) => ["Caterer", "Hall", "DJ"][i] ?? "",
+    money: (v) => formatAmount(v, 6, "cents"),
+    now: T0,
+    when,
+  };
+  const rows = storyRows(events, n).filter((r) => r.kind.startsWith("change-"));
+  assert.deepEqual(
+    rows.map((r) => [r.kind, r.title, r.sub]),
+    [
+      ["change-asked", "You proposed a change: add DJ, up to $300.00", "Made."],
+      ["change-yes", "Ubong said yes", "For the change: add DJ, up to $300.00"],
+      ["change-agreed", "Change agreed: add DJ, up to $300.00", "Agreed. Takes effect Mon 20 Oct, 09:00."],
+      ["change-made", "Change made: add DJ, up to $300.00", ""],
+      ["change-asked", "Ubong proposed a change: lower Hall's limit to $200.00", "Made."],
+      ["change-yes", "You said yes", "For the change: lower Hall's limit to $200.00"],
+      ["change-made", "Change made: lower Hall's limit to $200.00", ""],
+      ["change-asked", "You proposed a change: remove Caterer", "Withdrawn."],
+      ["change-withdrawn", "You withdrew a change: remove Caterer", ""],
+    ],
+  );
+});

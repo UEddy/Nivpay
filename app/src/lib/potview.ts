@@ -10,6 +10,8 @@ import { idbFeedStore } from "./idb.ts";
 import { verifyLabels, type PotLink } from "./invites.ts";
 import { readClient } from "./rpc.ts";
 import { shownText32 } from "./text32.ts";
+import type { PotChange } from "./changes.ts";
+import { readChanges } from "./changesLive.ts";
 import { lastOf, PotLastStore } from "./potLast.ts";
 import { potKey } from "./potstore.ts";
 
@@ -82,6 +84,12 @@ export type PotState = {
   /** Each listed account's shares (funderInfo.shares), by lowercase account, and the pot's total. */
   shares: Record<string, bigint>;
   totalShares: bigint;
+  /** On NivPayPotsV2: its changes can be proposed, and are read below. */
+  onV2: boolean;
+  /** Payees taken off the pot by a change, by index. All false on NivPayPots, where none can be. */
+  removed: boolean[];
+  /** The changes open on the pot (lib/changes.ts). Always empty on NivPayPots. */
+  changes: PotChange[];
 };
 
 export async function readPotState(onV2: boolean, potId: bigint, accounts: Address[], me: Address): Promise<PotState> {
@@ -95,6 +103,8 @@ export async function readPotState(onV2: boolean, potId: bigint, accounts: Addre
     readClient.readContract({ address: POTS, abi: POTS_READ_ABI, functionName: "token", ...at }),
   ]);
   const unique = [...new Map(accounts.map((a) => [a.toLowerCase(), a])).values()];
+  // A V2 pot's changes and removed payees, at the same block as everything else.
+  const v2 = onV2 ? await readChanges(readClient, POTS, potId, destinations.length, block.number) : { changes: [], removed: destinations.map(() => false) };
   const [decimals, myBalance, ...infos] = await Promise.all([
     readClient.readContract({ address: asset, abi: ERC20_READ_ABI, functionName: "decimals", ...at }),
     readClient.readContract({ address: asset, abi: ERC20_READ_ABI, functionName: "balanceOf", args: [me], ...at }),
@@ -117,6 +127,8 @@ export async function readPotState(onV2: boolean, potId: bigint, accounts: Addre
     held: Object.fromEntries(unique.map((a, i) => [a.toLowerCase(), (infos[i] as readonly [bigint, bigint])[1]])),
     shares: Object.fromEntries(unique.map((a, i) => [a.toLowerCase(), (infos[i] as readonly [bigint, bigint])[0]])),
     totalShares: pot.totalShares,
+    onV2,
+    ...v2,
   };
 }
 

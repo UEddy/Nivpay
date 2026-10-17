@@ -27,6 +27,7 @@ async function sharedPotUrl(potId: bigint): Promise<{ url: string; createdIn: `0
     kind: "pot",
     version: 2,
     deployment: "ausd",
+    onV2: false,
     potId,
     block: 69_000_000n + potId,
     people,
@@ -81,4 +82,23 @@ test("each pot opened is listed, newest first", async () => {
   openOnInviteePhone(store, (await sharedPotUrl(2n)).url, 2_000);
   assert.deepEqual(store.all("ausd").map((p) => p.potId), ["2", "1"]);
   assert.deepEqual(store.all("testusd"), [], "a pot is listed only for its own deployment");
+});
+
+test("pot 3 on V1 and pot 3 on V2 are two pots on the phone, and a V1 pot keeps the key it always had", async () => {
+  const { potKey, parseKey, samePot } = await import("./potstore.ts");
+  assert.equal(potKey({ potId: "3" }), "3");
+  assert.equal(potKey({ potId: 3n, onV2: true }), "v2:3");
+  assert.deepEqual(parseKey("v2:3"), { potId: "3", onV2: true });
+  assert.deepEqual(parseKey("3"), { potId: "3", onV2: false });
+  assert.equal(parseKey("v3:3"), null);
+  assert.equal(parseKey("3; x"), null);
+  assert.ok(!samePot({ potId: "3" }, { potId: "3", onV2: true }));
+  assert.ok(samePot({ potId: "3" }, { potId: "3", onV2: false }), "absent is V1");
+  const kv = new Map<string, string>();
+  const store = new PotStore({ getItem: (k) => kv.get(k) ?? null, setItem: (k, v) => void kv.set(k, v) });
+  store.put({ deployment: "ausd", potId: "3", block: "10", fragment: "", name: "V1", addedAt: 1 });
+  store.put({ deployment: "ausd", potId: "3", block: "20", fragment: "", name: "V2", addedAt: 2, onV2: true });
+  assert.equal(store.get("ausd", "3")?.name, "V1");
+  assert.equal(store.get("ausd", "3", true)?.name, "V2");
+  assert.equal(store.all("ausd").length, 2);
 });

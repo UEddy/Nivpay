@@ -6,6 +6,7 @@ import { copy, ERROR_CODES } from "../copy.ts";
 import type { StoredAccount } from "../lib/accounts.ts";
 import { BlockTimes, timesFor } from "../lib/blockTimes.ts";
 import { DEPLOYMENT, potsOf } from "../lib/deployment.ts";
+import { changeWordsFor } from "./Changes.tsx";
 import { AppError } from "../lib/errors.ts";
 import type { PotEvent } from "../lib/feed.ts";
 import type { PotLink } from "../lib/invites.ts";
@@ -179,6 +180,7 @@ export function TimelineScreen(props: {
       payeeName: (i) => state.payees[i]?.name ?? "",
       money: (v) => formatAmount(v, state.decimals, "cents"),
       now: state.now,
+      when: changeWordsFor(state).when,
     });
   }, [events, info, state, me, usernames]);
   const byOrder = useMemo(() => ({ newest: ordered(rows, "newest"), oldest: ordered(rows, "oldest") }), [rows]);

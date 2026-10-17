@@ -1,4 +1,4 @@
-import type { Hex } from "viem";
+import type { Address, Hex } from "viem";
 import type { SentRequest } from "./inboxLive.ts";
 
 /**
@@ -26,8 +26,14 @@ async function post(body: Record<string, unknown>): Promise<void> {
   }
 }
 
-/** A payment, chip-in or pot this phone made, once final: by its transaction alone. */
-export const notifyTx = (deployment: string, tx: Hex) => post({ kind: "tx", deployment, tx });
+/**
+ * A payment, chip-in or pot this phone made, once final: by its transaction
+ * alone. For a change agreed on a NivPayPotsV2 pot, `people` are those this
+ * phone saw put money in; the server tells only those who still hold some in
+ * the pot at that block, read from the chain, so a wrong list can only
+ * leave someone out, never tell a stranger.
+ */
+export const notifyTx = (deployment: string, tx: Hex, people?: Address[]) => post({ kind: "tx", deployment, tx, ...(people?.length ? { people } : {}) });
 
 /** A request this phone sent to a person: the proof the requester signed, with no amount or name. */
 export const notifyRequest = (sent: SentRequest) => post({ kind: "request", ...sent });

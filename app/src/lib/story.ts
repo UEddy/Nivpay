@@ -2,6 +2,8 @@ import { isAddressEqual, type Address, type Hex } from "viem";
 import { copy } from "../copy.ts";
 import { byChainOrder, type PotEvent } from "./feed.ts";
 import { dateLocale } from "./locale.ts";
+import { CHANGE_KINDS, changeWhat, widens, type ChangeKind, type ChangeWords } from "./changes.ts";
+import { shownText32 } from "./text32.ts";
 
 /**
  * The pot's story (Live-Timeline), from its finalized events only. Every row
@@ -23,7 +25,15 @@ export type RowKind =
   | "closed"
   | "paused"
   | "asked-unpause"
-  | "unpaused";
+  | "unpaused"
+  // Changes to a pot on NivPayPotsV2 (lib/changes.ts).
+  | "change-asked"
+  | "change-yes"
+  | "change-took-back"
+  | "change-agreed"
+  | "change-made"
+  | "change-withdrawn"
+  | "change-lapsed";
 
 export type StoryRow = {
   key: string;
@@ -47,6 +57,8 @@ export type StoryNames = {
   money: (amount: bigint) => string;
   /** The finalized block's time, so a request's status reads as the contract would judge it. */
   now: bigint;
+  /** A time in seconds as the phone shows it, for when a change takes effect. Only V2 pots have changes. */
+  when?: (seconds: bigint) => string;
 };
 
 const key = (e: PotEvent) => `${e.tx}:${e.logIndex}`;
@@ -86,6 +98,38 @@ export function storyRows(events: PotEvent[], n: StoryNames): StoryRow[] {
   }
   // Txs that ended a request: their yes is told in that row, not on its own.
   const endedIn = new Set(sorted.filter((e) => e.name === "PayoutExecuted" || e.name === "Unfrozen" || (e.name === "Closed" && e.args.viaProposal)).map((e) => e.tx));
+
+  // Each change as its proposal describes it (NivPayPotsV2's ChangeProposed), and how it ended.
+  const words: ChangeWords = { payeeName: n.payeeName, money: n.money, when: n.when ?? ((s) => s.toString()) };
+  const changes = new Map<bigint, { kind: ChangeKind; destIndex: number; label: string; limit: bigint; endTime: bigint; proposer: Address; askedIn: Hex; ended: string | null }>();
+  for (const e of sorted) {
+    if (e.name !== "ChangeProposed") continue;
+    const kind = CHANGE_KINDS[Number(e.args.kind)];
+    if (!kind) continue;
+    let label = "";
+    try {
+      label = shownText32(e.args.label as Hex);
+    } catch {
+      // Not UTF-8: no name, told as "someone it can pay".
+    }
+    changes.set(e.args.changeId as bigint, {
+      kind,
+      destIndex: Number(e.args.destIndex),
+      label,
+      limit: e.args.limit as bigint,
+      endTime: BigInt(e.args.endTime as bigint | number),
+      proposer: e.args.proposer as Address,
+      askedIn: e.tx,
+      ended: null,
+    });
+  }
+  for (const e of sorted) {
+    const c = e.name.startsWith("Change") ? changes.get(e.args.changeId as bigint) : undefined;
+    if (!c) continue;
+    if (e.name === "ChangeApplied") c.ended = copy.changeApplied;
+    else if (e.name === "ChangeWithdrawn") c.ended = copy.changeWithdrawn;
+    else if (e.name === "ChangeLapsed") c.ended = copy.changeLapsed;
+  }
 
   const rows: StoryRow[] = [];
   const add = (e: PotEvent, kind: RowKind, title: string, sub: string, person: Address | null) =>
@@ -180,6 +224,45 @@ export function storyRows(events: PotEvent[], n: StoryNames): StoryRow[] {
       case "Unfrozen":
         add(e, "unpaused", copy.storyUnpaused, "", null);
         break;
+      case "ChangeProposed": {
+        const c = changes.get(e.args.changeId as bigint);
+        if (c) add(e, "change-asked", copy.storyChangeAsked(who(c.proposer), changeWhat(c, words)), c.ended ?? "", null);
+        break;
+      }
+      case "ChangeYes": {
+        const c = changes.get(e.args.changeId as bigint);
+        const by = e.args.approver as Address;
+        // The proposer's own yes comes with the proposal.
+        if (c && e.tx !== c.askedIn) add(e, "change-yes", isMe(by) ? copy.storyYesYou : copy.storyYes(n.nameOf(by)), copy.storyForChange(changeWhat(c, words)), null);
+        break;
+      }
+      case "ChangeYesRevoked": {
+        const c = changes.get(e.args.changeId as bigint);
+        const by = e.args.approver as Address;
+        if (c) add(e, "change-took-back", isMe(by) ? copy.storyTookBackYou : copy.storyTookBack(n.nameOf(by)), copy.storyForChange(changeWhat(c, words)), null);
+        break;
+      }
+      case "ChangeApproved": {
+        const c = changes.get(e.args.changeId as bigint);
+        // A narrowing change applies with its yes: told once, as made.
+        if (c && widens(c.kind)) add(e, "change-agreed", copy.storyChangeAgreed(changeWhat(c, words)), copy.changeTakesEffect(words.when(BigInt(e.args.appliesAt as bigint | number))), null);
+        break;
+      }
+      case "ChangeApplied": {
+        const c = changes.get(e.args.changeId as bigint);
+        if (c) add(e, "change-made", copy.storyChangeMade(changeWhat({ ...c, destIndex: Number(e.args.destIndex) }, words)), "", null);
+        break;
+      }
+      case "ChangeWithdrawn": {
+        const c = changes.get(e.args.changeId as bigint);
+        if (c) add(e, "change-withdrawn", copy.storyChangeWithdrawn(who(c.proposer), changeWhat(c, words)), "", null);
+        break;
+      }
+      case "ChangeLapsed": {
+        const c = changes.get(e.args.changeId as bigint);
+        if (c) add(e, "change-lapsed", copy.storyChangeLapsed(changeWhat(c, words)), "", null);
+        break;
+      }
     }
   }
   return rows;

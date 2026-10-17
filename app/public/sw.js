@@ -104,9 +104,11 @@ function notificationFor(texts, p) {
 
 function urlFor(p) {
   const num = (v) => typeof v === "string" && /^\d{1,20}$/.test(v);
+  // A pot on NivPayPotsV2 comes as "v2:" and its number.
+  const pot = (v) => typeof v === "string" && /^(v2:)?\d{1,20}$/.test(v);
   if (p.k === "received") return "/?go=receive";
-  if (p.k === "askYes" && num(p.p) && num(p.r)) return `/?go=request&pot=${p.p}&ask=${p.r}`;
-  if ((p.k === "chippedIn" || p.k === "potNamesYou") && num(p.p)) return `/?go=pot&pot=${p.p}`;
+  if (p.k === "askYes" && pot(p.p) && num(p.r)) return `/?go=request&pot=${p.p}&ask=${p.r}`;
+  if ((p.k === "chippedIn" || p.k === "potNamesYou" || p.k === "changeApproved") && pot(p.p)) return `/?go=pot&pot=${p.p}`;
   return "/?go=notes";
 }
 // END push

@@ -433,3 +433,49 @@ export function deleteRefusal(draft: Pick<Draft, "made" | "sending">, createInFl
   if (draft.sending || createInFlight) return "beingMade";
   return null;
 }
+
+/** A closed pot, as Copy this pot reads it: names from its signed link where they checked out. */
+export type PotToCopy = {
+  name: string;
+  threshold: number;
+  deciders: Address[];
+  /** The pot's signed labels, when they checked out; empty otherwise. */
+  people: Person[];
+  payees: { to: Address; name: string; cap: bigint }[];
+  /** Payees a change took off the pot, by index: not copied. */
+  removed: boolean[];
+};
+
+/**
+ * Copy this pot: a new draft for `owner` with the closed pot's name, its
+ * other deciders and its rule, and the payees still on it with their limits
+ * and accounts. The closing date is chosen again, and the creator's own city
+ * is kept if the pot's labels had it. Nothing is signed or sent.
+ */
+export function draftFromPot(
+  owner: Address,
+  timeZone: string,
+  now: number,
+  random: (n: number) => Uint8Array,
+  pot: PotToCopy,
+  nameOf: (account: Address) => string,
+): Draft {
+  const label = (a: Address) => pot.people.find((p) => isAddressEqual(p.account, a));
+  const others = pot.deciders.filter((d) => !isAddressEqual(d, owner));
+  const deciders: Person[] = others.map((a) => {
+    const p = label(a);
+    return { account: getAddress(a), name: p?.name || nameOf(a), city: p?.city ?? "", timeZone: p?.timeZone || timeZone };
+  });
+  const payees: Payee[] = pot.payees
+    .filter((_, i) => !pot.removed[i])
+    .map((p) => ({ slot: newSlot(random), name: p.name || nameOf(p.to), cap: p.cap.toString(), account: getAddress(p.to), via: "pasted" as const }));
+  const fresh = newDraft(owner, timeZone, now, random);
+  return {
+    ...fresh,
+    name: pot.name,
+    me: { city: label(owner)?.city ?? "", timeZone },
+    deciders,
+    threshold: Math.max(1, Math.min(pot.threshold, deciders.length + 1)),
+    payees,
+  };
+}

@@ -36,7 +36,7 @@ export function factsOf(state: PotState): PotFacts {
     totalAssets: state.totalAssets,
     threshold: state.threshold,
     deciders: state.deciders,
-    payees: state.payees.map((p) => ({ name: p.name, cap: p.cap, spent: p.spent })),
+    payees: state.payees.map((p, i) => ({ name: p.name, cap: p.cap, spent: p.spent, ...(state.removed[i] ? { removed: true } : {}) })),
     decimals: state.decimals,
   };
 }

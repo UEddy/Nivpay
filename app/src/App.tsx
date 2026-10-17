@@ -40,7 +40,8 @@ import { readDesk } from "./lib/rampDesk.ts";
 import { PotFeed } from "./lib/feed.ts";
 import { idbFeedStore } from "./lib/idb.ts";
 import { LimitStore, settle } from "./lib/limits.ts";
-import { dismiss, fromArrivals, fromPoll, fromRequests, markAllRead, markRead, NotesStore, start as startNotes, unread, withoutRequestsFrom, type Funding, type Note, type NotesState, type PollInputs } from "./lib/notes.ts";
+import { dismiss, fromArrivals, fromPoll, fromRequests, markAllRead, markRead, NotesStore, start as startNotes, unread, withoutRequestsFrom, type Coming, type Funding, type Note, type NotesState, type PollInputs } from "./lib/notes.ts";
+import { readComing } from "./lib/changesLive.ts";
 import { MutedStore } from "./lib/inbox.ts";
 import { VoiceStore } from "./lib/voice.ts";
 import { askToListen, asksForVoice, onVoiceSettings, withoutVoiceAsk } from "./lib/voiceAsk.ts";
@@ -558,6 +559,10 @@ function Screens() {
         banner={banner}
         onBack={() => go({ kind: "story", pot: screen.pot })}
         onOpenRequest={(proposalId) => go({ kind: "request", pot: screen.pot, proposalId })}
+        onCopy={(draft) => {
+          drafts.put(draft);
+          go({ kind: "create", draftId: draft.id });
+        }}
       />
     );
   }
@@ -615,6 +620,7 @@ function Screens() {
           onOpenDraft={(draftId) => go({ kind: "create", draftId })}
           onOpenPot={(pot) => go({ kind: "pot", pot })}
           onOpenRequest={(pot, proposalId) => go({ kind: "request", pot, proposalId })}
+          onOpenClose={(pot) => go({ kind: "close", pot })}
           onSend={() => go({ kind: "send", request: null })}
           onPay={(request) => go({ kind: "send", request })}
           onReceive={() => go({ kind: "receive" })}
@@ -809,6 +815,8 @@ function Home(props: {
   onOpenDraft: (draftId: Hex) => void;
   onOpenPot: (pot: StoredPot) => void;
   onOpenRequest: (pot: StoredPot, proposalId: bigint) => void;
+  /** Take my part out, on a pot's Close screen: from a note about a change on its way. */
+  onOpenClose: (pot: StoredPot) => void;
   onSend: () => void;
   /** Pay a request from a person: Send, filled in from it. */
   onPay: (request: PayLink) => void;
@@ -1374,6 +1382,12 @@ function Home(props: {
             onPay={payNote}
             onIgnore={(n) => setNotes(notesStore.update((s) => dismiss(s, n.id)))}
             onMute={muteNote}
+            onTakeOut={(n) => {
+              setNotes(notesStore.update((s) => markRead(s, n.id)));
+              setNotesOpen(false);
+              const pot = n.potId === undefined ? null : potToOpen(n.potId);
+              if (pot) props.onOpenClose(pot);
+            }}
             onOpen={openNote} onReadAll={() => setNotes(notesStore.update(markAllRead))} onClose={() => setNotesOpen(false)} />
         </Suspense>
       )}
@@ -1499,6 +1513,8 @@ const potMembers = memberCache();
  */
 type Net = {
   onV2: boolean;
+  /** The contract itself. */
+  address: Address;
   /** The name this contract's stores live under on the phone. */
   ns: string;
   deployBlock: bigint;
@@ -1513,6 +1529,7 @@ type Net = {
 
 const V1_NET: Net = {
   onV2: false,
+  address: POTS,
   ns: DEPLOYMENT,
   deployBlock: POTS_DEPLOY_BLOCK,
   pots: livePots,
@@ -1527,6 +1544,7 @@ const V2_NET: Net | null =
   POTS_V2_HERE && POTS_V2_DEPLOY_BLOCK_HERE !== null
     ? {
         onV2: true,
+        address: POTS_V2_HERE,
         ns: `${DEPLOYMENT}.v2`,
         deployBlock: POTS_V2_DEPLOY_BLOCK_HERE,
         pots: potsReader(readClient, POTS_V2_HERE),
@@ -1565,6 +1583,8 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
   const [makers, setMakers] = useState<Record<string, Address>>(() => net?.potMakers.all() ?? {});
   // Money put into this account's own pots by the people in them, since the poll before (lib/fundings.ts).
   const [fundings, setFundings] = useState<Funding[]>([]);
+  // On V2: changes agreed and on their way, on pots this account put money into (lib/notes.ts "changeAgreed").
+  const [coming, setComing] = useState<Coming[]>([]);
   const cursor = useMemo(() => new FundingsCursor(localStorage, ns, account), [ns, account]);
   const { track } = connection;
   useEffect(() => {
@@ -1590,6 +1610,20 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
           if (read) {
             cursor.set(read.readTo);
             setFundings(read.fundings);
+          }
+          if (net.onV2) {
+            const mineIn = next.found.filter((p) => p.roles.includes("putIn") && !p.closed).map((p) => BigInt(p.potId));
+            const found = mineIn.length ? await readComing(readClient, net.address, mineIn, BigInt(next.at)).catch(() => null) : [];
+            if (!live) return;
+            if (found) {
+              setComing(
+                found.map(({ potId, change, payee }) => ({
+                  potId: potId.toString(),
+                  changeId: change.id.toString(),
+                  change: { kind: change.kind, payee, label: change.label, limit: change.limit.toString(), endTime: change.endTime.toString(), appliesAt: change.appliesAt.toString() },
+                })),
+              );
+            }
           }
         }
         state = next;
@@ -1634,7 +1668,7 @@ function useFoundPots(account: Address, connection: ReturnType<typeof useConnect
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [account, store, askStore, track, cursor, net, rowsHere]);
-  return { scan, failed, answered: answeredInvites, asks, starts, makers, fundings };
+  return { scan, failed, answered: answeredInvites, asks, starts, makers, fundings, coming };
 }
 
 type Found = ReturnType<typeof useFoundPots>;
@@ -1655,6 +1689,7 @@ function keyedV2(f: Found): Found {
     starts: keys(f.starts),
     makers: keys(f.makers),
     fundings: f.fundings.map((x) => ({ ...x, potId: k(x.potId) })),
+    coming: f.coming.map((c) => ({ ...c, potId: k(c.potId) })),
   };
 }
 
@@ -1673,6 +1708,7 @@ function useAllFoundPots(account: Address, connection: ReturnType<typeof useConn
     starts: { ...v1.starts, ...v2.starts },
     makers: { ...v1.makers, ...v2.makers },
     fundings: [...v1.fundings, ...v2.fundings],
+    coming: v2.coming,
   };
 }
 
@@ -1839,7 +1875,7 @@ function YourPots(props: {
   onOpenPot: (pot: StoredPot) => void;
   onOpenRequest: (pot: StoredPot, proposalId: bigint) => void;
 }) {
-  const { scan, failed, answered, asks, starts, makers, fundings } = useAllFoundPots(props.account.address, props.connection);
+  const { scan, failed, answered, asks, starts, makers, fundings, coming } = useAllFoundPots(props.account.address, props.connection);
   const owner = props.account.address;
   const contacts = useMemo(() => new ContactStore(localStorage, DEPLOYMENT, owner).list(), [owner]);
   const [reporting, setReporting] = useState<{ potId: string; name: string } | null>(null);
@@ -1918,6 +1954,7 @@ function YourPots(props: {
       makers,
       trusted: facts.trusted,
       fundings,
+      coming: coming.filter((c) => !notYours.has(c.potId)),
     });
     // Once per poll: scan and asks are new objects after each one.
   }, [scan, asks]);

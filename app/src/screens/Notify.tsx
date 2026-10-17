@@ -8,6 +8,7 @@ import { DEPLOYMENT } from "../lib/deployment.ts";
 import { reloadOnce } from "../lib/reloadOnce.ts";
 import { HowThisWorks, InstallHow, NoticeLine, useInstallWay, type Notice } from "./ui.tsx";
 import { PUSH_KINDS, type PushKind, type PushSettings } from "../lib/push.ts";
+import { POTS_V2_HERE } from "../lib/deployment.ts";
 import { pushInfo, pushOnHere, pushSettings, pushSupported, savePushSettings, syncPush, turnOffPush, turnOnPush } from "../lib/pushLive.ts";
 
 // The signing code loads only when something here is turned on or off.
@@ -111,7 +112,11 @@ const KIND_TEXT: Record<PushKind, string> = {
   askYes: copy.pushKindAskYes,
   request: copy.pushKindRequest,
   potNamesYou: copy.pushKindPotNamesYou,
+  changeApproved: copy.pushKindChangeApproved,
 };
+
+/** Changes agreed to a pot exist only on NivPayPotsV2: the switch shows once it is set (config.ts POTS_V2). */
+const SHOWN_KINDS = PUSH_KINDS.filter((k) => k !== "changeApproved" || POTS_V2_HERE !== null);
 
 /** On this phone: Turn on or off, what to be told about, and amounts on the lock screen. */
 function PushPart(props: { account: Account }) {
@@ -162,7 +167,7 @@ function PushPart(props: { account: Account }) {
       {notice && <NoticeLine notice={notice} />}
       <fieldset className="push-kinds">
         <legend className="settings-group">{copy.pushKindsTitle}</legend>
-        {PUSH_KINDS.map((k) => (
+        {SHOWN_KINDS.map((k) => (
           <label className="check-row" key={k}>
             <input type="checkbox" checked={settings.kinds[k]} onChange={(e) => change({ ...settings, kinds: { ...settings.kinds, [k]: e.target.checked } })} />
             <span>{KIND_TEXT[k]}</span>
