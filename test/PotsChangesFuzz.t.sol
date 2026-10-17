@@ -127,19 +127,31 @@ contract PotsChangesFuzzTest is PotsV2TestBase {
         for (uint256 i = 0; i < moves.length; ++i) {
             uint8 m = moves[i] % 4;
             if (m == 0 || m == 1) {
-                vm.prank(ana);
+                address by = [ana, ben, cleo][moves[i] % 3];
+                vm.prank(by);
                 try pots.proposeRaiseLimit(pot, CATERER, (700 + i) * ONE) returns (uint256 id) {
                     mine[made++] = id;
                 } catch (bytes memory err) {
-                    assertEq(bytes4(err), NivPayPotsV2.TooManyOpenChanges.selector);
+                    bytes4 e = bytes4(err);
+                    assertTrue(e == NivPayPotsV2.TooManyOpenChanges.selector || e == NivPayPotsV2.TooManyOpenChangesFromYou.selector);
                 }
             } else if (m == 2 && made > 0) {
-                vm.prank(ana);
-                try pots.withdrawChange(mine[moves[i] % made]) {} catch {}
+                uint256 id = mine[moves[i] % made];
+                vm.prank(pots.changeInfo(id).proposer);
+                try pots.withdrawChange(id) {} catch {}
             } else {
                 vm.warp(block.timestamp + uint256(moves[i]) * 1 hours);
             }
-            assertLe(pots.openChanges(pot).length, 5);
+            uint256[] memory open = pots.openChanges(pot);
+            assertLe(open.length, 5);
+            uint256[3] memory each;
+            for (uint256 j = 0; j < open.length; ++j) {
+                address p = pots.changeInfo(open[j]).proposer;
+                each[p == ana ? 0 : p == ben ? 1 : 2]++;
+            }
+            assertLe(each[0], 2);
+            assertLe(each[1], 2);
+            assertLe(each[2], 2);
         }
     }
 }

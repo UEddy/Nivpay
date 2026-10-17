@@ -7,11 +7,16 @@ import {MockAUSD} from "../mocks/MockAUSD.sol";
 
 /// @notice Drives NivPayPotsV2 through random sequences of funding, exits,
 /// claims, payments, freezes, closes and every kind of change: proposed,
-/// agreed, applied early and late, withdrawn and lapsed. It keeps its own
-/// books of every pot's payees and limits, changed only when it has seen a
-/// change apply, and checks every payment against those books, not the
-/// contract's: a payment the contract let through to a payee or above a
-/// limit the handler never saw applied is a violation.
+/// agreed, taken back, applied early and late, withdrawn, overridden and
+/// lapsed, and tried by deciders of other pots. It keeps its own books of
+/// every pot's payees and limits, changed only when it has seen a change
+/// apply, and checks every payment against those books, not the contract's:
+/// a payment the contract let through to a payee or above a limit the handler
+/// never saw applied is a violation.
+///
+/// Three pots, each with its own deciders, so a check made against the wrong
+/// pot shows: two of three (pots 0 and 1) and one of two (pot 2), where a
+/// proposal agrees, and a narrowing applies, in the call that makes it.
 ///
 /// Violations are counted, not asserted, because fail_on_revert is off and an
 /// assertion inside a handler action would be swallowed.
@@ -20,10 +25,10 @@ contract PotsV2Handler is Test {
     MockAUSD public immutable token;
 
     address[] public funders;
-    address[] public deciders;
     uint256[] public potIds;
+    mapping(uint256 => address[]) internal _deciders;
 
-    uint256 public constant POTS = 2;
+    uint256 public constant POTS = 3;
     uint256 private constant MAX_FUND = 100_000_000000;
 
     // Money books, per pot.
@@ -39,6 +44,8 @@ contract PotsV2Handler is Test {
     mapping(uint256 => mapping(uint256 => bool)) public gRemoved;
     mapping(uint256 => mapping(uint256 => address)) public gTo;
     mapping(uint256 => uint64) public gEnd;
+    /// Each payee's narrowings (lowered or removed) seen so far, to tell a raise agreed before one from one agreed after.
+    mapping(uint256 => mapping(uint256 => uint256)) public gNarrowings;
 
     struct Known {
         uint256 potId;
@@ -50,6 +57,7 @@ contract PotsV2Handler is Test {
         address proposer;
         bool agreed;
         uint256 agreedAt;
+        uint256 narrowingsAtAgree;
     }
 
     uint256[] public changeIds;
@@ -61,6 +69,8 @@ contract PotsV2Handler is Test {
     uint256 public appliedLate;
     uint256 public appliedWhileFrozenOrClosed;
     uint256 public changedClosedPot;
+    uint256 public crossPotAccepted;
+    uint256 public raiseUndidNarrowing;
     uint256 public exitsRefused;
     uint256 public payments;
     uint256 public applies;
@@ -74,10 +84,14 @@ contract PotsV2Handler is Test {
             vm.prank(f);
             token.approve(address(pots), type(uint256).max);
         }
-        for (uint256 i = 0; i < 3; ++i) {
-            deciders.push(makeAddr(string.concat("decider", vm.toString(i))));
-        }
+        uint8[3] memory sizes = [3, 3, 2];
+        uint8[3] memory rules = [2, 2, 1];
+        uint256 n;
         for (uint256 p = 0; p < POTS; ++p) {
+            address[] memory who = new address[](sizes[p]);
+            for (uint256 i = 0; i < sizes[p]; ++i) {
+                who[i] = makeAddr(string.concat("decider", vm.toString(n++)));
+            }
             address[] memory ds = new address[](2);
             bytes32[] memory labels = new bytes32[](2);
             uint256[] memory caps = new uint256[](2);
@@ -87,8 +101,9 @@ contract PotsV2Handler is Test {
                 caps[i] = 50_000_000000;
             }
             uint64 end = uint64(block.timestamp + 120 days);
-            uint256 id = pots.createPot("Handler", deciders, 2, ds, labels, caps, end);
+            uint256 id = pots.createPot("Handler", who, rules[p], ds, labels, caps, end);
             potIds.push(id);
+            _deciders[id] = who;
             gPayees[id] = 2;
             gEnd[id] = end;
             for (uint256 i = 0; i < 2; ++i) {
@@ -106,12 +121,17 @@ contract PotsV2Handler is Test {
         return changeIds.length;
     }
 
+    function decidersOf(uint256 potId) external view returns (address[] memory) {
+        return _deciders[potId];
+    }
+
     function _pot(uint256 seed) internal view returns (uint256) {
         return potIds[seed % potIds.length];
     }
 
-    function _decider(uint256 seed) internal view returns (address) {
-        return deciders[seed % deciders.length];
+    function _decider(uint256 potId, uint256 seed) internal view returns (address) {
+        address[] storage who = _deciders[potId];
+        return who[seed % who.length];
     }
 
     // ---------------------------------------------------------------------
@@ -166,11 +186,17 @@ contract PotsV2Handler is Test {
         uint16 index = uint16(destSeed % 8 == 0 ? gPayees[potId] : destSeed % gPayees[potId]);
         // Mostly payments a pot can make; sometimes far above any limit.
         amount = amount % 8 == 0 ? bound(amount, 1, 200_000_000000) : bound(amount, 1, 5_000_000000);
-        vm.prank(deciders[0]);
+        uint256 assetsBefore = pots.getPot(potId).totalAssets;
+        vm.prank(_deciders[potId][0]);
         uint256 id;
         try pots.proposePayout(potId, index, amount) returns (uint256 x) {
             id = x;
         } catch {
+            return;
+        }
+        // A one of n pot pays in the proposal itself.
+        if (pots.proposalInfo(id).status == NivPayPotsV2.ProposalStatus.Executed) {
+            _paid(potId, index, amount, assetsBefore);
             return;
         }
         // One in three waits for its second yes (payLater), so changes can
@@ -196,31 +222,37 @@ contract PotsV2Handler is Test {
 
     function _secondYes(uint256 id, uint256 potId, uint16 index, uint256 amount) internal {
         uint256 assetsBefore = pots.getPot(potId).totalAssets;
-        vm.prank(deciders[1]);
+        vm.prank(_deciders[potId][1]);
         try pots.approve(id) {
-            payments++;
-            uint256 fee = assetsBefore - pots.getPot(potId).totalAssets - amount;
-            if (index >= gPayees[potId] || gRemoved[potId][index]) paidToUnapplied++;
-            else if (gSpent[potId][index] + amount > gCap[potId][index]) paidAboveLimit++;
-            gSpent[potId][index] += amount;
-            gPaid[potId] += amount;
-            gFees[potId] += fee;
+            _paid(potId, index, amount, assetsBefore);
         } catch {}
+    }
+
+    function _paid(uint256 potId, uint16 index, uint256 amount, uint256 assetsBefore) internal {
+        payments++;
+        uint256 fee = assetsBefore - pots.getPot(potId).totalAssets - amount;
+        if (index >= gPayees[potId] || gRemoved[potId][index]) paidToUnapplied++;
+        else if (gSpent[potId][index] + amount > gCap[potId][index]) paidAboveLimit++;
+        gSpent[potId][index] += amount;
+        gPaid[potId] += amount;
+        gFees[potId] += fee;
     }
 
     /// @notice Unfreezes a frozen pot; freezes one only one time in four, so
     /// pots spend most of a run unfrozen and the freeze rules still come up.
     function freezeOrUnfreeze(uint256 potSeed, uint256 dice) external {
         uint256 potId = _pot(potSeed);
+        address[] storage who = _deciders[potId];
         if (!pots.getPot(potId).frozen) {
             if (dice % 4 != 0) return;
-            vm.prank(deciders[2]);
+            vm.prank(who[who.length - 1]);
             try pots.freeze(potId) {} catch {}
             return;
         }
-        vm.prank(deciders[0]);
+        vm.prank(who[0]);
         try pots.proposeUnfreeze(potId) returns (uint256 id) {
-            vm.prank(deciders[1]);
+            if (pots.proposalInfo(id).status != NivPayPotsV2.ProposalStatus.Pending) return;
+            vm.prank(who[1]);
             try pots.approve(id) {} catch {}
         } catch {}
     }
@@ -229,9 +261,10 @@ contract PotsV2Handler is Test {
     function closeEarly(uint256 potSeed, uint256 dice) external {
         if (dice % 25 != 0) return;
         uint256 potId = _pot(potSeed);
-        vm.prank(deciders[0]);
+        vm.prank(_deciders[potId][0]);
         try pots.proposeClose(potId) returns (uint256 id) {
-            vm.prank(deciders[1]);
+            if (pots.proposalInfo(id).status != NivPayPotsV2.ProposalStatus.Pending) return;
+            vm.prank(_deciders[potId][1]);
             try pots.approve(id) {} catch {}
         } catch {}
     }
@@ -246,7 +279,10 @@ contract PotsV2Handler is Test {
 
     function propose(uint256 deciderSeed, uint256 potSeed, uint256 kindSeed, uint256 destSeed, uint256 value) external {
         uint256 potId = _pot(potSeed);
-        address d = _decider(deciderSeed);
+        _propose(potId, _decider(potId, deciderSeed), kindSeed, destSeed, value);
+    }
+
+    function _propose(uint256 potId, address d, uint256 kindSeed, uint256 destSeed, uint256 value) internal returns (bool ok) {
         uint256 kind = kindSeed % 5;
         uint16 index = uint16(destSeed % (gPayees[potId] + 1));
         // Mostly a limit that fits the kind, so most proposals are real ones;
@@ -261,42 +297,9 @@ contract PotsV2Handler is Test {
         address to = makeAddr(string.concat("new", vm.toString(changeIds.length)));
 
         bool closed = pots.getPot(potId).closed;
-        vm.prank(d);
-        uint256 id;
-        if (kind == 0) {
-            try pots.proposeAddPayee(potId, to, "New", limit) returns (uint256 x) {
-                id = x;
-            } catch {
-                return;
-            }
-        } else if (kind == 1) {
-            try pots.proposeRaiseLimit(potId, index, limit) returns (uint256 x) {
-                id = x;
-            } catch {
-                return;
-            }
-        } else if (kind == 2) {
-            try pots.proposeLaterClose(potId, end) returns (uint256 x) {
-                id = x;
-            } catch {
-                return;
-            }
-        } else if (kind == 3) {
-            try pots.proposeLowerLimit(potId, index, limit) returns (uint256 x) {
-                id = x;
-            } catch {
-                return;
-            }
-        } else {
-            try pots.proposeRemovePayee(potId, index) returns (uint256 x) {
-                id = x;
-            } catch {
-                return;
-            }
-        }
-        if (closed) changedClosedPot++;
-        changeIds.push(id);
-        known[id] = Known({
+        uint256 count = pots.changeCount();
+        // Recorded before the call: a one of n narrowing applies inside it, and is booked from this.
+        known[count] = Known({
             potId: potId,
             kind: NivPayPotsV2.ChangeKind(kind),
             destIndex: index,
@@ -305,8 +308,48 @@ contract PotsV2Handler is Test {
             endTime: end,
             proposer: d,
             agreed: false,
-            agreedAt: 0
+            agreedAt: 0,
+            narrowingsAtAgree: 0
         });
+        vm.prank(d);
+        if (kind == 0) {
+            try pots.proposeAddPayee(potId, to, "New", limit) {} catch {
+                return false;
+            }
+        } else if (kind == 1) {
+            try pots.proposeRaiseLimit(potId, index, limit) {} catch {
+                return false;
+            }
+        } else if (kind == 2) {
+            try pots.proposeLaterClose(potId, end) {} catch {
+                return false;
+            }
+        } else if (kind == 3) {
+            try pots.proposeLowerLimit(potId, index, limit) {} catch {
+                return false;
+            }
+        } else {
+            try pots.proposeRemovePayee(potId, index) {} catch {
+                return false;
+            }
+        }
+        if (closed) changedClosedPot++;
+        changeIds.push(count);
+        _afterYes(count);
+        return true;
+    }
+
+    /// @dev After a yes that may have agreed the change: book it if it applied, start its wait if it waits.
+    function _afterYes(uint256 id) internal {
+        NivPayPotsV2.ChangeView memory v = pots.changeInfo(id);
+        if (v.status == NivPayPotsV2.ChangeStatus.Applied) {
+            _booked(id, v.destIndex);
+        } else if (v.status == NivPayPotsV2.ChangeStatus.Waiting) {
+            Known storage k = known[id];
+            k.agreed = true;
+            k.agreedAt = block.timestamp;
+            k.narrowingsAtAgree = gNarrowings[k.potId][k.destIndex];
+        }
     }
 
     /// @dev From the seed on, the first change in `status`, so the actions
@@ -323,25 +366,48 @@ contract PotsV2Handler is Test {
     function approve(uint256 deciderSeed, uint256 changeSeed) external {
         (bool found, uint256 id) = _find(changeSeed, NivPayPotsV2.ChangeStatus.Pending);
         if (!found) return;
-        address d = _decider(deciderSeed);
-        if (pots.hasApprovedChange(id, d)) d = _decider(deciderSeed + 1);
-        if (pots.hasApprovedChange(id, d)) d = _decider(deciderSeed + 2);
-        bool closed = pots.getPot(known[id].potId).closed;
+        uint256 potId = known[id].potId;
+        address d = _decider(potId, deciderSeed);
+        if (pots.hasApprovedChange(id, d)) d = _decider(potId, deciderSeed + 1);
+        if (pots.hasApprovedChange(id, d)) d = _decider(potId, deciderSeed + 2);
+        bool closed = pots.getPot(potId).closed;
         vm.prank(d);
         try pots.approveChange(id) {
             if (closed) changedClosedPot++;
-            NivPayPotsV2.ChangeView memory v = pots.changeInfo(id);
-            if (v.status == NivPayPotsV2.ChangeStatus.Applied) {
-                _booked(id, v.destIndex);
-            } else if (v.status == NivPayPotsV2.ChangeStatus.Waiting) {
-                known[id].agreed = true;
-                known[id].agreedAt = block.timestamp;
-            }
+            _afterYes(id);
+        } catch {}
+    }
+
+    /// @notice A yes taken back from a change not yet agreed.
+    function revoke(uint256 deciderSeed, uint256 changeSeed) external {
+        (bool found, uint256 id) = _find(changeSeed, NivPayPotsV2.ChangeStatus.Pending);
+        if (!found) return;
+        address d = _decider(known[id].potId, deciderSeed);
+        if (!pots.hasApprovedChange(id, d)) return;
+        vm.prank(d);
+        try pots.revokeChangeYes(id) {} catch {}
+    }
+
+    /// @notice A decider of another pot tries to propose on this one, and to
+    /// say yes to its changes. Neither may ever work.
+    function crossPot(uint256 potSeed, uint256 otherSeed, uint256 changeSeed, uint256 value) external {
+        uint256 potId = _pot(potSeed);
+        uint256 other = _pot(potSeed + 1 + (otherSeed % (POTS - 1)));
+        address stranger = _decider(other, otherSeed);
+        vm.prank(stranger);
+        try pots.proposeLowerLimit(potId, 0, bound(value, 1, 1_000000)) {
+            crossPotAccepted++;
+        } catch {}
+        (bool found, uint256 id) = _find(changeSeed, NivPayPotsV2.ChangeStatus.Pending);
+        if (!found || known[id].potId == other) return;
+        vm.prank(stranger);
+        try pots.approveChange(id) {
+            crossPotAccepted++;
         } catch {}
     }
 
     /// @notice Mostly a change that is ready; sometimes any change, so early,
-    /// late, withdrawn and narrowing ones are tried too.
+    /// late, withdrawn, overridden and narrowing ones are tried too.
     function apply_(uint256 changeSeed, uint256 who) external {
         if (changeIds.length == 0) return;
         uint256 id = changeIds[changeSeed % changeIds.length];
@@ -356,6 +422,7 @@ contract PotsV2Handler is Test {
             if (before.frozen || before.closed) appliedWhileFrozenOrClosed++;
             if (!k.agreed || block.timestamp < k.agreedAt + pots.EXIT_WINDOW()) appliedEarly++;
             if (block.timestamp > k.agreedAt + pots.EXIT_WINDOW() + pots.APPLY_PERIOD()) appliedLate++;
+            if (k.kind == NivPayPotsV2.ChangeKind.RaiseLimit && gNarrowings[k.potId][k.destIndex] != k.narrowingsAtAgree) raiseUndidNarrowing++;
             _booked(id, pots.changeInfo(id).destIndex);
         } catch {}
     }
@@ -388,8 +455,10 @@ contract PotsV2Handler is Test {
             gEnd[potId] = k.endTime;
         } else if (k.kind == NivPayPotsV2.ChangeKind.RemovePayee) {
             gRemoved[potId][k.destIndex] = true;
+            gNarrowings[potId][k.destIndex]++;
         } else {
             gCap[potId][k.destIndex] = k.limit;
+            if (k.kind == NivPayPotsV2.ChangeKind.LowerLimit) gNarrowings[potId][k.destIndex]++;
         }
     }
 }

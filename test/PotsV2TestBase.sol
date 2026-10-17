@@ -35,7 +35,7 @@ abstract contract PotsV2TestBase is Test {
     function setUp() public virtual {
         vm.warp(1_760_000_000);
         token = new MockAUSD();
-        pots = new NivPayPotsV2(IERC20(address(token)), FEE_BPS, FEE_CAP, feeRecipient);
+        pots = new NivPayPotsV2(IERC20(address(token)), FEE_BPS, FEE_CAP, feeRecipient, 72 hours, 7 days);
         endTime = uint64(block.timestamp + 30 days);
         potId = _birthday(endTime);
         _fundAccount(ana, 10_000 * ONE);

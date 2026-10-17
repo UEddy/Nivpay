@@ -12,6 +12,12 @@ import {NivPayPotsV2} from "../src/NivPayPotsV2.sol";
 /// on the chain rather than typed in again. NivPayPots itself is not touched:
 /// its pots stay where they are and keep working exactly as before.
 ///
+/// The exit window is EXIT_WINDOW below, 72 hours, and the apply period
+/// APPLY_PERIOD, 7 days, and nothing else: neither is read from the
+/// environment, and test/DeployPotsV2.t.sol fails if either is ever anything
+/// else. A short window is only for a staging copy
+/// (script/DeployPotsV2Staging.s.sol).
+///
 /// POTS_TOKEN picks which: "ausd" (the default) or "testusd". Run it without
 /// --broadcast first: that is a dry run that performs every check and
 /// deploys nothing.
@@ -22,6 +28,10 @@ import {NivPayPotsV2} from "../src/NivPayPotsV2.sol";
 /// See the README for the keystore and broadcast commands.
 contract DeployPotsV2 is Script {
     uint256 internal constant MONAD_TESTNET_CHAIN_ID = 10143;
+
+    /// The exit window and apply period of the real deployment.
+    uint256 public constant EXIT_WINDOW = 72 hours;
+    uint256 public constant APPLY_PERIOD = 7 days;
 
     /// The live NivPayPots instances (app/src/lib/config.ts, broadcast/).
     address internal constant POTS_AUSD = 0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB;
@@ -58,21 +68,31 @@ contract DeployPotsV2 is Script {
         console.log("fee bps       ", feeBps);
         console.log("fee cap       ", feeCap);
         console.log("fee recipient ", feeRecipient);
+        console.log("exit window s ", EXIT_WINDOW);
+        console.log("apply period s", APPLY_PERIOD);
 
         vm.startBroadcast();
-        pots = new NivPayPotsV2(IERC20(token), feeBps, feeCap, feeRecipient);
+        pots = deploy(IERC20(token), feeBps, feeCap, feeRecipient);
         vm.stopBroadcast();
 
         console.log("NivPayPotsV2  ", address(pots));
+        check(pots, IERC20(token), feeBps, feeCap, feeRecipient);
+    }
 
-        // Read the deployed state back, so the log is evidence rather than a
-        // restatement of the arguments.
-        require(address(pots.token()) == token, "deployed token mismatch");
+    /// The deployment itself, with this script's EXIT_WINDOW. A test calls it too.
+    function deploy(IERC20 token, uint256 feeBps, uint256 feeCap, address feeRecipient) public returns (NivPayPotsV2) {
+        return new NivPayPotsV2(token, feeBps, feeCap, feeRecipient, EXIT_WINDOW, APPLY_PERIOD);
+    }
+
+    /// Reads the deployed state back, so the log is evidence rather than a
+    /// restatement of the arguments.
+    function check(NivPayPotsV2 pots, IERC20 token, uint256 feeBps, uint256 feeCap, address feeRecipient) public view {
+        require(address(pots.token()) == address(token), "deployed token mismatch");
         require(pots.feeBps() == feeBps, "deployed feeBps mismatch");
         require(pots.feeCap() == feeCap, "deployed feeCap mismatch");
         require(pots.feeRecipient() == feeRecipient, "deployed feeRecipient mismatch");
-        require(pots.EXIT_WINDOW() == 72 hours, "deployed exit window mismatch");
-        require(pots.APPLY_PERIOD() == 7 days, "deployed apply period mismatch");
+        require(pots.EXIT_WINDOW() == 72 hours, "deployed exit window is not 72 hours");
+        require(pots.APPLY_PERIOD() == 7 days, "deployed apply period is not 7 days");
         require(pots.MAX_OPEN_CHANGES() == 5, "deployed open change limit mismatch");
         require(pots.potCount() == 0 && pots.changeCount() == 0, "a fresh contract should have no pots and no changes");
     }

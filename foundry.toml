@@ -101,3 +101,14 @@ monad_testnet = { key = "${MONADSCAN_API_KEY}", chain = 10143, url = "https://so
 line_length = 120
 tab_width = 4
 
+
+# Ten times the default fuzz and invariant runs, at the same depth, for the
+# last check before a deploy (README, "Deep runs"). Takes a long time.
+#
+#     $env:FOUNDRY_PROFILE = "deep"; forge test
+[profile.deep.fuzz]
+runs = 5120
+max_test_rejects = 2000000
+
+[profile.deep.invariant]
+runs = 2560

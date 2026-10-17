@@ -18,13 +18,13 @@ contract PotsChangesInvariantTest is Test {
     function setUp() public {
         vm.warp(1_760_000_000);
         token = new MockAUSD();
-        pots = new NivPayPotsV2(IERC20(address(token)), 100, 50_000000, makeAddr("feeRecipient"));
+        pots = new NivPayPotsV2(IERC20(address(token)), 100, 50_000000, makeAddr("feeRecipient"), 72 hours, 7 days);
         handler = new PotsV2Handler(pots, token);
 
         targetContract(address(handler));
         // The change actions are listed twice, so they come up as often as
         // the money ones: a change needs a proposal, a yes and an apply.
-        bytes4[] memory selectors = new bytes4[](19);
+        bytes4[] memory selectors = new bytes4[](21);
         selectors[0] = PotsV2Handler.fund.selector;
         selectors[1] = PotsV2Handler.fund.selector;
         selectors[2] = PotsV2Handler.exitSome.selector;
@@ -44,6 +44,8 @@ contract PotsChangesInvariantTest is Test {
         selectors[16] = PotsV2Handler.lapse.selector;
         selectors[17] = PotsV2Handler.exitSome.selector;
         selectors[18] = PotsV2Handler.payLater.selector;
+        selectors[19] = PotsV2Handler.revoke.selector;
+        selectors[20] = PotsV2Handler.crossPot.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
 
@@ -79,6 +81,46 @@ contract PotsChangesInvariantTest is Test {
         assertEq(handler.appliedEarly(), 0, "applied inside the exit window");
         assertEq(handler.appliedLate(), 0, "applied after it lapsed");
         assertEq(handler.appliedWhileFrozenOrClosed(), 0, "applied on a frozen or closed pot");
+    }
+
+    /// @notice Nobody who doesn't decide on a pot ever proposed a change on it
+    /// or said yes to one, and a raise agreed before a payee was lowered or
+    /// removed never applied after it.
+    function invariant_onlyThePotsOwnDecidersAndNoUndoing() public view {
+        assertEq(handler.crossPotAccepted(), 0, "a decider of another pot was heard");
+        assertEq(handler.raiseUndidNarrowing(), 0, "a raise undid a later lowering");
+    }
+
+    /// @notice Every change's yes count is exactly the deciders who have said
+    /// yes to it, however many were given and taken back.
+    function invariant_yesCountsAreTheYeses() public view {
+        uint256 n = pots.changeCount();
+        for (uint256 id = 0; id < n; ++id) {
+            NivPayPotsV2.ChangeView memory v = pots.changeInfo(id);
+            address[] memory who = handler.decidersOf(v.potId);
+            uint256 yes;
+            for (uint256 i = 0; i < who.length; ++i) {
+                if (pots.hasApprovedChange(id, who[i])) ++yes;
+            }
+            assertEq(v.approvals, yes, "approvals");
+            assertEq(v.approvedBy.length, yes, "approvedBy");
+        }
+    }
+
+    /// @notice Never more than two open changes from one decider on a pot.
+    function invariant_atMostTwoFromOneDecider() public view {
+        for (uint256 p = 0; p < handler.POTS(); ++p) {
+            uint256 potId = handler.potIds(p);
+            uint256[] memory open = pots.openChanges(potId);
+            address[] memory who = handler.decidersOf(potId);
+            for (uint256 i = 0; i < who.length; ++i) {
+                uint256 mine;
+                for (uint256 j = 0; j < open.length; ++j) {
+                    if (pots.changeInfo(open[j]).proposer == who[i]) ++mine;
+                }
+                assertLe(mine, 2);
+            }
+        }
     }
 
     /// @notice A closed pot took no proposal and no yes for a change.

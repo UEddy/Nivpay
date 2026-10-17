@@ -153,7 +153,7 @@ contract PotsChangesTest is PotsV2TestBase {
         vm.prank(ana);
         uint256 lower = pots.proposeLowerLimit(all, 0, 500 * ONE);
         vm.prank(ana);
-        uint256 raise = pots.proposeRaiseLimit(all, 0, 700 * ONE);
+        uint256 raise = pots.proposeLaterClose(all, endTime + 1 days);
         vm.prank(ben);
         pots.approveChange(lower);
         vm.prank(ben);
@@ -170,6 +170,7 @@ contract PotsChangesTest is PotsV2TestBase {
         vm.prank(cleo);
         pots.approveChange(raise);
         assertEq(uint8(_status(raise)), uint8(NivPayPotsV2.ChangeStatus.Waiting), "and starts the wide one's wait");
+        assertEq(pots.getPot(all).endTime, endTime, "not before it");
     }
 
     function test_approve_onlyDecidersAndOnlyOnce() public {
@@ -466,16 +467,188 @@ contract PotsChangesTest is PotsV2TestBase {
         assertEq(_cap(CATERER), 900 * ONE);
     }
 
-    function test_raise_ofAPayeeRemovedMeanwhileIsRefused() public {
+    function test_raise_ofAPayeeRemovedMeanwhileIsOverridden() public {
         vm.prank(ana);
         uint256 raise = pots.proposeRaiseLimit(potId, HALL, 400 * ONE);
         _agreed(raise);
         vm.prank(ana);
         uint256 remove = pots.proposeRemovePayee(potId, HALL);
+        vm.expectEmit(true, true, false, true, address(pots));
+        emit NivPayPotsV2.ChangeOverridden(raise, potId, remove);
         _agreed(remove);
+        assertEq(uint8(_status(raise)), uint8(NivPayPotsV2.ChangeStatus.Overridden));
+        assertEq(pots.openChanges(potId).length, 0, "its place is free");
         vm.warp(block.timestamp + WINDOW);
-        vm.expectRevert(NivPayPotsV2.PayeeRemoved.selector);
+        vm.expectRevert(NivPayPotsV2.ChangeNotReady.selector);
         pots.applyChange(raise);
+    }
+
+    function test_lower_endsEveryOpenRaiseOfThatPayeeOnly() public {
+        // Ben's raise of the caterer is agreed; then the caterer is lowered at once.
+        vm.prank(ben);
+        uint256 raise = pots.proposeRaiseLimit(potId, CATERER, 5_000 * ONE);
+        vm.prank(ana);
+        pots.approveChange(raise);
+        vm.prank(cleo);
+        uint256 pending = pots.proposeRaiseLimit(potId, CATERER, 900 * ONE);
+        vm.prank(cleo);
+        uint256 hallRaise = pots.proposeRaiseLimit(potId, HALL, 400 * ONE);
+        vm.prank(ana);
+        uint256 lower = pots.proposeLowerLimit(potId, CATERER, 100 * ONE);
+        vm.prank(cleo);
+        pots.approveChange(lower);
+        assertEq(_cap(CATERER), 100 * ONE);
+        // Both raises of the caterer end, agreed or not; the hall's stays.
+        assertEq(uint8(_status(raise)), uint8(NivPayPotsV2.ChangeStatus.Overridden));
+        assertEq(uint8(_status(pending)), uint8(NivPayPotsV2.ChangeStatus.Overridden));
+        assertEq(uint8(_status(hallRaise)), uint8(NivPayPotsV2.ChangeStatus.Pending));
+        vm.warp(block.timestamp + WINDOW);
+        vm.expectRevert(NivPayPotsV2.ChangeNotReady.selector);
+        pots.applyChange(raise);
+        assertEq(_cap(CATERER), 100 * ONE, "the lowering stands");
+        vm.prank(ben);
+        vm.expectRevert(NivPayPotsV2.ChangeNotOpen.selector);
+        pots.withdrawChange(raise);
+        // A raise agreed after the lowering is a fresh decision, and applies.
+        vm.prank(ben);
+        uint256 again = pots.proposeRaiseLimit(potId, CATERER, 300 * ONE);
+        vm.prank(ana);
+        pots.approveChange(again);
+        vm.warp(block.timestamp + WINDOW);
+        pots.applyChange(again);
+        assertEq(_cap(CATERER), 300 * ONE);
+    }
+
+    function test_remove_endsEveryOpenChangeOfThatPayee() public {
+        vm.prank(ben);
+        uint256 lower = pots.proposeLowerLimit(potId, HALL, 200 * ONE);
+        vm.prank(cleo);
+        uint256 otherPayee = pots.proposeLowerLimit(potId, CATERER, 500 * ONE);
+        vm.prank(ana);
+        uint256 remove = pots.proposeRemovePayee(potId, HALL);
+        _agreed(remove);
+        assertEq(uint8(_status(lower)), uint8(NivPayPotsV2.ChangeStatus.Overridden));
+        assertEq(uint8(_status(otherPayee)), uint8(NivPayPotsV2.ChangeStatus.Pending));
+    }
+
+    function test_agree_aWideningChangeThatCouldNeverApplyIsRefused() public {
+        // The hall's raise can't be agreed once the hall is gone: nobody is told of a change that can't happen.
+        vm.prank(ana);
+        uint256 raise = pots.proposeRaiseLimit(potId, CATERER, 900 * ONE);
+        vm.prank(ben);
+        uint256 higher = pots.proposeRaiseLimit(potId, CATERER, 1_000 * ONE);
+        vm.prank(cleo);
+        pots.approveChange(higher);
+        vm.warp(block.timestamp + WINDOW);
+        pots.applyChange(higher);
+        vm.prank(ben);
+        vm.expectRevert(NivPayPotsV2.NotWider.selector);
+        pots.approveChange(raise);
+        assertEq(uint8(_status(raise)), uint8(NivPayPotsV2.ChangeStatus.Pending));
+    }
+
+    function test_widening_thatTheCloseWouldBeatIsRefused() public {
+        uint256 soon = _birthday(uint64(block.timestamp + 48 hours));
+        // Proposing it is refused: the pot closes before its 72 hours are up.
+        vm.prank(ana);
+        vm.expectRevert(NivPayPotsV2.ClosesBeforeItApplies.selector);
+        pots.proposeLaterClose(soon, uint64(block.timestamp + 60 days));
+        vm.prank(ana);
+        vm.expectRevert(NivPayPotsV2.ClosesBeforeItApplies.selector);
+        pots.proposeAddPayee(soon, dj, "DJ", ONE);
+        // Narrowing still works to the end.
+        vm.prank(ana);
+        uint256 lower = pots.proposeLowerLimit(soon, CATERER, 100 * ONE);
+        vm.prank(ben);
+        pots.approveChange(lower);
+        // And one proposed in time is refused when agreed too late.
+        uint256 later = _birthday(uint64(block.timestamp + 4 days));
+        vm.prank(ana);
+        uint256 add = pots.proposeAddPayee(later, dj, "DJ", ONE);
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(ben);
+        vm.expectRevert(NivPayPotsV2.ClosesBeforeItApplies.selector);
+        pots.approveChange(add);
+    }
+
+    function test_removedPayee_showsNothingLeft() public {
+        vm.prank(ana);
+        uint256 remove = pots.proposeRemovePayee(potId, HALL);
+        _agreed(remove);
+        (,, uint256 cap, uint256 spent, uint256 remaining) = pots.getDestination(potId, HALL);
+        assertEq(cap, 300 * ONE);
+        assertEq(spent, 0);
+        assertEq(remaining, 0, "a removed payee can be paid nothing more");
+    }
+
+    function test_expired_neitherLapsesNorWithdraws() public {
+        vm.prank(ana);
+        uint256 id = pots.proposeAddPayee(potId, dj, "DJ", ONE);
+        vm.warp(block.timestamp + 7 days + 1);
+        vm.expectRevert(NivPayPotsV2.ChangeNotLapsed.selector);
+        pots.lapseChange(id);
+        vm.prank(ana);
+        vm.expectRevert(NivPayPotsV2.ChangeNotOpen.selector);
+        pots.withdrawChange(id);
+        // Still listed until the next proposal sweeps it.
+        assertEq(pots.openChanges(potId).length, 1);
+        vm.prank(ben);
+        pots.proposeRemovePayee(potId, HALL);
+        assertEq(pots.openChanges(potId).length, 1);
+        assertEq(pots.openChanges(potId)[0], id + 1);
+    }
+
+    function test_sweep_dropsSeveralFromTheMiddleAtOnce() public {
+        // Five open: the first, third and fifth expire; the second and fourth are agreed and waiting.
+        uint256[] memory ids = new uint256[](5);
+        vm.prank(ana);
+        ids[0] = pots.proposeRaiseLimit(potId, CATERER, 700 * ONE);
+        vm.prank(ben);
+        ids[1] = pots.proposeAddPayee(potId, dj, "DJ", ONE);
+        vm.prank(cleo);
+        ids[2] = pots.proposeRaiseLimit(potId, HALL, 400 * ONE);
+        vm.prank(ana);
+        ids[3] = pots.proposeLaterClose(potId, endTime + 1 days);
+        vm.prank(ben);
+        ids[4] = pots.proposeRaiseLimit(potId, HALL, 500 * ONE);
+        vm.prank(ana);
+        pots.approveChange(ids[1]);
+        vm.warp(block.timestamp + 6 days);
+        vm.prank(ben);
+        pots.approveChange(ids[3]);
+        vm.warp(block.timestamp + 1 days + 1);
+        vm.prank(cleo);
+        uint256 fresh = pots.proposeRemovePayee(potId, CATERER);
+        uint256[] memory open = pots.openChanges(potId);
+        assertEq(open.length, 3);
+        bool one;
+        bool three;
+        bool f;
+        for (uint256 i = 0; i < open.length; ++i) {
+            one = one || open[i] == ids[1];
+            three = three || open[i] == ids[3];
+            f = f || open[i] == fresh;
+        }
+        assertTrue(one && three && f, "the agreed ones and the new one stay");
+    }
+
+    function test_expiry_theLastSecondStillTakesAYes() public {
+        vm.prank(ana);
+        uint256 id = pots.proposeLowerLimit(potId, CATERER, 500 * ONE);
+        vm.warp(block.timestamp + 7 days);
+        vm.prank(ben);
+        pots.approveChange(id);
+        assertEq(_cap(CATERER), 500 * ONE);
+    }
+
+    function test_changeInfo_ofARemovedPayeesChange() public {
+        vm.prank(ana);
+        uint256 remove = pots.proposeRemovePayee(potId, HALL);
+        _agreed(remove);
+        NivPayPotsV2.ChangeView memory v = pots.changeInfo(remove);
+        assertEq(v.to, hall);
+        assertEq(uint8(v.status), uint8(NivPayPotsV2.ChangeStatus.Applied));
+        assertTrue(pots.isRemoved(potId, HALL));
     }
 
     function test_add_whenTheLastPlaceWasTakenMeanwhileIsRefused() public {
@@ -659,45 +832,78 @@ contract PotsChangesTest is PotsV2TestBase {
     // At most five open, and the proposer can withdraw
     // ---------------------------------------------------------------------
 
+    /// Who proposes the i-th of five changes: two each at most (MAX_OPEN_PER_PROPOSER).
+    function _proposer(uint256 i) internal view returns (address) {
+        return i < 2 ? ana : i < 4 ? ben : cleo;
+    }
+
+    /// A decider other than the proposer, to agree it.
+    function _agreer(address proposer) internal view returns (address) {
+        return proposer == ana ? cleo : ana;
+    }
+
     function test_open_atMostFive() public {
         uint256[] memory ids = new uint256[](5);
         for (uint256 i = 0; i < 5; ++i) {
-            vm.prank(ana);
+            vm.prank(_proposer(i));
             ids[i] = pots.proposeRaiseLimit(potId, CATERER, (700 + i) * ONE);
         }
         assertEq(pots.openChanges(potId).length, 5);
-        vm.prank(ben);
+        vm.prank(cleo);
         vm.expectRevert(NivPayPotsV2.TooManyOpenChanges.selector);
         pots.proposeAddPayee(potId, dj, "DJ", ONE);
 
-        vm.prank(ana);
-        pots.withdrawChange(ids[2]);
         vm.prank(ben);
+        pots.withdrawChange(ids[2]);
+        vm.prank(cleo);
         pots.proposeAddPayee(potId, dj, "DJ", ONE);
         assertEq(pots.openChanges(potId).length, 5);
     }
 
+    function test_open_atMostTwoFromOneDecider() public {
+        vm.startPrank(cleo);
+        pots.proposeRaiseLimit(potId, CATERER, 700 * ONE);
+        uint256 second = pots.proposeRaiseLimit(potId, CATERER, 701 * ONE);
+        // One decider can't take every place and keep the others from proposing.
+        vm.expectRevert(NivPayPotsV2.TooManyOpenChangesFromYou.selector);
+        pots.proposeRaiseLimit(potId, CATERER, 702 * ONE);
+        vm.stopPrank();
+        vm.prank(ana);
+        pots.proposeRemovePayee(potId, HALL);
+        vm.prank(cleo);
+        pots.withdrawChange(second);
+        vm.prank(cleo);
+        pots.proposeRaiseLimit(potId, CATERER, 702 * ONE);
+    }
+
     function test_open_agreedAndWaitingStillCounts() public {
         for (uint256 i = 0; i < 5; ++i) {
-            vm.prank(ana);
+            address by = _proposer(i);
+            vm.prank(by);
             uint256 id = pots.proposeRaiseLimit(potId, CATERER, (700 + i) * ONE);
-            _agreed(id);
+            vm.prank(_agreer(by));
+            pots.approveChange(id);
         }
-        vm.prank(ana);
+        vm.prank(cleo);
         vm.expectRevert(NivPayPotsV2.TooManyOpenChanges.selector);
         pots.proposeAddPayee(potId, dj, "DJ", ONE);
     }
 
     function test_open_expiredAndLapsedFreeTheirPlaces() public {
-        vm.startPrank(ana);
-        for (uint256 i = 0; i < 3; ++i) {
-            pots.proposeRaiseLimit(potId, CATERER, (700 + i) * ONE);
-        }
+        vm.prank(ana);
+        pots.proposeRaiseLimit(potId, CATERER, 700 * ONE);
+        vm.prank(ana);
+        pots.proposeRaiseLimit(potId, CATERER, 701 * ONE);
+        vm.prank(ben);
+        pots.proposeRaiseLimit(potId, CATERER, 702 * ONE);
+        vm.prank(ben);
         uint256 a = pots.proposeAddPayee(potId, dj, "DJ", ONE);
+        vm.prank(cleo);
         uint256 b = pots.proposeLaterClose(potId, endTime + 1 days);
-        vm.stopPrank();
-        _agreed(a);
-        _agreed(b);
+        vm.prank(ana);
+        pots.approveChange(a);
+        vm.prank(ana);
+        pots.approveChange(b);
 
         // The three never agreed expire after 7 days; the two agreed lapse 7 days after their wait.
         vm.warp(block.timestamp + WINDOW + APPLY + 1);
@@ -852,5 +1058,61 @@ contract PotsChangesTest is PotsV2TestBase {
         assertEq(p.threshold, 2);
         assertEq(p.approverCount, 3);
         assertEq(p.purpose, "Birthday");
+    }
+
+    function test_laterClose_thatIsNoLongerLaterIsRefused() public {
+        vm.prank(ana);
+        uint256 far = pots.proposeLaterClose(potId, endTime + 10 days);
+        vm.prank(ana);
+        uint256 near = pots.proposeLaterClose(potId, endTime + 5 days);
+        _agreed(far);
+        _agreed(near);
+        vm.warp(block.timestamp + WINDOW);
+        pots.applyChange(far);
+        // The closing date is already later than this one would make it.
+        vm.expectRevert(NivPayPotsV2.NotWider.selector);
+        pots.applyChange(near);
+        assertEq(pots.getPot(potId).endTime, endTime + 10 days);
+    }
+
+    function test_lapsed_onceRecordedStaysLapsed() public {
+        vm.prank(ana);
+        uint256 id = pots.proposeAddPayee(potId, dj, "DJ", 300 * ONE);
+        _agreed(id);
+        vm.warp(block.timestamp + WINDOW + APPLY + 1);
+        pots.lapseChange(id);
+        assertEq(uint8(_status(id)), uint8(NivPayPotsV2.ChangeStatus.Lapsed));
+        vm.prank(ana);
+        vm.expectRevert(NivPayPotsV2.ChangeNotOpen.selector);
+        pots.withdrawChange(id);
+        vm.expectRevert(NivPayPotsV2.ChangeNotReady.selector);
+        pots.applyChange(id);
+    }
+
+    function test_widening_closesExactlyWhenItWouldApplyIsRefused() public {
+        // The pot is closed from endTime on, so endTime equal to the wait's end is already too late.
+        uint256 pot = _birthday(uint64(block.timestamp + WINDOW));
+        vm.prank(ana);
+        vm.expectRevert(NivPayPotsV2.ClosesBeforeItApplies.selector);
+        pots.proposeAddPayee(pot, dj, "DJ", 300 * ONE);
+        // One second more and it can apply, at the last second before the close.
+        uint256 roomy = _birthday(uint64(block.timestamp + WINDOW + 1));
+        vm.prank(ana);
+        uint256 add = pots.proposeAddPayee(roomy, dj, "DJ", 300 * ONE);
+        vm.prank(ben);
+        pots.approveChange(add);
+        vm.warp(block.timestamp + WINDOW);
+        pots.applyChange(add);
+        assertEq(pots.getDestinations(roomy).length, 3);
+    }
+
+    function test_widening_agreedExactlyTooLateIsRefused() public {
+        uint256 pot = _birthday(uint64(block.timestamp + WINDOW + 1 hours));
+        vm.prank(ana);
+        uint256 add = pots.proposeAddPayee(pot, dj, "DJ", 300 * ONE);
+        vm.warp(block.timestamp + 1 hours);
+        vm.prank(ben);
+        vm.expectRevert(NivPayPotsV2.ClosesBeforeItApplies.selector);
+        pots.approveChange(add);
     }
 }

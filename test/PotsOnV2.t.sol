@@ -19,7 +19,7 @@ import {Mama60Test} from "./Mama60.t.sol";
 /// of them fails here. What V2 adds is tested in PotsChanges*.t.sol.
 
 function newV2(IERC20 token_, uint256 feeBps_, uint256 feeCap_, address feeRecipient_) returns (NivPayPots) {
-    return NivPayPots(address(new NivPayPotsV2(token_, feeBps_, feeCap_, feeRecipient_)));
+    return NivPayPots(address(new NivPayPotsV2(token_, feeBps_, feeCap_, feeRecipient_, 72 hours, 7 days)));
 }
 
 contract PotsCoreOnV2Test is PotsCoreTest {

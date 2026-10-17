@@ -45,17 +45,17 @@ contract PotsCoreTest is PotsTestBase {
 
     function test_constructor_revertsOnZeroToken() public {
         vm.expectRevert(NivPayPots.ZeroAddress.selector);
-        _newPots(IERC20(address(0)), 100, FEE_CAP, feeRecipient);
+        this.newPotsCall(IERC20(address(0)), 100, FEE_CAP, feeRecipient);
     }
 
     function test_constructor_revertsOnZeroFeeRecipient() public {
         vm.expectRevert(NivPayPots.ZeroAddress.selector);
-        _newPots(IERC20(address(token)), 100, FEE_CAP, address(0));
+        this.newPotsCall(IERC20(address(token)), 100, FEE_CAP, address(0));
     }
 
     function test_constructor_revertsAboveMaxFeeBps() public {
         vm.expectRevert(NivPayPots.FeeTooHigh.selector);
-        _newPots(IERC20(address(token)), 101, FEE_CAP, feeRecipient);
+        this.newPotsCall(IERC20(address(token)), 101, FEE_CAP, feeRecipient);
     }
 
     function test_constructor_allowsZeroFee() public {

@@ -82,18 +82,25 @@ contract NivPayPotsV2 is ReentrancyGuard {
     /// uint256 for the share supply growth described on _convertToShares.
     uint256 public constant DECIMALS_OFFSET = 3;
 
-    /// @notice How long a widening change waits after the yes that agrees it
-    /// before anyone may apply it. The time every funder has to see it coming
-    /// and take their money out if they disagree.
-    uint256 public constant EXIT_WINDOW = 72 hours;
+    /// @notice The shortest and longest exit window a deployment may have.
+    /// The real deployment uses 72 hours (script/DeployPotsV2.s.sol, checked
+    /// by test/DeployPotsV2.t.sol); a short one is only for a staging copy.
+    uint256 public constant MIN_EXIT_WINDOW = 1 minutes;
+    uint256 public constant MAX_EXIT_WINDOW = 30 days;
 
-    /// @notice How long after its wait a widening change may be applied.
-    /// After that it has lapsed and can never apply.
-    uint256 public constant APPLY_PERIOD = 7 days;
+    /// @notice The shortest and longest apply period a deployment may have.
+    /// The real deployment uses 7 days (script/DeployPotsV2.s.sol, checked by
+    /// test/DeployPotsV2.t.sol); a short one is only for a staging copy.
+    uint256 public constant MIN_APPLY_PERIOD = 1 minutes;
+    uint256 public constant MAX_APPLY_PERIOD = 30 days;
 
     /// @notice Changes open on one pot at once: gathering yeses, or agreed
     /// and not yet applied.
     uint256 public constant MAX_OPEN_CHANGES = 5;
+
+    /// @notice Changes one decider may have open on a pot at once, so no one
+    /// decider can take every place and keep the others from proposing.
+    uint256 public constant MAX_OPEN_PER_PROPOSER = 2;
 
     // ---------------------------------------------------------------------
     // Immutables
@@ -112,6 +119,15 @@ contract NivPayPotsV2 is ReentrancyGuard {
 
     /// @notice The only address that can collect accrued fees.
     address public immutable feeRecipient;
+
+    /// @notice How long a widening change waits after the yes that agrees it
+    /// before anyone may apply it. The time every funder has to see it coming
+    /// and take their money out if they disagree. Fixed at deployment.
+    uint256 public immutable EXIT_WINDOW;
+
+    /// @notice How long after its wait a widening change may be applied.
+    /// After that it has lapsed and can never apply. Fixed at deployment.
+    uint256 public immutable APPLY_PERIOD;
 
     // ---------------------------------------------------------------------
     // Types
@@ -181,7 +197,10 @@ contract NivPayPotsV2 is ReentrancyGuard {
         /// Never got its yeses within PROPOSAL_TTL.
         Expired,
         /// Agreed, but nobody applied it within APPLY_PERIOD of its wait.
-        Lapsed
+        Lapsed,
+        /// Ended unapplied because the payee it was about was lowered or
+        /// removed after it: a raise agreed before a lowering never undoes it.
+        Overridden
     }
 
     struct Change {
@@ -205,6 +224,7 @@ contract NivPayPotsV2 is ReentrancyGuard {
         bool applied;
         bool withdrawn;
         bool lapsed;
+        bool overridden;
     }
 
     // ---------------------------------------------------------------------
@@ -312,6 +332,8 @@ contract NivPayPotsV2 is ReentrancyGuard {
     );
     event ChangeWithdrawn(uint256 indexed changeId, uint256 indexed potId, address indexed proposer);
     event ChangeLapsed(uint256 indexed changeId, uint256 indexed potId);
+    /// @notice A change ended unapplied by a later narrowing of the same payee (`byChangeId`).
+    event ChangeOverridden(uint256 indexed changeId, uint256 indexed potId, uint256 byChangeId);
 
     // ---------------------------------------------------------------------
     // Errors
@@ -319,6 +341,8 @@ contract NivPayPotsV2 is ReentrancyGuard {
 
     error ZeroAddress();
     error FeeTooHigh();
+    error BadExitWindow();
+    error BadApplyPeriod();
     error NoSuchPot();
     error NoSuchProposal();
     error NoSuchDestination();
@@ -358,6 +382,8 @@ contract NivPayPotsV2 is ReentrancyGuard {
     error ChangeNotReady();
     error ChangeNotOpen();
     error ChangeNotLapsed();
+    error TooManyOpenChangesFromYou();
+    error ClosesBeforeItApplies();
 
     // ---------------------------------------------------------------------
     // Constructor
@@ -367,13 +393,26 @@ contract NivPayPotsV2 is ReentrancyGuard {
     /// @param feeBps_ Payout fee in basis points. Capped at MAX_FEE_BPS forever.
     /// @param feeCap_ Absolute ceiling on the fee taken from one payout.
     /// @param feeRecipient_ The only address allowed to collect accrued fees.
-    constructor(IERC20 token_, uint256 feeBps_, uint256 feeCap_, address feeRecipient_) {
+    /// @param exitWindow_ EXIT_WINDOW, between MIN_EXIT_WINDOW and MAX_EXIT_WINDOW.
+    /// @param applyPeriod_ APPLY_PERIOD, between MIN_APPLY_PERIOD and MAX_APPLY_PERIOD.
+    constructor(
+        IERC20 token_,
+        uint256 feeBps_,
+        uint256 feeCap_,
+        address feeRecipient_,
+        uint256 exitWindow_,
+        uint256 applyPeriod_
+    ) {
         if (address(token_) == address(0) || feeRecipient_ == address(0)) revert ZeroAddress();
         if (feeBps_ > MAX_FEE_BPS) revert FeeTooHigh();
+        if (exitWindow_ < MIN_EXIT_WINDOW || exitWindow_ > MAX_EXIT_WINDOW) revert BadExitWindow();
+        if (applyPeriod_ < MIN_APPLY_PERIOD || applyPeriod_ > MAX_APPLY_PERIOD) revert BadApplyPeriod();
         token = token_;
         feeBps = feeBps_;
         feeCap = feeCap_;
         feeRecipient = feeRecipient_;
+        EXIT_WINDOW = exitWindow_;
+        APPLY_PERIOD = applyPeriod_;
     }
 
     // ---------------------------------------------------------------------
@@ -855,6 +894,8 @@ contract NivPayPotsV2 is ReentrancyGuard {
         if (!_isApprover[potId][msg.sender]) revert NotApprover();
         _sweep(potId);
         if (_openChanges[potId].length >= MAX_OPEN_CHANGES) revert TooManyOpenChanges();
+        if (_openBy(potId, msg.sender) >= MAX_OPEN_PER_PROPOSER) revert TooManyOpenChangesFromYou();
+        if (_widens(kind) && pot.endTime <= block.timestamp + EXIT_WINDOW) revert ClosesBeforeItApplies();
 
         changeId = changeCount++;
         c = _changes[changeId];
@@ -892,6 +933,10 @@ contract NivPayPotsV2 is ReentrancyGuard {
         c.agreed = true;
         c.agreedAt = at;
         if (_widens(c.kind)) {
+            // Agreed only if it could apply: funders are told of it, and should only be told of what can happen.
+            // Closed from endTime on, so a pot closing exactly when the wait ends is too soon as well.
+            if (pot.endTime <= uint256(at) + EXIT_WINDOW) revert ClosesBeforeItApplies();
+            _checkWidening(c, pot);
             emit ChangeApproved(changeId, c.potId, at + uint64(EXIT_WINDOW), at + uint64(EXIT_WINDOW + APPLY_PERIOD));
         } else {
             emit ChangeApproved(changeId, c.potId, at, at);
@@ -906,18 +951,16 @@ contract NivPayPotsV2 is ReentrancyGuard {
     function _apply(uint256 changeId, Change storage c, Pot storage pot) private {
         uint256 potId = c.potId;
         ChangeKind kind = c.kind;
+        if (_widens(kind)) _checkWidening(c, pot);
         if (kind == ChangeKind.AddPayee) {
             Destination[] storage ds = _destinations[potId];
-            if (ds.length >= MAX_DESTINATIONS) revert BadDestinationCount();
             c.destIndex = uint16(ds.length);
             ds.push(Destination({to: c.to, label: c.label, cap: c.limit, spent: 0}));
         } else if (kind == ChangeKind.LaterClose) {
-            if (c.endTime <= pot.endTime) revert NotWider();
             pot.endTime = c.endTime;
         } else {
             Destination storage d = _livePayee(potId, c.destIndex);
             if (kind == ChangeKind.RaiseLimit) {
-                if (c.limit <= d.cap) revert NotWider();
                 d.cap = c.limit;
             } else if (kind == ChangeKind.LowerLimit) {
                 if (c.limit >= d.cap) revert NotNarrower();
@@ -927,9 +970,45 @@ contract NivPayPotsV2 is ReentrancyGuard {
                 _removed[potId][c.destIndex] = true;
             }
         }
+        // A lowering ends every open raise of that payee, and a removal every open change of it,
+        // so a raise agreed before never undoes the narrowing when it applies later.
+        if (!_widens(kind)) _override(potId, changeId, c.destIndex, kind == ChangeKind.RemovePayee);
         c.applied = true;
         _dropOpen(potId, changeId);
         emit ChangeApplied(changeId, potId, kind, c.destIndex, c.limit, c.endTime);
+    }
+
+    /// @dev Whether a widening change could apply to the pot as it is now.
+    function _checkWidening(Change storage c, Pot storage pot) private view {
+        if (c.kind == ChangeKind.AddPayee) {
+            if (_destinations[c.potId].length >= MAX_DESTINATIONS) revert BadDestinationCount();
+        } else if (c.kind == ChangeKind.LaterClose) {
+            if (c.endTime <= pot.endTime) revert NotWider();
+        } else if (c.limit <= _livePayee(c.potId, c.destIndex).cap) {
+            revert NotWider();
+        }
+    }
+
+    /// @dev Ends the open changes a narrowing of payee `index` made moot. Bounded by MAX_OPEN_CHANGES.
+    function _override(uint256 potId, uint256 byChangeId, uint16 index, bool removed) private {
+        uint256[] storage open = _openChanges[potId];
+        for (uint256 i = open.length; i > 0; --i) {
+            uint256 id = open[i - 1];
+            Change storage o = _changes[id];
+            bool samePayee = (o.kind == ChangeKind.RaiseLimit || o.kind == ChangeKind.LowerLimit || o.kind == ChangeKind.RemovePayee) && o.destIndex == index;
+            if (id == byChangeId || !samePayee || (!removed && o.kind != ChangeKind.RaiseLimit)) continue;
+            o.overridden = true;
+            _dropOpen(potId, id);
+            emit ChangeOverridden(id, potId, byChangeId);
+        }
+    }
+
+    /// @dev Bounded by MAX_OPEN_CHANGES.
+    function _openBy(uint256 potId, address proposer) private view returns (uint256 n) {
+        uint256[] storage open = _openChanges[potId];
+        for (uint256 i = 0; i < open.length; ++i) {
+            if (_changes[open[i]].proposer == proposer) ++n;
+        }
     }
 
     function _lapse(uint256 changeId, Change storage c) private {
@@ -969,6 +1048,7 @@ contract NivPayPotsV2 is ReentrancyGuard {
     function _changeStatus(Change storage c) private view returns (ChangeStatus) {
         if (c.applied) return ChangeStatus.Applied;
         if (c.withdrawn) return ChangeStatus.Withdrawn;
+        if (c.overridden) return ChangeStatus.Overridden;
         if (c.lapsed) return ChangeStatus.Lapsed;
         if (!c.agreed) {
             return block.timestamp > c.createdAt + PROPOSAL_TTL ? ChangeStatus.Expired : ChangeStatus.Pending;
@@ -980,8 +1060,10 @@ contract NivPayPotsV2 is ReentrancyGuard {
         return ChangeStatus.Lapsed;
     }
 
+    /// @dev ChangeKind lists the three widening kinds first (AddPayee,
+    /// RaiseLimit, LaterClose), then the two narrowing ones.
     function _widens(ChangeKind kind) private pure returns (bool) {
-        return kind == ChangeKind.AddPayee || kind == ChangeKind.RaiseLimit || kind == ChangeKind.LaterClose;
+        return kind < ChangeKind.LowerLimit;
     }
 
     function _livePayee(uint256 potId, uint16 destIndex) private view returns (Destination storage) {
@@ -1136,7 +1218,8 @@ contract NivPayPotsV2 is ReentrancyGuard {
         _requirePot(potId);
         if (index >= _destinations[potId].length) revert NoSuchDestination();
         Destination storage d = _destinations[potId][index];
-        return (d.to, d.label, d.cap, d.spent, d.cap - d.spent);
+        // A removed payee can be paid nothing more.
+        return (d.to, d.label, d.cap, d.spent, _removed[potId][index] ? 0 : d.cap - d.spent);
     }
 
     /// @notice A funder's share balance and what those shares are worth right
@@ -1285,8 +1368,9 @@ contract NivPayPotsV2 is ReentrancyGuard {
             }
         }
 
-        uint64 appliesAt;
-        uint64 lapsesAt;
+        // Zero until the change is agreed.
+        uint64 appliesAt = 0;
+        uint64 lapsesAt = 0;
         if (c.agreed) {
             bool wide = _widens(c.kind);
             appliesAt = wide ? c.agreedAt + uint64(EXIT_WINDOW) : c.agreedAt;

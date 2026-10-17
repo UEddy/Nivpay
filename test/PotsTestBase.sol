@@ -35,6 +35,14 @@ abstract contract PotsTestBase is Test {
         return new NivPayPots(token_, feeBps_, feeCap_, feeRecipient_);
     }
 
+    /// @notice _newPots as an external call. `new` runs as a cheatcode here, so
+    /// vm.expectRevert only catches a constructor's revert through a call like
+    /// this one; called directly, a constructor that should revert and doesn't
+    /// would still pass.
+    function newPotsCall(IERC20 token_, uint256 feeBps_, uint256 feeCap_, address feeRecipient_) external returns (NivPayPots) {
+        return _newPots(token_, feeBps_, feeCap_, feeRecipient_);
+    }
+
     function _fundAccount(address who, uint256 amount) internal {
         token.mint(who, amount);
         vm.prank(who);
