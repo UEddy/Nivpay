@@ -48,6 +48,34 @@ export interface FeedStore {
   save(state: FeedState): Promise<void>;
 }
 
+/**
+ * What a saved row gives back to the feed: its cursor, its events and the
+ * gaps still to fill. A store that kept only the first two would make a
+ * history cut short look whole. A row saved before gaps existed was read
+ * from its first block up, so it has none.
+ */
+export function savedFeedState(row: FeedState): FeedState {
+  return { cursor: row.cursor, events: row.events, gaps: row.gaps ?? [] };
+}
+
+/**
+ * A pot's saved feed, filled again where it was cut short. Until gaps were
+ * read back (savedFeedState), a pot left before its history had filled came
+ * back looking whole without it. A pot's whole history has its PotCreated, at
+ * its first block, so a saved one without it and with nothing left to fill is
+ * filled again from that block; what it already has is kept.
+ */
+export function refillCutShort(store: FeedStore, firstBlock: bigint): FeedStore {
+  return {
+    save: (state) => store.save(state),
+    async load() {
+      const saved = await store.load();
+      if (!saved || saved.cursor <= firstBlock || (saved.gaps?.length ?? 0) > 0 || saved.events.some((e) => e.name === "PotCreated")) return saved;
+      return { ...saved, gaps: [[firstBlock, saved.cursor - 1n]] };
+    },
+  };
+}
+
 /** Inclusive [from, to] pages of at most `size` blocks. */
 export function pages(from: bigint, to: bigint, size: bigint): [bigint, bigint][] {
   const out: [bigint, bigint][] = [];

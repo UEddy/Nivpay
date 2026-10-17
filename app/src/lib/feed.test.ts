@@ -99,7 +99,7 @@ test("the feed reports history first, then only what is new, and resumes from it
 // First open of an old pot: newest history first, in the background
 // ---------------------------------------------------------------------------
 
-import { fillTop, pagesDown, type FeedProgress } from "./feed.ts";
+import { fillTop, pagesDown, refillCutShort, savedFeedState, type FeedProgress } from "./feed.ts";
 
 const fast = { pageSize: 101n, parallel: 2, everyMs: 5, backParallel: 2, pauseMs: 1, retryMs: 5 };
 
@@ -202,4 +202,58 @@ test("a history fill cut short resumes from its saved gap, and nothing is read t
   feed.stop();
   assert.ok(asked.every(([, to]) => to <= 300n || to >= 501n), "only the gap and what is new");
   assert.deepEqual(store.get()?.events.map((e) => e.block), [50n, 450n]);
+});
+
+/** A store kept the way IndexedDB keeps it (lib/idb.ts): a copy of the row with its key, read back through savedFeedState. */
+function rowStore() {
+  let row: (FeedState & { key: string }) | undefined;
+  return {
+    load: async () => (row ? savedFeedState(structuredClone(row)) : undefined),
+    save: async (s: FeedState) => void (row = structuredClone({ key: "pot", ...s })),
+    get: () => row,
+  };
+}
+
+test("a feed stopped while its history fills comes back from the saved row and fills the rest", async () => {
+  const { source } = fakeSource([ev(50n), ev(450n)], 500n);
+  const store = rowStore();
+  const first = new PotFeed(source, store, 0n, fast);
+  await new Promise<void>((resolve) => first.start(() => resolve()));
+  first.stop();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.ok((store.get()?.gaps?.length ?? 0) > 0, "left with history still to fill");
+  const second = new PotFeed(source, store, 0n, fast);
+  await new Promise<void>((resolve) => second.start((_, __, p) => p.complete && resolve()));
+  second.stop();
+  assert.deepEqual(
+    store.get()?.events.map((e) => e.block),
+    [50n, 450n],
+  );
+});
+
+test("a row saved before gaps existed was read from its first block up, so nothing is left to fill", () => {
+  assert.deepEqual(savedFeedState({ cursor: 9n, events: [] }), { cursor: 9n, events: [], gaps: [] });
+  assert.deepEqual(savedFeedState({ cursor: 9n, events: [], gaps: [[1n, 4n]] }).gaps, [[1n, 4n]]);
+});
+
+test("a pot history saved without its gaps by an earlier version fills again from the pot's first block, once", async () => {
+  const { source, asked } = fakeSource([ev(100n, 0, "PotCreated"), ev(150n), ev(450n)], 500n);
+  // What the earlier version left: the newest events, the cursor at the top, the gaps gone.
+  const store = memoryStore({ cursor: 501n, events: [ev(450n)], gaps: [] });
+  const feed = new PotFeed(source, refillCutShort(store, 100n), 100n, fast);
+  await new Promise<void>((resolve) => feed.start((all, _, p) => p.complete && all.length === 3 && resolve()));
+  feed.stop();
+  assert.deepEqual(
+    store.get()?.events.map((e) => e.name),
+    ["PotCreated", "Funded", "Funded"],
+  );
+  // A whole history is left as it is.
+  const before = asked.length;
+  const again = new PotFeed(source, refillCutShort(memoryStore(store.get()), 100n), 100n, fast);
+  await new Promise<void>((resolve) => again.start((_, __, p) => p.complete && resolve()));
+  again.stop();
+  assert.deepEqual(asked.slice(before), [], "nothing is read again");
+  // Nor is one still being filled, or one whose first block isn't finalized yet.
+  assert.deepEqual((await refillCutShort(memoryStore({ cursor: 501n, events: [], gaps: [[100n, 200n]] }), 100n).load())?.gaps, [[100n, 200n]]);
+  assert.deepEqual((await refillCutShort(memoryStore({ cursor: 100n, events: [], gaps: [] }), 100n).load())?.gaps, []);
 });

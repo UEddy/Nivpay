@@ -5,7 +5,7 @@ import { LOG_PAGE_BLOCKS } from "./config.ts";
 import { DEPLOYMENT, POTS } from "./deployment.ts";
 import type { Person, Share } from "./draft.ts";
 import { AppError } from "./errors.ts";
-import { PotFeed, type FeedSource, type PotEvent } from "./feed.ts";
+import { PotFeed, refillCutShort, type FeedSource, type PotEvent } from "./feed.ts";
 import { idbFeedStore } from "./idb.ts";
 import { verifyLabels, type PotLink } from "./invites.ts";
 import { readClient } from "./rpc.ts";
@@ -145,7 +145,7 @@ function rpcSource(potId: bigint): FeedSource {
 }
 
 export function potFeed(potId: bigint, fromBlock: bigint): PotFeed {
-  const feed = new PotFeed(rpcSource(potId), idbFeedStore(`${POTS}:${potId}`), fromBlock, {
+  const feed = new PotFeed(rpcSource(potId), refillCutShort(idbFeedStore(`${POTS}:${potId}`), fromBlock), fromBlock, {
     pageSize: LOG_PAGE_BLOCKS,
     parallel: 4,
     everyMs: 1_000,

@@ -1,5 +1,5 @@
 import type { Address } from "viem";
-import type { FeedState, FeedStore } from "./feed.ts";
+import { savedFeedState, type FeedState, type FeedStore } from "./feed.ts";
 import type { PendingWrite, WriteStore } from "./writes.ts";
 
 // Pending writes live in IndexedDB so a reload, a second tab or a crash
@@ -82,7 +82,7 @@ export function idbFeedStore(key: string): FeedStore {
   return {
     load: async () => {
       const row = await run<(FeedState & { key: string }) | undefined>("readonly", (s) => s.get(key), FEEDS);
-      return row ? { cursor: row.cursor, events: row.events } : undefined;
+      return row ? savedFeedState(row) : undefined;
     },
     save: async (state) => {
       await run("readwrite", (s) => s.put({ key, ...state }), FEEDS);

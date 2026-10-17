@@ -854,6 +854,12 @@ These are limits of the design as built, stated so nobody relies on more.
   pot 0) and fills its history newest first, but the oldest entries arrive
   last: pot 0, 167,624 blocks old with its only events at the start when it was
   timed on 10 Oct 2026, took 11.6 minutes to complete. See `docs/APP-CONTRACT-MAP.md` section 12.
+  Leaving before it finishes is fine: what is still to read is saved with
+  what was read, and the next open carries on from there
+  (`savedFeedState` in `app/src/lib/feed.ts`). Until 17 Oct 2026 it was not
+  read back, so a pot left early came back without its oldest entries; a
+  pot saved like that is read again from its first block, once
+  (`refillCutShort`).
 
 ## Protecting people from bad actors
 
