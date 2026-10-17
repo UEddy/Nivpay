@@ -2499,6 +2499,94 @@ button.avatar {
   }
 }
 
+/* One big Tap to speak, when "Hey NivPay" or a ?voice=1 link asked and the browser wants a tap first. */
+.voice-big {
+  min-height: 72px;
+  font-size: 19px;
+}
+
+/* "Hey NivPay": a bar across the top whenever the microphone listens for it, or says why it stopped. */
+.wake-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: max(6px, env(safe-area-inset-top)) 16px 6px;
+  background: var(--chip);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.3;
+}
+#root:has(> .wake-bar) > .screen,
+#root:has(> .wake-bar) > .page {
+  min-height: calc(100dvh - 44px);
+  padding-top: 0;
+}
+.wake-text {
+  flex: 1;
+  min-width: 0;
+}
+.wake-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wake-bar.listening .wake-dot {
+    animation: voice-pulse 1.6s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Listening, without the pulse: a steady dot, a little dimmed. */
+  .wake-bar.listening .wake-dot {
+    opacity: 0.8;
+  }
+}
+.wake-action {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  background: var(--card);
+  color: var(--primary-text);
+  font: 600 14px/1 var(--font-body);
+  cursor: pointer;
+}
+.wake-close {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+/* Profile, Voice: the link that opens Send ready to listen, and the Siri and Google steps. */
+.voice-link {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--chip);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.voice-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 15px;
+}
+
 /* Get help: the last answers to this phone's sends. */
 .recent-sends {
   list-style: none;

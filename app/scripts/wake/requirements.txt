@@ -1,0 +1,10 @@
+# Training and checking "Hey NivPay" only; nothing here is shipped in the app.
+numpy==2.5.4
+scipy==1.18.1
+soundfile==0.14.0
+onnx==1.23.2
+onnxruntime==1.31.0
+kokoro-onnx==0.6.1
+espeakng-loader==0.2.4
+phonemizer==3.4.0
+ai-edge-litert==2.3.0

@@ -1,21 +1,18 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import { ContactStore, PaidStore } from "../lib/contacts.ts";
 import { DEPLOYMENT } from "../lib/deployment.ts";
-import { language } from "../lib/locale.ts";
-import { listenOnce, SpeechError, speechAvailable } from "../lib/speech.ts";
+import { listenOnce, SpeechError } from "../lib/speech.ts";
 import { parseVoice, PAYMENTS_WITH_PERSON, VoiceStore, type VoiceCommand } from "../lib/voice.ts";
-import { HowThisWorks, NoticeLine, Sheet, type Notice } from "./ui.tsx";
+import { micPermission, onAsk, takeAsk, voiceBusy, voiceSettingsChanged } from "../lib/voiceAsk.ts";
+import { voiceOffered, voiceReady, wakeOffered } from "../lib/voiceOn.ts";
+import { copyLink, CopyLinkButton, HowThisWorks, NoticeLine, Sheet, type Notice } from "./ui.tsx";
 
 /** An account, for what this file shows; named so, since screen text is checked for words people mustn't see. */
 type Account = Address;
 
-/** Voice is offered only in English (its parser is tested in English only), where the browser can do speech. */
-export const voiceOffered = () => language() === "en" && speechAvailable();
-
-/** On for this account, unlocked, and offered here. */
-export const voiceReady = (account: Account) => voiceOffered() && new VoiceStore(localStorage, DEPLOYMENT, account).active();
+export { voiceOffered, voiceReady };
 
 function MicIcon() {
   return (
@@ -27,10 +24,12 @@ function MicIcon() {
 }
 
 /**
- * The microphone on Send and on a pot's screen. It listens only after a tap,
- * for one sentence, shows the words heard, and hands back a command for the
- * screen to fill in. Before the first use it says who turns the words into
- * text. Hidden unless voice is on for this account (VoiceSection).
+ * The microphone on Send and on a pot's screen. It listens after a tap, or
+ * when "Hey NivPay" or a ?voice=1 link asks (lib/voiceAsk.ts), for one
+ * sentence, shows the words heard, and hands back a command for the screen to
+ * fill in. Before the first use it says who turns the words into text. Where
+ * the browser wants a tap before it listens, an ask shows one big Tap to
+ * speak button. Hidden unless voice is on for this account (VoiceSection).
  */
 export function VoiceButton(props: {
   account: Account;
@@ -45,17 +44,25 @@ export function VoiceButton(props: {
   const [listening, setListening] = useState(false);
   const [heard, setHeard] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  // An ask came while the browser wants a tap first: one big button to tap.
+  const [tapFirst, setTapFirst] = useState(false);
   const stopRef = useRef<() => void>(() => {});
-  if (!voiceReady(props.account)) return null;
+  const listeningRef = useRef(false);
 
-  const listen = async () => {
+  /** Listens for one sentence. `asked`: no tap started it, so a refusal may only mean a tap is wanted. */
+  const listen = async (asked = false) => {
+    if (listeningRef.current) return;
+    listeningRef.current = true;
     props.onStart?.();
     setNotice(null);
     setHeard(null);
+    setTapFirst(false);
     setListening(true);
-    const session = listenOnce("en-US");
-    stopRef.current = session.stop;
+    // The wake word lets the microphone go while the speech service has it.
+    voiceBusy(true);
     try {
+      const session = listenOnce("en-US");
+      stopRef.current = session.stop;
       const text = await session.heard;
       setHeard(text);
       const cmd = parseVoice(text);
@@ -64,11 +71,38 @@ export function VoiceButton(props: {
       else props.onCommand(cmd, text);
     } catch (e) {
       const reason = e instanceof SpeechError ? e.reason : "";
-      if (reason !== "aborted") setNotice({ tone: "bad", text: reason === "not-allowed" || reason === "service-not-allowed" ? copy.voiceMicRefused : copy.voiceNotHeard, code: ERROR_CODES.VOICE_FAILED });
+      const refused = reason === "not-allowed" || reason === "service-not-allowed";
+      if (refused && asked && (await micPermission()) !== "denied") setTapFirst(true);
+      else if (reason !== "aborted") setNotice({ tone: "bad", text: refused ? copy.voiceMicRefused : copy.voiceNotHeard, code: ERROR_CODES.VOICE_FAILED });
     } finally {
+      listeningRef.current = false;
       setListening(false);
+      voiceBusy(false);
     }
   };
+
+  /** "Hey NivPay" or a ?voice=1 link asks: listen now if nothing needs a tap first, else ask for one. */
+  const answer = async () => {
+    if (listeningRef.current || props.disabled) return;
+    if (!store.get().explained) return setExplaining(true);
+    if ((await micPermission()) !== "granted") return setTapFirst(true);
+    void listen(true);
+  };
+  const answerRef = useRef(answer);
+  answerRef.current = answer;
+  const ready = voiceReady(props.account);
+  useEffect(() => {
+    if (!ready) return;
+    const take = () => {
+      if (takeAsk()) void answerRef.current();
+    };
+    // An ask made just before this screen opened, then any while it is open.
+    take();
+    return onAsk(take);
+  }, [ready]);
+
+  if (!ready) return null;
+
   const tap = () => {
     if (listening) return stopRef.current();
     if (!store.get().explained) return setExplaining(true);
@@ -77,10 +111,17 @@ export function VoiceButton(props: {
 
   return (
     <div className="voice">
-      <button type="button" className={`btn voice-btn${listening ? " listening" : ""}`} disabled={props.disabled} aria-pressed={listening} onClick={tap}>
-        <MicIcon />
-        <span>{listening ? copy.voiceListening : copy.voiceSpeak}</span>
-      </button>
+      {tapFirst && !listening ? (
+        <button type="button" className="pill-btn voice-big" disabled={props.disabled} onClick={tap}>
+          <MicIcon />
+          <span>{copy.voiceTapToSpeak}</span>
+        </button>
+      ) : (
+        <button type="button" className={`btn voice-btn${listening ? " listening" : ""}`} disabled={props.disabled} aria-pressed={listening} onClick={tap}>
+          <MicIcon />
+          <span>{listening ? copy.voiceListening : copy.voiceSpeak}</span>
+        </button>
+      )}
       {heard !== null && <p className="hint voice-heard">{copy.voiceHeard(heard || "…")}</p>}
       {notice && <NoticeLine notice={notice} />}
       {explaining && (
@@ -108,12 +149,60 @@ export function VoiceButton(props: {
   );
 }
 
+/** The link that opens Send ready to listen, on this site. */
+export const voiceLink = (origin: string) => `${origin}/?voice=1`;
+
+/** "Hey Siri" and "Hey Google": short guides, each with the link to copy. */
+function AssistantGuides() {
+  const link = voiceLink(location.origin);
+  const copyButton = <CopyLinkButton onCopy={() => copyLink(link)} />;
+  return (
+    <>
+      <p className="settings-group">{copy.voiceOpenTitle}</p>
+      <p className="hint">{copy.voiceOpenLink}</p>
+      <p className="voice-link">
+        <span className="voice-link-text">{link}</span>
+      </p>
+      <details className="how-it-works">
+        <summary>{copy.siriTitle}</summary>
+        <div className="how-it-works-body">
+          <ol className="voice-steps">
+            <li>{copy.siriStep1}</li>
+            <li>{copy.siriStep2}</li>
+            <li>
+              {copy.siriStep3} {copyButton}
+            </li>
+            <li>{copy.siriStep4}</li>
+            <li>{copy.siriStep5}</li>
+          </ol>
+          <p className="hint">{copy.siriSafari}</p>
+        </div>
+      </details>
+      <details className="how-it-works">
+        <summary>{copy.googleTitle}</summary>
+        <div className="how-it-works-body">
+          <ol className="voice-steps">
+            <li>{copy.googleStep1}</li>
+            <li>{copy.googleStep2}</li>
+            <li>{copy.googleStep3}</li>
+            <li>
+              {copy.googleStep4} {copyButton}
+            </li>
+          </ol>
+        </div>
+      </details>
+    </>
+  );
+}
+
 /**
- * Voice, in Profile: on or off, and which contacts voice may pay. A contact
- * can be marked only once this phone has seen 10 final payments with them,
- * sent or received, including one paid to them; until then it shows "x of
- * 10". Voice can't mark anyone itself. Hidden in other languages and where
- * the browser can't do speech.
+ * Voice, in Profile: on or off, listening for "Hey NivPay", which contacts
+ * voice may pay, and how to open NivPay ready to listen from Siri or Google.
+ * A contact can be marked only once this phone has seen 10 final payments
+ * with them, sent or received, including one paid to them; until then it
+ * shows "x of 10". Voice can't mark anyone itself. Hidden in other languages
+ * and where the browser can't do speech; the wake word switch is hidden too
+ * where the browser can't hear it on the phone.
  */
 export function VoiceSection(props: { account: Account }) {
   const store = useMemo(() => new VoiceStore(localStorage, DEPLOYMENT, props.account), [props.account]);
@@ -131,6 +220,7 @@ export function VoiceSection(props: { account: Account }) {
           onChange={(e) => {
             store.setOn(e.target.checked);
             setState(store.get());
+            voiceSettingsChanged();
           }}
         />
         <span>{copy.voiceCommands}</span>
@@ -139,6 +229,28 @@ export function VoiceSection(props: { account: Account }) {
       <HowThisWorks>
         <p className="hint">{copy.voiceCannot}</p>
       </HowThisWorks>
+      {wakeOffered() && (
+        <>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={state.on && state.wake}
+              disabled={!state.on}
+              onChange={(e) => {
+                store.setWake(e.target.checked);
+                setState(store.get());
+                voiceSettingsChanged();
+              }}
+            />
+            <span>{copy.wakeSwitch}</span>
+          </label>
+          <p className="hint">{state.on ? copy.wakeWhatItDoes : copy.wakeNeedsVoice}</p>
+          <HowThisWorks>
+            <p className="hint">{copy.wakeOnPhone}</p>
+            <p className="hint">{copy.wakeStops}</p>
+          </HowThisWorks>
+        </>
+      )}
       <p className="settings-group">{copy.voiceTrustedTitle}</p>
       {contacts.length === 0 ? (
         <p className="hint">{copy.voiceNoContacts}</p>
@@ -170,6 +282,7 @@ export function VoiceSection(props: { account: Account }) {
           );
         })
       )}
+      <AssistantGuides />
     </section>
   );
 }

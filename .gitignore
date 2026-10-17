@@ -62,3 +62,6 @@ video/node_modules/
 video/.cache/
 video/.render/
 video/privacy-denylist.txt
+
+# "Hey NivPay" training: downloads, voices made for it and features (app/scripts/wake/fetch.sh).
+/app/scripts/wake/work/

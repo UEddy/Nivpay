@@ -207,6 +207,8 @@ type KeyValue = Pick<Storage, "getItem" | "setItem">;
 
 export type VoiceState = {
   on: boolean;
+  /** Listening for "Hey NivPay" while the app is open (lib/wake), on top of voice being on. */
+  wake: boolean;
   /** The speech service has been explained and the person said go ahead. */
   explained: boolean;
   /** Contacts marked Trusted for voice. */
@@ -219,7 +221,7 @@ export type VoiceState = {
   withPerson: Record<string, string[]>;
 };
 
-const FRESH: VoiceState = { on: false, explained: false, trusted: [], withPerson: {} };
+const FRESH: VoiceState = { on: false, wake: false, explained: false, trusted: [], withPerson: {} };
 
 /** Voice, per deployment and account, on this phone. */
 export class VoiceStore {
@@ -244,6 +246,7 @@ export class VoiceStore {
       }
       return {
         on: raw.on === true,
+        wake: raw.wake === true,
         explained: raw.explained === true,
         trusted: Array.isArray(raw.trusted) ? (raw.trusted as unknown[]).filter((a): a is string => typeof a === "string" && isAddress(a)).map((a) => getAddress(a)) : [],
         withPerson,
@@ -278,6 +281,10 @@ export class VoiceStore {
 
   setOn(on: boolean): void {
     this.set({ ...this.get(), on });
+  }
+
+  setWake(wake: boolean): void {
+    this.set({ ...this.get(), wake });
   }
 
   active(): boolean {
