@@ -43,6 +43,8 @@ import { LimitStore, settle } from "./lib/limits.ts";
 import { dismiss, fromArrivals, fromPoll, fromRequests, markAllRead, markRead, NotesStore, start as startNotes, unread, withoutRequestsFrom, type Funding, type Note, type NotesState, type PollInputs } from "./lib/notes.ts";
 import { MutedStore } from "./lib/inbox.ts";
 import { VoiceStore } from "./lib/voice.ts";
+import { askToListen, asksForVoice, onVoiceSettings, withoutVoiceAsk } from "./lib/voiceAsk.ts";
+import { voiceReady, wakeReady } from "./lib/voiceOn.ts";
 import { readInbox } from "./lib/inboxLive.ts";
 import { parseGo, type Go } from "./lib/push.ts";
 import { syncPush } from "./lib/pushLive.ts";
@@ -65,6 +67,7 @@ const NotesSheet = lazy(() => reloadOnce(() => import("./screens/Notes.tsx")).th
 const HistoryCard = lazy(() => reloadOnce(() => import("./screens/History.tsx")).then((m) => ({ default: m.HistoryCard })));
 const ProfilePage = lazy(() => reloadOnce(() => import("./screens/Profile.tsx")).then((m) => ({ default: m.ProfilePage })));
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
+const WakeHost = lazy(() => reloadOnce(() => import("./screens/Wake.tsx")).then((m) => ({ default: m.WakeHost })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
 const sending = () => reloadOnce(() => import("./lib/send.ts"));
 import { AmountUnderstood, DisplayNameForm, formatDay, Icon, InstallBanner, InstallHow, type Notice, NoticeLine, openHelp, phoneTimeZone, ScreenBoundary, Sheet, useInstallWay, useNamesSyncOn, useOnline } from "./screens/ui.tsx";
@@ -273,6 +276,11 @@ function Screens() {
   const [pendingPot, setPendingPot] = useState<StoredPot | null>(null);
   const [pendingPay, setPendingPay] = useState<PayLink | null>(null);
   const [pendingRequest, setPendingRequest] = useState<Extract<Screen, { kind: "request" }> | null>(null);
+  // A ?voice=1 link opened before this phone had an account open: Send listens once there is one.
+  const [pendingVoice, setPendingVoice] = useState(false);
+  // Voice or "Hey NivPay" turned on or off in Profile: whether to listen is checked again.
+  const [, setVoiceRev] = useState(0);
+  useEffect(() => onVoiceSettings(() => setVoiceRev((n) => n + 1)), []);
   const connection = useConnection();
   // Requests from this phone still in flight. Unknown until checked, and
   // unknown is never read as "nothing moved".
@@ -297,6 +305,24 @@ function Screens() {
       setScreen(next);
     });
   }, []);
+
+  /**
+   * "Hey NivPay" was heard: Send, unless a screen with a microphone button
+   * (Send, a pot) is open already, and its button listens for one sentence
+   * (lib/voiceAsk.ts).
+   */
+  const heard = useCallback(() => {
+    setScreen((s) => (s.kind === "send" || s.kind === "pot" ? s : { kind: "send", request: null }));
+    askToListen();
+  }, []);
+  /** A ?voice=1 link opened: Send, listening. With voice off, Home says so. */
+  const openVoice = useCallback(() => {
+    const opener = accounts.active();
+    if (!opener) return setPendingVoice(true);
+    if (!voiceReady(opener.address)) return go({ kind: "home" }, { tone: "bad", text: copy.voiceLinkOff });
+    go({ kind: "send", request: null });
+    askToListen();
+  }, [go]);
 
   /** Acts on a link opened from a chat: an invite, a reply to one of our drafts, or a pot. */
   const openLink = useCallback(
@@ -375,6 +401,11 @@ function Screens() {
     [go],
   );
   useEffect(() => {
+    if (!asksForVoice(location.search)) return;
+    history.replaceState(null, "", withoutVoiceAsk(location.pathname, location.search, location.hash));
+    openVoice();
+  }, [openVoice]);
+  useEffect(() => {
     const g = parseGo(location.search);
     if (g) {
       history.replaceState(null, "", location.pathname + location.hash);
@@ -421,6 +452,9 @@ function Screens() {
     } else if (pendingRequest) {
       go(pendingRequest);
       setPendingRequest(null);
+    } else if (pendingVoice) {
+      setPendingVoice(false);
+      openVoice();
     }
   };
 
@@ -433,6 +467,19 @@ function Screens() {
     setActive(accounts.active());
   };
 
+  // Listening for "Hey NivPay", over every screen, while it is on for the account open (screens/Wake.tsx).
+  const wake = active && !switching && wakeReady(active.address) && (
+    <Suspense fallback={null}>
+      <WakeHost key={active.address} onHeard={heard} />
+    </Suspense>
+  );
+  const shell = (page: ReactNode) => (
+    <>
+      {wake}
+      {page}
+    </>
+  );
+
   const banner: ReactNode = connection.down && (
     <div className="banner" role="status">
       {offlineMessage(inFlight, connection.offline)}
@@ -440,7 +487,7 @@ function Screens() {
   );
 
   if (active && !switching && screen.kind === "create") {
-    return (
+    return shell(
       <CreateScreen
         key={screen.draftId}
         account={active}
@@ -455,7 +502,7 @@ function Screens() {
     );
   }
   if (active && !switching && screen.kind === "pot") {
-    return (
+    return shell(
       <ChipInScreen
         key={screen.pot.potId + active.address}
         account={active}
@@ -475,7 +522,7 @@ function Screens() {
     );
   }
   if (active && !switching && screen.kind === "story") {
-    return (
+    return shell(
       <TimelineScreen
         key={screen.pot.potId + ":" + active.address}
         account={active}
@@ -496,7 +543,7 @@ function Screens() {
     );
   }
   if (active && !switching && screen.kind === "close") {
-    return (
+    return shell(
       <CloseScreen
         key={screen.pot.potId + ":" + active.address}
         account={active}
@@ -508,7 +555,7 @@ function Screens() {
     );
   }
   if (active && !switching && screen.kind === "request") {
-    return (
+    return shell(
       <RequestScreen
         key={screen.pot.potId + ":" + screen.proposalId + ":" + active.address}
         account={active}
@@ -523,21 +570,21 @@ function Screens() {
   if (active && !switching && screen.kind === "send") {
     // Keyed by the link too: a second pay link opened over this screen starts afresh, never keeping the first one's recipient.
     const linkKey = screen.request ? `${screen.request.account}:${screen.request.amount}:${screen.request.name}` : "";
-    return <SendScreen key={active.address + ":" + linkKey} account={active} request={screen.request} banner={banner} onClose={() => go({ kind: "home" })} />;
+    return shell(<SendScreen key={active.address + ":" + linkKey} account={active} request={screen.request} banner={banner} onClose={() => go({ kind: "home" })} />);
   }
   if (active && !switching && screen.kind === "money") {
-    return <MoneyScreen key={active.address + screen.mode} account={active} mode={screen.mode} banner={banner} onClose={() => go({ kind: "home" })} />;
+    return shell(<MoneyScreen key={active.address + screen.mode} account={active} mode={screen.mode} banner={banner} onClose={() => go({ kind: "home" })} />);
   }
   if (active && !switching && screen.kind === "receive") {
-    return <ReceiveScreen key={active.address} account={active} banner={banner} onClose={() => go({ kind: "home" })} />;
+    return shell(<ReceiveScreen key={active.address} account={active} banner={banner} onClose={() => go({ kind: "home" })} />);
   }
   if (active && !switching && screen.kind === "join") {
-    return (
+    return shell(
       <JoinScreen account={active} invite={screen.invite} banner={banner} onAnswered={(row) => invited.put(row)} onClose={() => go({ kind: "home" })} />
     );
   }
 
-  return (
+  return shell(
     <div className={`page${active && !switching ? " with-tabs" : ""}`}>
       <InstallBanner />
       {banner}

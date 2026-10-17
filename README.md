@@ -1185,8 +1185,9 @@ never included) from a refused one (Code 56).
 ## Voice commands
 
 A microphone on Send and on a pot's screen (`app/src/lib/voice.ts`,
-`app/src/screens/Voice.tsx`). No wake word and nothing listening in the
-background: it listens only after a tap, for one sentence, then stops.
+`app/src/screens/Voice.tsx`). It listens after a tap, or after "Hey NivPay"
+when that is turned on (next section), for one sentence, then stops. Nothing
+listens in the background.
 
 * **The browser's speech recognition**, where the browser has it; elsewhere
   the button is hidden. Before the first use the app says plainly that the
@@ -1212,6 +1213,141 @@ background: it listens only after a tap, for one sentence, then stops.
   is at most $200 (Code 68), even if the amount is changed afterwards. Voice
   has no command to change settings or limits, add contacts or mark them
   trusted, or say yes to a pot's payment.
+
+## Hey NivPay
+
+Hands free, on top of voice commands, with every voice rule kept: only
+contacts trusted for voice, 10 payments together first, at most $200, the
+read back, and a fingerprint for every payment. "Hey NivPay" only does what a
+tap on the microphone does; what is said next goes through the same checks
+(`app/src/lib/wake/`, `app/src/screens/Wake.tsx`, `app/src/lib/voiceAsk.ts`).
+
+* **Off by default**: "Listen for “Hey NivPay”" in Profile, Voice, under
+  voice commands, which must be on first. Hidden in other languages, like the
+  rest of voice, and where the browser can't hear it on the phone.
+* **Heard on the phone, only while the app is open.** The wake word is found
+  in the page itself; no sound leaves the phone until it is heard. Then a
+  chime and a short buzz (where the phone can buzz), the wake word lets the
+  microphone go, Send opens (a pot's screen stays as it is) and the phone's
+  speech service hears one sentence, as after a tap. The two never share the
+  microphone, and listening comes back after the sentence.
+* **Always shown.** A bar across the top says "Listening for “Hey NivPay”",
+  with Stop, whenever the microphone is on for it. It stops when the app goes
+  to the background or the screen locks, after 5 minutes without a tap, key
+  or wake, if the microphone is taken away, or on Stop, and the bar says
+  which, with Listen again. A browser that wants a tap before it plays sound
+  gets a Start button.
+* **Never under a confirm sheet**: while Send's confirm sheet, or a sheet over
+  a pot's amount, is open, a wake changes nothing.
+* **English only**, like the rest of voice.
+
+### The engine, and why this one
+
+| | Picovoice Porcupine Web | openWakeWord's design, in the page (chosen) |
+| --- | --- | --- |
+| Accuracy | the best published, with a phrase trained in Picovoice's console | good; it depends on the phrase's training, measured below |
+| Licence | proprietary; its free tier was reported ended on 30 June 2026, so a paid plan | code Apache-2.0, Google's speech embedding Apache-2.0; its ready made wake words are non-commercial (CC BY-NC-SA 4.0), so none is used |
+| Cost and keys | a paid plan, and an AccessKey in the page that Picovoice's servers check | none |
+| What the page needs | WebAssembly (`'wasm-unsafe-eval'` in the CSP) and a `connect-src` for the key check | nothing new |
+
+openWakeWord's design is written out in plain TypeScript
+(`app/src/lib/wake/engine.ts`): a mel spectrogram (librosa's filters, worked
+out in code), Google's speech embedding (96 numbers every 80 ms from the last
+0.76 s; its 20 layers are streamed, so each is worked out once per new row)
+and a small classifier, trained for this app, on the last 1.28 s. A wake is 3
+scores in a row at 0.6 or more, then 2 s before the next. No WebAssembly, no
+account and no key, so no environment variable and nothing to hide the switch
+behind. The weights are one file, `app/public/wake/hey-nivpay-v1.bin`
+(2.1 MB), fetched only when listening is on and kept by the service worker.
+The engine gives openWakeWord's own numbers, checked frame by frame in
+`engine.test.ts`; openWakeWord's embedding file matches the official
+`embedding_model.tflite` that Home Assistant's `wyoming-openwakeword` ships.
+Listening used about 9% of one core in headless Chromium on the test
+machine (0.3% with it off).
+
+`Permissions-Policy` is unchanged: `microphone=(self)` was already there for
+voice commands, and nothing wider is needed. The Content Security Policy is
+unchanged too: the audio worklet (`app/public/wake/capture.js`) and the
+weights are this site's own files.
+
+### Training, and how well it hears
+
+The classifier is trained only on speech made for it, so nothing with a
+non-commercial licence goes into it (`app/scripts/wake/`, reproducible from
+npm and PyPI). Kokoro-82M (Apache-2.0) said "Hey NivPay" 4,200 times in 46
+voices (American and British English, English with Spanish, French, Hindi,
+Italian, Portuguese, Japanese and Chinese accents) and mixes of them, at
+different speeds and in several ways ("Hey, NivPay!", run together, without
+the h). It also said 93 phrases that sound alike ("hey Nick, pay", "hey
+Venmo", "navy pay", "hey Siri", "NivPay" without "hey") 3,720 times, and 4,800
+ordinary sentences. Each was put in a scene: other people talking before and
+after, rooms, phone microphone bands, levels, and noise (hum, babble, music,
+hiss) 3 to 30 dB below the voice.
+
+Measured on 8 of Kokoro's voices it never trained on (`evaluate.py`):
+
+| | |
+| --- | --- |
+| "Hey NivPay" heard, quiet room | 98.9% of 566 |
+| heard, everyday room (reverb, phone band, noise 3 to 30 dB down) | 91.0% |
+| heard, noise 5 dB below the voice | 85.2% |
+| false wakes, 105 similar phrases (840 clips) | 3.3% |
+| false wakes, ordinary talk (1,800 sentences, 111 min) | 1.1 an hour (2) |
+| false wakes, noise and babble (40 min) | none |
+
+83 of the 105 similar phrases never woke it. The ones that sometimes do are
+the closest: "hey, did Niv pay" and "hey, Liv paid" (3 times in 8), "hey,
+need pay" and "hey Liv, pay" (2 in 8), and 18 others once in 8, such as "hey
+NetPay", "hey Nick, pay" and "open NivPay". A false wake only opens Send to
+hear one sentence; nothing is paid without a trusted contact, the read back
+and a fingerprint. These are synthetic voices: real people, accents and rooms
+will differ.
+
+### Open NivPay ready to listen: ?voice=1, Siri and Google
+
+`https://nivpay.vercel.app/?voice=1` opens Send with the microphone ready,
+when voice is on. If the microphone is already allowed, it listens at once;
+if the browser must ask, or wants a tap first, Send shows one big Tap to
+speak button. With voice off, Home says how to turn it on. `voice=1` leaves
+the address bar at once, so a reload doesn't listen again; opened before an
+account is open, it waits for one.
+
+Profile, Voice has short guides, each with a Copy link button:
+
+* **Hey Siri (iPhone):** a Shortcut with one action, Open URLs, and the link.
+  It opens in Safari, which keeps its own NivPay apart from the app on the
+  Home Screen, so voice and who it can pay are set up there too; the guide
+  says so.
+* **Hey Google (Android):** install NivPay from Chrome, then "Hey Google, open
+  NivPay", then "Hey NivPay" with listening on; or touch and hold the NivPay
+  icon and tap Speak (a shortcut in `manifest.webmanifest` to the same link).
+
+### Tested
+
+* `engine.test.ts`: the TypeScript engine against openWakeWord's front end in
+  Python, frame by frame, on a recorded "Hey NivPay"; it wakes on that
+  recording once, and not on recorded similar words ("navy pay", "NivPay"
+  alone, "hey Siri", "hey Niv", "hey Kev, pay"...), talk, silence or hiss
+  (`app/src/lib/wake/testdata/`, voices it never trained on).
+* `session.test.ts`: when the microphone is on, the wake, the background, the
+  5 minutes, a refused or lost microphone, a stop while starting, and sharing
+  the microphone with the button; `voiceAsk.test.ts`, `resample.test.ts`, and
+  `voice.test.ts` for the switch.
+* `app/scripts/wake/browser-check.mjs`: the built app in Chromium on
+  localhost under the real headers, with recordings as the microphone: the
+  wake, chime, buzz, hand over and the voice rules after it; no wake in 60 s
+  of similar words or 90 s of talk (the closest phrases are counted, not
+  failed: about 1 in 10, 1 and 3 of 32 in two runs); the background and 5 idle minutes; `?voice=1` three ways;
+  the switch and guides; no CSP or Trusted Types violation.
+
+**Needs a real phone**: how well it hears real voices, accents and phone
+microphones; whether the microphone and sound start without a tap when the
+app opens (Android installed app, iPhone Safari and Home Screen app), and
+whether the speech service listens after a wake without one (if not, Tap to
+speak shows); the chime's loudness and the buzz (iPhones don't buzz for web
+pages); that leaving the app or locking the screen turns the phone's own
+microphone light off; battery over a few 5 minute sessions; Bluetooth
+headsets; the Siri Shortcut, "Hey Google, open NivPay" and the Speak shortcut.
 
 ## The pot map, on the world
 
@@ -2484,6 +2620,27 @@ each installed package's `package.json`.
 | --- | --- | --- | --- |
 | World land outlines (`app/src/data/world-land.json`, made by `app/scripts/make_world.mjs`, simplified) | [Natural Earth](https://www.naturalearthdata.com/), `ne_110m_land`, v5.1.2, downloaded 16 Oct 2026 | Public domain | the world under the pot map |
 | World cities (`app/src/data/cities.json`, made by `app/scripts/make_cities.py`) | [GeoNames](https://www.geonames.org/), `cities15000`, downloaded 15 Oct 2026 | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | turning a phone's position, or a typed name, into a city, on the phone only |
+| Speech embedding weights, in `app/public/wake/hey-nivpay-v1.bin` (made by `app/scripts/wake/export.py`) | Google's [speech_embedding](https://www.kaggle.com/models/google/speech-embedding) as exported by [openWakeWord](https://github.com/dscripka/openWakeWord) (`embedding_model.onnx`, taken from npm `@wakebox/browser` 0.1.2 and checked against the `embedding_model.tflite` in PyPI `wyoming-openwakeword` 1.8.2) | Apache-2.0 | "Hey NivPay": turning sound into what the wake word classifier reads, on the phone only |
+| The "Hey NivPay" classifier, in the same file | trained for this app by `app/scripts/wake/`, on speech made for it (below) | MIT, as this project | deciding it heard "Hey NivPay" |
+
+### Wake word engine
+
+| Code | Version | License | Used for |
+| --- | --- | --- | --- |
+| [openWakeWord](https://github.com/dscripka/openWakeWord)'s design: mel spectrogram, speech embedding, classifier on 16 embeddings | 0.6.0 | Apache-2.0 | re-written in TypeScript in `app/src/lib/wake/engine.ts`; none of its code or its non-commercial (CC BY-NC-SA 4.0) wake word models are shipped or used |
+
+Used only to train and check the classifier, on the author's machine; none is
+shipped, and the voices it made are not in the repository:
+[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0; npm
+`kokoro-q8-shards` 1.0.0 for the weights, `kokoro-js` 1.2.1 for the voices)
+through `kokoro-onnx` 0.6.1 (MIT); `espeak-ng` (GPL-3.0-or-later, through
+`espeakng-loader` 0.2.4) and `phonemizer` 3.4.0 (GPL-3.0) for the phonemes of
+the sentences spoken; `onnxruntime` 1.31.0 (MIT); `numpy`, `scipy` and
+`soundfile` (BSD-3-Clause); `ai-edge-litert` (Apache-2.0) for the check
+against the TFLite model; the sentences spoken are docstrings of Python's
+standard library (PSF License) and this repository's documentation. [Playwright](https://playwright.dev/)
+(Apache-2.0) runs `app/scripts/wake/browser-check.mjs`; it is not a
+dependency.
 
 ### App, indirect dependencies
 
@@ -2553,6 +2710,9 @@ their parent packages.
     app/src/lib/                  accounts, writes, feeds, links, money, config
     app/api/fund/                 the gas grant function and its status endpoint
     app/api/ramp/                 the test desk behind Add money and Cash out, a simulation
+    app/src/lib/wake/             "Hey NivPay": the wake word engine, the listening rules, recorded test audio
+    app/public/wake/              its weights and the microphone's audio worklet
+    app/scripts/wake/             how the weights were trained and measured, and the browser check
     docs/                         design, measurements, error codes, bounty and submission notes
     brand/                        the logo: SVG lockups, app tiles, PNG exports, make-logo.mjs
     video/                        the demo videos: Remotion compositions, timelines, facts, shot list

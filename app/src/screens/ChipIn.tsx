@@ -571,6 +571,8 @@ export function ChipInScreen(props: {
           <VoiceButton
             account={me}
             mode="put"
+            // Not while a sheet is over the amount.
+            disabled={exact || askOpen}
             onStart={() => setVoiceNote(null)}
             onCommand={(cmd: VoiceCommand, heard: string) => {
               if (cmd.kind !== "put") return;

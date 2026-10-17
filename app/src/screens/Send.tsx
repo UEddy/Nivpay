@@ -496,7 +496,10 @@ export function SendScreen(props: { account: StoredAccount; request: PayLink | n
               <SaveContact already={Boolean(savedFor(request.account))} suggested={linkName} onSave={(name) => saveContact(request.account, name)} />
             )}
             <div className="card enter" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {!step && !stuck && <VoiceButton account={me} mode="send" onStart={() => (setResult(null), setVoicePick(null))} onCommand={onVoice} />}
+              {!step && !stuck && (
+                // Never while the confirm sheet is open: a wake can't change who or how much behind it.
+                <VoiceButton account={me} mode="send" disabled={confirming} onStart={() => (setResult(null), setVoicePick(null))} onCommand={onVoice} />
+              )}
               {voicePick && (
                 <div className="list" aria-label={copy.voiceWhichOne}>
                   <p className="hint">{copy.voiceWhichOne}</p>

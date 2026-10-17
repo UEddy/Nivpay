@@ -165,3 +165,20 @@ test("payments are counted per person, each once, and the switch is per account"
   kv.set([...kv.keys()][0]!, "{");
   assert.equal(v.countWith(mum), 0, "damaged storage starts over");
 });
+
+test("listening for Hey NivPay is off until turned on, per account, and kept with the rest", () => {
+  const kv = new Map<string, string>();
+  const store = { getItem: (k: string) => kv.get(k) ?? null, setItem: (k: string, v: string) => void kv.set(k, v) };
+  const me = getAddress("0x4444444444444444444444444444444444444444");
+  const v = new VoiceStore(store, "ausd", me);
+  assert.equal(v.get().wake, false, "off by default");
+  // Kept from before the wake word existed: still off.
+  kv.set(`nivpay.voice.v2.ausd.${me}`, JSON.stringify({ on: true, explained: true, trusted: [], withPerson: {} }));
+  assert.deepEqual([v.get().on, v.get().wake], [true, false]);
+  v.setWake(true);
+  assert.equal(v.get().wake, true);
+  assert.equal(v.get().on, true, "turning it on changes nothing else");
+  assert.equal(new VoiceStore(store, "ausd", getAddress("0x5555555555555555555555555555555555555555")).get().wake, false, "per account");
+  v.setWake(false);
+  assert.equal(v.get().wake, false);
+});
