@@ -10,6 +10,7 @@ import {
   labelOffsets,
   landCopies,
   movedLayout,
+  needsMore,
   placeOf,
   settleView,
   worldLayout,
@@ -18,6 +19,7 @@ import {
   ZOOM_MIN,
   type CityRow,
   type LabelOffset,
+  type Where,
   type WorldView,
   type Zones,
 } from "../lib/worldmap.ts";
@@ -50,8 +52,8 @@ export type MapPerson = {
   sub: string;
   /** "You": the sub line in the person's colour, bold. */
   subStrong?: boolean;
-  /** Where they are, for their place on the world: the city in the pot's link or the one they shared, and their phone's time zone. */
-  where?: { city?: string; timeZone?: string };
+  /** Where they are, for their place on the world: the city they shared (with its country) or the one in the pot's link, and their phone's time zone. */
+  where?: Where;
   /** solid: the person's colour. dashed: their colour, dashed. pencil: not there yet. */
   ring: "solid" | "dashed" | "pencil";
   dim?: boolean;
@@ -105,16 +107,37 @@ function loadMapCities(): Promise<CityRow[] | null> {
     .catch(() => null);
   return citiesLoad;
 }
-function useMapCities(): CityRow[] | null {
-  const [list, setList] = useState<CityRow[] | null>(null);
+/**
+ * Every city one can choose or be found in (lib/cities.ts), loaded only when
+ * someone on a map has a city the big ones don't have.
+ */
+let moreLoad: Promise<CityRow[] | null> | null = null;
+function loadMoreCities(): Promise<CityRow[] | null> {
+  moreLoad ??= reloadOnce(() => import("../data/cities.json"))
+    .then((m) => m.default as unknown as CityRow[])
+    .catch(() => null);
+  return moreLoad;
+}
+function useMapCities(wheres: (Where | undefined)[]): { cities: CityRow[] | null; more: CityRow[] | null } {
+  const [cities, setCities] = useState<CityRow[] | null>(null);
+  const [more, setMore] = useState<CityRow[] | null>(null);
   useEffect(() => {
     let live = true;
-    void loadMapCities().then((l) => live && setList(l));
+    void loadMapCities().then((l) => live && setCities(l));
     return () => {
       live = false;
     };
   }, []);
-  return list;
+  const need = cities !== null && more === null && wheres.some((w) => w && needsMore(cities, w));
+  useEffect(() => {
+    if (!need) return;
+    let live = true;
+    void loadMoreCities().then((l) => live && setMore(l));
+    return () => {
+      live = false;
+    };
+  }, [need]);
+  return { cities, more };
 }
 
 /** A label's width, from its longest line: near enough for Work Sans at the map's sizes. */
@@ -375,11 +398,11 @@ export function PotMap(props: {
   // Offline, nothing on the map is live: the badge says so and stops its ping.
   const online = useOnline();
   const live = props.badge === "live" && online;
-  const cities = useMapCities();
-  const placesKey = people.map((p) => `${p.where?.city ?? ""}|${p.where?.timeZone ?? ""}`).join(";");
+  const { cities, more } = useMapCities(people.map((p) => p.where));
+  const placesKey = people.map((p) => [p.where?.shared?.city, p.where?.shared?.country, p.where?.city, p.where?.country, p.where?.timeZone].join("|")).join(";");
   const labelsKey = people.map((p) => `${p.city}|${p.sub}`).join(";");
   // Where people are, and their labels' widths: they change only with these keys.
-  const places = useMemo(() => people.map((p) => (p.where ? placeOf({ cities, zones: ZONES }, p.where) : null)), [placesKey, cities]);
+  const places = useMemo(() => people.map((p) => (p.where ? placeOf({ cities, more, zones: ZONES }, p.where) : null)), [placesKey, cities, more]);
   const widths = useMemo(() => people.map((p) => labelWidth([p.city, p.sub])), [labelsKey]);
   const framed = useMemo(() => worldLayout(places, payees.length, widths), [places, payees.length, widths]);
   const svg = useRef<SVGSVGElement>(null);

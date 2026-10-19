@@ -1,12 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { between, canZoom, cityPlace, fold, labelOffsets, landCopies, lonUnderPot, movedLayout, placeOf, routeInto, settleView, worldLayout, WHOLE_WORLD, zoomAt, ZOOM_MAX, ZOOM_MIN, type CityRow, type Place, type Zones } from "./worldmap.ts";
+import { between, canZoom, cityPlace, fold, labelOffsets, landCopies, lonUnderPot, movedLayout, needsMore, placeOf, routeInto, settleView, worldLayout, WHOLE_WORLD, zoomAt, ZOOM_MAX, ZOOM_MIN, type CityRow, type Place, type Zones } from "./worldmap.ts";
 import { personSpots, reverseRoute, VIEW } from "./potmap.ts";
 
 const land = JSON.parse(readFileSync(new URL("../data/world-land.json", import.meta.url), "utf8")) as { land: string[]; zones: Zones };
 const cities = JSON.parse(readFileSync(new URL("../data/world-cities.json", import.meta.url), "utf8")) as CityRow[];
 const P = (name: string, country?: string): Place => cityPlace(cities, name, country)!;
+// Every city one can choose or be found in (lib/cities.ts): the map's fallback.
+const more = JSON.parse(readFileSync(new URL("../data/cities.json", import.meta.url), "utf8")) as CityRow[];
 const LONDON = P("London", "GB");
 const LAGOS = P("Lagos", "NG");
 const HOUSTON = P("Houston", "US");
@@ -186,4 +188,33 @@ test("while dragging, labels ride with their people", () => {
     assert.equal(s.label.x - s.x, follow[i]!.dx);
     assert.equal(s.label.y - s.y, follow[i]!.dy);
   });
+});
+
+test("a chosen town sits where it is, in its own country, not at its time zone's city", () => {
+  const t = { cities, more, zones: land.zones };
+  const at = (name: string, country: string) => {
+    const r = more.find((c) => c[0] === name && c[1] === country)!;
+    return { lat: r[2] / 100, lon: r[3] / 100 };
+  };
+  // Dschang, Cameroon, and Niagara Falls, Canada: on the full list only.
+  for (const [name, country, zone] of [["Dschang", "CM", "Africa/Douala"], ["Niagara Falls", "CA", "America/Toronto"]] as const) {
+    assert.equal(cityPlace(cities, name, country), null, `${name} is not a big city`);
+    const who = { shared: { city: name, country }, timeZone: zone };
+    assert.equal(needsMore(cities, who), true);
+    assert.deepEqual(placeOf(t, who), at(name, country));
+    assert.deepEqual(placeOf({ cities, zones: land.zones }, who), placeOf({ cities: null, zones: land.zones }, who), "until the full list loads, the time zone");
+  }
+  // Lagos, Portugal, shared: never Lagos, Nigeria, though the big list has only Nigeria's.
+  const algarve = { shared: { city: "Lagos", country: "PT" }, timeZone: "Europe/Lisbon" };
+  assert.equal(cityPlace(cities, "Lagos", "PT"), null);
+  assert.equal(needsMore(cities, algarve), true);
+  assert.deepEqual(placeOf(t, algarve), at("Lagos", "PT"));
+  // A town typed into the link, with no country: the full list, the biggest of that name.
+  assert.deepEqual(placeOf(t, { city: "Dschang", timeZone: "UTC" }), at("Dschang", "CM"));
+  // The country can come with the city too, as the map is told after someone shares theirs on the pot screen.
+  assert.deepEqual(placeOf(t, { city: "Lagos", country: "PT" }), at("Lagos", "PT"));
+  // A big city needs nothing more, and someone with no city needs nothing at all.
+  assert.equal(needsMore(cities, { shared: { city: "Uyo", country: "NG" } }), false);
+  assert.equal(needsMore(cities, { city: "London" }), false);
+  assert.equal(needsMore(cities, { timeZone: "Europe/London" }), false);
 });

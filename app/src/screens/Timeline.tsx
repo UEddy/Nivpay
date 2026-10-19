@@ -20,6 +20,7 @@ import { ordered, replayStepMs, replaySteps, storyRows, type Order, type ReplayS
 import { AskSheet, useAskFlow } from "./Ask.tsx";
 import { usePayMotion } from "./payMotion.ts";
 import { mapLines } from "./mapNames.ts";
+import { atSharedCity, useSharedCities } from "./sharedCities.ts";
 import { PotMap, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { factsOf, layersOf, peopleOf } from "./Request.tsx";
 import { Icon, NoticeLine, type Notice } from "./ui.tsx";
@@ -52,6 +53,8 @@ export function TimelineScreen(props: {
   const me = props.account.address;
   const link = useMemo(() => linkFor(props.pot), [props.pot]);
   const potId = BigInt(props.pot.potId);
+  // Where people are, shared with this pot only: each on the map at the city they chose.
+  const { cities: sharedCities } = useSharedCities(props.pot.fragment, props.pot.potId);
   const onV2 = Boolean(props.pot.onV2);
   const [info, setInfo] = useState<PotInfo | null>(null);
   const [state, setState] = useState<PotState | null>(null);
@@ -152,7 +155,7 @@ export function TimelineScreen(props: {
     };
   }, [events]);
 
-  const people = info && state ? peopleOf(info, state, me) : [];
+  const people = info && state ? peopleOf(info, state, me, sharedCities) : [];
   const colorOf = (a: Address | null) => {
     const i = a ? people.findIndex((p) => isAddressEqual(p.account, a)) : -1;
     return i >= 0 && i < PERSON_COLORS.length ? PERSON_COLORS[i]!.fill : "var(--ink)";

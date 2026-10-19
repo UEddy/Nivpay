@@ -23,6 +23,7 @@ import { readClient } from "../lib/rpc.ts";
 import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { mapLines } from "./mapNames.ts";
+import { atSharedCity, useSharedCities } from "./sharedCities.ts";
 import { PotMap, type Coin, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { MoneyCards } from "./MoneyCards.tsx";
 import { layersOf, peopleOf } from "./Request.tsx";
@@ -49,6 +50,8 @@ export function CloseScreen(props: {
   const me = props.account.address;
   const link = useMemo(() => linkFor(props.pot), [props.pot]);
   const potId = BigInt(props.pot.potId);
+  // Where people are, shared with this pot only: each on the map at the city they chose.
+  const { cities: sharedCities } = useSharedCities(props.pot.fragment, props.pot.potId);
   const onV2 = Boolean(props.pot.onV2);
   const POTS = potsOf(onV2);
   const [info, setInfo] = useState<PotInfo | null>(null);
@@ -283,7 +286,7 @@ export function CloseScreen(props: {
 
   const d = state.decimals;
   const fmt = (v: bigint, style: "auto" | "cents" = "cents") => formatAmount(v, d, style);
-  const people = peopleOf(info, state, me);
+  const people = peopleOf(info, state, me, sharedCities);
   const nameOf = (a: Address) => (isAddressEqual(a, me) ? copy.youCap : (people.find((p) => isAddressEqual(p.account, a))?.name ?? copy.accountEnding(a)));
   const lower = me.toLowerCase();
   const myShares = state.shares[lower] ?? 0n;

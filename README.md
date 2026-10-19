@@ -1470,9 +1470,15 @@ each person at their city in a box with their name, a route from there into
 the pot, and the payees on the right. Where someone is comes from the city
 they shared with the pot (opt in, encrypted for the pot's link,
 `lib/cityShare.ts`), else the city written in the pot's link, else the time
-zone their phone gave when they joined; never a position. A city's place is
-looked up on the phone in a bundled list of cities of 100,000 people or
-more, loaded only when a map needs it. The world is scaled and moved so
+zone their phone gave when they joined; never a position. This holds on
+every screen with a map: the pot, closing, a payment asked, and the story. A
+city's place is looked up on the phone in a bundled list of cities of 100,000
+people or more, loaded only when a map needs it, and when someone's city
+isn't there (a town they picked, or the one Use my location found), in the
+full list of 34,163 cities of 15,000 or more that a city is chosen from, so
+they sit at their own town, not at their time zone's city. A shared city
+carries its country and is only looked for in it: Lagos in Portugal is never
+put in Nigeria. The world is scaled and moved so
 everyone placed is on the map and clear of the pot and payees, and each
 label takes the side of its dot that covers least (`lib/worldmap.ts`).
 Someone with no known place sits in one of the map's usual spots, not

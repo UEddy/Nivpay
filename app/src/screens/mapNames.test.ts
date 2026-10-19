@@ -37,3 +37,8 @@ test("the person looking is placed by this phone's time zone when the pot doesn'
   assert.equal(mapLines({ account: A, city: "", me: true, name: "You", timeZone: "Europe/London" }, true, "You", "", lagos).where.timeZone, "Europe/London", "the pot's own wins");
   assert.equal(mapLines({ account: A, city: "", me: false, name: "x", timeZone: "UTC" }, false, "x", "", lagos).where.timeZone, undefined, "never someone else's from this phone");
 });
+
+test("a city shared with its country goes to the map with it, so the town is found in its own country", () => {
+  assert.deepEqual(mapLines({ account: A, city: "Lagos", country: "PT", me: false, name: "Rui", timeZone: "Europe/Lisbon" }, true, "Rui", "").where, { city: "Lagos", country: "PT", timeZone: "Europe/Lisbon" });
+  assert.deepEqual(mapLines({ account: A, city: "", country: "PT", me: false, name: "Rui" }, true, "Rui", "").where, { city: undefined, timeZone: undefined }, "no city, no country");
+});

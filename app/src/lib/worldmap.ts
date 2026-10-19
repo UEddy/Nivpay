@@ -8,7 +8,9 @@ import { personSpots, type PersonSpot } from "./potmap.ts";
  * (lib/cityShare.ts), the city written in the pot's link, then the time zone
  * their phone gave when they joined. Never a position: a city's own place,
  * from the bundled list (src/data/world-cities.json, cities of 100,000
- * people or more), or a time zone's city (src/data/world-land.json). Someone
+ * people or more), else the full list a city is chosen from
+ * (src/data/cities.json, 15,000 or more, loaded only for a city the first
+ * doesn't have), or a time zone's city (src/data/world-land.json). Someone
  * with none of these isn't put anywhere they may not be: they sit in one of
  * the map's usual spots.
  *
@@ -31,12 +33,16 @@ export function fold(text: string): string {
     .replace(/[^\p{L}\p{N}]/gu, "");
 }
 
-/** The biggest city with this name, in this country if one is given ("Lagos", "Lagos, NG" or a shared city). */
+/**
+ * The biggest city with this name ("Lagos", or "Houston, Texas" by its first
+ * part), and when a country is given, only in that country: Lagos in Portugal
+ * is never put in Nigeria because a list has only Nigeria's.
+ */
 export function cityPlace(cities: readonly CityRow[], name: string, country?: string): Place | null {
   const want = fold(name.split(",")[0] ?? "");
   if (!want) return null;
   const hits = cities.filter((c) => fold(c[0]) === want);
-  const hit = (country && hits.find((c) => c[1] === country)) || hits[0];
+  const hit = country ? hits.find((c) => c[1] === country) : hits[0];
   return hit ? { lat: hit[2] / 100, lon: hit[3] / 100 } : null;
 }
 
@@ -45,17 +51,38 @@ export function zonePlace(zones: Zones, zone: string | undefined): Place | null 
   return z ? { lat: z[0] / 100, lon: z[1] / 100 } : null;
 }
 
-/** Someone's place: their shared city, else the city in the link, else their time zone; null if none is known. */
-export function placeOf(t: { cities: readonly CityRow[] | null; zones: Zones }, who: { shared?: { city: string; country: string } | null; city?: string; timeZone?: string }): Place | null {
-  if (t.cities && who.shared) {
-    const p = cityPlace(t.cities, who.shared.city, who.shared.country);
-    if (p) return p;
-  }
-  if (t.cities && who.city) {
-    const p = cityPlace(t.cities, who.city);
-    if (p) return p;
+export type Where = { shared?: { city: string; country: string } | null; city?: string; country?: string; timeZone?: string };
+type Lists = { cities: readonly CityRow[] | null; more?: readonly CityRow[] | null; zones: Zones };
+
+/** The cities to look for, in order: the shared one, then the one in the link (or shared on this phone), each with its country if known. */
+function wanted(who: Where): { city: string; country?: string }[] {
+  const out: { city: string; country?: string }[] = [];
+  if (who.shared) out.push(who.shared);
+  if (who.city) out.push({ city: who.city, country: who.country });
+  return out;
+}
+
+/**
+ * Someone's place: their shared city, else the city in the link, else their
+ * time zone; null if none is known. Each city is looked for among the big
+ * cities, then in the full list a city can be chosen from (`more`, cities of
+ * 15,000 people or more), so a town picked or found by the phone sits where it
+ * is, not at its time zone's city.
+ */
+export function placeOf(t: Lists, who: Where): Place | null {
+  for (const w of wanted(who)) {
+    for (const list of [t.cities, t.more]) {
+      const p = list ? cityPlace(list, w.city, w.country) : null;
+      if (p) return p;
+    }
   }
   return zonePlace(t.zones, who.timeZone);
+}
+
+/** Someone has a city the big cities don't have: the full list is needed to place them. */
+export function needsMore(cities: readonly CityRow[], who: Where): boolean {
+  const w = wanted(who);
+  return w.length > 0 && !w.some((c) => cityPlace(cities, c.city, c.country));
 }
 
 /** Where the world sits under the map: a point at (lon, lat) is drawn at (tx + lon * k, ty - lat * k). */

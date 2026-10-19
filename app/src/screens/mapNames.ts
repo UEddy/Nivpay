@@ -9,16 +9,16 @@ import { copy } from "../copy.ts";
  * "You", and the second carries only the detail.
  */
 export function mapLines(
-  p: { account: Address; city: string; me: boolean; name: string; timeZone?: string },
+  p: { account: Address; city: string; country?: string; me: boolean; name: string; timeZone?: string },
   named: boolean,
   withName: string,
   alone: string,
   phoneZone: () => string = () => Intl.DateTimeFormat().resolvedOptions().timeZone,
-): { city: string; sub: string; where: { city?: string; timeZone?: string } } {
+): { city: string; sub: string; where: { city?: string; country?: string; timeZone?: string } } {
   // Where they are on the world: the city, else their time zone (lib/worldmap.ts). For the person
   // looking, when the pot doesn't know theirs (no names, so "UTC" or none), this phone's own.
   const known = p.timeZone && p.timeZone !== "UTC" ? p.timeZone : undefined;
-  const where = { city: p.city || undefined, timeZone: known ?? (p.me ? phoneZone() || undefined : undefined) };
+  const where = { city: p.city || undefined, ...(p.city && p.country ? { country: p.country } : {}), timeZone: known ?? (p.me ? phoneZone() || undefined : undefined) };
   if (p.city) return { city: p.city, sub: withName, where };
   return { city: p.me ? copy.youCap : named ? p.name : copy.mapEnding(p.account), sub: alone, where };
 }

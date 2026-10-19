@@ -21,12 +21,14 @@ import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { initialsOf, mapLines } from "./mapNames.ts";
 import { usePayMotion } from "./payMotion.ts";
+import { atSharedCity, useSharedCities } from "./sharedCities.ts";
 import { PotMap, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { andList, copyLink, CopyLinkButton, Icon, NoticeLine, phoneTimeZone, shareLink, STOPPED, useCancellable, type Notice } from "./ui.tsx";
 import { beforePasskey } from "../lib/cancel.ts";
+import type { SharedCity } from "../lib/cityShare.ts";
 
 type Action = "yes" | "take back";
-type Who = Person & { me: boolean };
+type Who = Person & { country?: string; me: boolean };
 
 /** The pot's numbers in the shape the payment rules read. */
 export function factsOf(state: PotState): PotFacts {
@@ -42,11 +44,11 @@ export function factsOf(state: PotState): PotFacts {
 }
 
 /** Everyone on the map in join order: the labelled people, or the deciders by the end of their account. */
-export function peopleOf(info: PotInfo, state: PotState, me: Address): Who[] {
+export function peopleOf(info: PotInfo, state: PotState, me: Address, shared: Record<string, SharedCity> = {}): Who[] {
   const labelled: Person[] = info.labelsOk
     ? info.people
     : state.deciders.map((a) => ({ account: a, name: copy.accountEnding(a), city: "", timeZone: "" }));
-  const list = labelled.map((p) => ({ ...p, me: isAddressEqual(p.account, me) }));
+  const list: Who[] = labelled.map((p) => atSharedCity({ ...p, me: isAddressEqual(p.account, me) }, shared));
   // Someone looking who isn't named in the link: their own phone's time zone places them.
   if (!list.some((p) => p.me)) list.push({ account: me, name: copy.youCap, city: "", timeZone: phoneTimeZone(), me: true });
   return list;
@@ -77,6 +79,8 @@ export function RequestScreen(props: {
   const { proposalId } = props;
   const link = useMemo(() => linkFor(props.pot), [props.pot]);
   const potId = BigInt(props.pot.potId);
+  // Where people are, shared with this pot only: each on the map at the city they chose.
+  const { cities: sharedCities } = useSharedCities(props.pot.fragment, props.pot.potId);
   const onV2 = Boolean(props.pot.onV2);
   const POTS = potsOf(onV2);
 
@@ -342,7 +346,7 @@ export function RequestScreen(props: {
   const facts = factsOf(state);
   const view = requestView(request, facts, me, req.now);
   const days = ttlDays(terms.ttl);
-  const people = peopleOf(info, state, me);
+  const people = peopleOf(info, state, me, sharedCities);
   const payee = state.payees[request.payee];
   const payeeLabel = payeeName(state, req);
   const asker = people.find((p) => isAddressEqual(p.account, request.asker));

@@ -21,6 +21,7 @@ import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { requestsFrom, waitingRequests } from "../lib/payout.ts";
 import { AskSheet, useAskFlow, WaitingRequests } from "./Ask.tsx";
 import { usePayMotion } from "./payMotion.ts";
+import { atSharedCity, useSharedCities } from "./sharedCities.ts";
 import { PotMap, type Coin, type Layer, type MapPayee, type MapPerson } from "./PotMap.tsx";
 import { WhoControls } from "./WhoControls.tsx";
 import { changeWordsFor, fundersOf, PotChanges } from "./Changes.tsx";
@@ -39,7 +40,6 @@ import { dateLocale } from "../lib/locale.ts";
 import { photoKnownMissing, photoVersion, usePhotosOn } from "./Avatar.tsx";
 import { initialsFor, photoUrl } from "../lib/photo.ts";
 import { CityShare } from "./CityShare.tsx";
-import { fetchCities, keyFromFragment, readCities, type SharedCity } from "../lib/cityShare.ts";
 
 const orList = new Intl.ListFormat(dateLocale(), { style: "long", type: "disjunction" });
 const FLIGHT_MS = 900;
@@ -71,7 +71,7 @@ function useTicker(target: bigint | null, decimals: number): string {
   return formatAmount(shown.value, decimals, shown.moving ? "whole" : "auto");
 }
 
-type Who = { account: Address; name: string; city: string; timeZone: string; me: boolean };
+type Who = { account: Address; name: string; city: string; country?: string; timeZone: string; me: boolean };
 
 /** Pour in your share (docs/design/Live-ChipIn.dc.html). */
 export function ChipInScreen(props: {
@@ -123,27 +123,8 @@ export function ChipInScreen(props: {
   const askFlow = useAskFlow(me, POTS, potId, props.onOpenRequest);
   const photosOn = usePhotosOn();
   // Where people are, shared with this pot only (lib/cityShare.ts): read with the link's key, none without a link.
-  const [sharedCities, setSharedCities] = useState<Record<string, SharedCity>>({});
-  const [citiesOn, setCitiesOn] = useState(false);
   const [cityReads, setCityReads] = useState(0);
-  const { fragment } = props.pot;
-  useEffect(() => {
-    if (!fragment) return;
-    let live = true;
-    void (async () => {
-      const key = await keyFromFragment(fragment);
-      const found = await fetchCities(DEPLOYMENT, potId.toString());
-      if (!live) return;
-      setCitiesOn(found.enabled);
-      if (key && found.enabled) {
-        const read = await readCities(key, found.entries);
-        if (live) setSharedCities(read);
-      }
-    })().catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [fragment, potId, cityReads]);
+  const { cities: sharedCities, enabled: citiesOn } = useSharedCities(props.pot.fragment, potId.toString(), cityReads);
   const contacts = useMemo(() => new ContactStore(localStorage, DEPLOYMENT, me).list(), [me]);
   // An ask that was in flight when the app was closed opens its sheet again.
   useEffect(() => {
@@ -163,7 +144,7 @@ export function ChipInScreen(props: {
     const labelled: Person[] = info.labelsOk
       ? info.people
       : (state?.deciders ?? []).map((a) => ({ account: a, name: copy.accountEnding(a), city: "", timeZone: "UTC" }));
-    const list: Who[] = labelled.map((p) => ({ account: p.account, name: p.name, city: sharedCities[p.account.toLowerCase()]?.city ?? p.city, timeZone: p.timeZone, me: isAddressEqual(p.account, me) }));
+    const list: Who[] = labelled.map((p) => atSharedCity({ account: p.account, name: p.name, city: p.city, timeZone: p.timeZone, me: isAddressEqual(p.account, me) }, sharedCities));
     if (!list.some((p) => p.me)) list.push({ account: me, name: copy.youCap, city: "", timeZone: phoneTimeZone(), me: true });
     return list;
   }, [info, state?.deciders, me, sharedCities]);
