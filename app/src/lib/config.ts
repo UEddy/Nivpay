@@ -74,9 +74,14 @@ export const DEPLOY_BLOCK = {
  * on NivPayPots keep working there, exactly as now. Set both addresses and
  * their blocks from the receipts under broadcast/DeployPotsV2.s.sol/10143/.
  */
-export const POTS_V2 = null as Record<Deployment, Address> | null;
+export const POTS_V2 = {
+  // Transaction 0x490c2e41598bcae2a69bc9f84c7ee383bd1e92105d92dbd3b858313243221a8d.
+  ausd: getAddress("0xa41e0DdC0c94a795f200c5e850321242975dFA93"),
+  // Transaction 0xe399f8493f48bd81ec2df18661f48274d7569ce1003c0fb13c8e8ad47128c86c.
+  testusd: getAddress("0xE47CCe61e95fB4B451c0FfF0dD5164F2E48e79d1"),
+} as Record<Deployment, Address> | null;
 /** The blocks the two NivPayPotsV2 were deployed in. Null with POTS_V2. */
-export const POTS_V2_DEPLOY_BLOCK = null as Record<Deployment, bigint> | null;
+export const POTS_V2_DEPLOY_BLOCK = { ausd: 72436819n, testusd: 72438051n } as Record<Deployment, bigint> | null;
 
 /** Every pots contract there is, so money from any of them shows as from a pot. */
 export const ALL_POTS: Address[] = [POTS_AUSD, POTS_TESTUSD, ...(POTS_V2 ? [POTS_V2.ausd, POTS_V2.testusd] : [])];

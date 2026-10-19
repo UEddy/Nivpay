@@ -71,8 +71,8 @@ a call before anything is signed, so these send nothing.
 
 ## Changing a pot (NivPayPotsV2)
 
-Only pots made on NivPayPotsV2 can change, and nothing here shows while
-`POTS_V2` in `app/src/lib/config.ts` is null. Proposing, saying yes to,
+Only pots made on NivPayPotsV2 can change; pots made on NivPayPots before it
+show none of this. Proposing, saying yes to,
 withdrawing and making a change are each run as a call before anything is
 signed, so these send nothing. A change from someone who doesn't decide shows
 22, and one on a closed pot 95, as for payments and closing.

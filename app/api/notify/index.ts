@@ -90,7 +90,10 @@ export const CTK: Address = getAddress("0x7BEb5D9DB0d85cBEa543C04f0dE8c23c2176cd
 export const SETTLEMENT_PAIR: Address = getAddress("0x1Aa8958Aa34cEC8096EF4381cb335effe977b0ae");
 
 type Deployment = "ausd" | "testusd";
-export const POTS_V2 = null as Record<Deployment, Address> | null;
+export const POTS_V2 = {
+  ausd: getAddress("0xa41e0DdC0c94a795f200c5e850321242975dFA93"),
+  testusd: getAddress("0xE47CCe61e95fB4B451c0FfF0dD5164F2E48e79d1"),
+} as Record<Deployment, Address> | null;
 
 const DEPLOYMENTS: Record<Deployment, { pots: Address; potsV2: Address | null; tokens: { address: Address; decimals: number; symbol: string }[] }> = {
   ausd: { pots: POTS_AUSD, potsV2: POTS_V2?.ausd ?? null, tokens: [{ address: AUSD, decimals: 6, symbol: "$" }, { address: CTK, decimals: 18, symbol: "CTK" }] },

@@ -120,9 +120,10 @@ and would do so with the app gone.
 `src/NivPayPotsV2.sol` sits next to `NivPayPots`, which is untouched and
 keeps every pot already made on it. V2 does everything V1 does, the same
 way: every NivPayPots suite runs against V2 too (`test/PotsOnV2.t.sol`).
-What it adds is changes to a pot after it is made. The app makes new pots on
-V2 only once `POTS_V2` in `app/src/lib/config.ts` is set; until then nothing
-about V2 shows.
+What it adds is changes to a pot after it is made. Deployed on 19 Oct 2026
+(addresses under [Contract addresses](#contract-addresses)), and set in
+`app/src/lib/config.ts` as `POTS_V2`: the app makes new pots on V2, and every
+pot made on NivPayPots before stays there and works as it always did.
 
 | Change | Who proposes | Yeses | When it applies | While the pot is paused | Once the pot is closed |
 | --- | --- | --- | --- | --- | --- |
@@ -349,12 +350,14 @@ Monad testnet, chain id `10143`, RPC `https://testnet-rpc.monad.xyz`. The
 explorer is [MonadVision](https://testnet.monadvision.com), which reads
 verified source from Monad's Sourcify. The "Verified" links below are the
 Sourcify records themselves, so anyone can check them; each was checked on 9
-Oct 2026.
+Oct 2026, and the two NivPayPotsV2 on 19 Oct 2026.
 
 | Contract | Address | Verified source | What it is for |
 | --- | --- | --- | --- |
 | NivPayPots on AUSD | [`0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB`](https://testnet.monadvision.com/address/0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0xB9E68db3117Db149dF56F5Aa29CF6adaA2369EfB) | The product. Pots funded in AUSD. The app runs on this by default. |
 | NivPayPots on TESTUSD | [`0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA`](https://testnet.monadvision.com/address/0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0xe80FBB5F77Cb87d4f588A3F21bf9Eae34fC996aA) | The same bytecode bound to TESTUSD, the fallback for testing. |
+| NivPayPotsV2 on AUSD | [`0xa41e0DdC0c94a795f200c5e850321242975dFA93`](https://testnet.monadvision.com/address/0xa41e0DdC0c94a795f200c5e850321242975dFA93) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0xa41e0DdC0c94a795f200c5e850321242975dFA93) | Pots that can change, with a 72 hour exit window and a 7 day apply period, read back from the chain. New pots are made here; pots on NivPayPots stay there and keep working. See [Pots that can change](#pots-that-can-change-nivpaypotsv2). |
+| NivPayPotsV2 on TESTUSD | [`0xE47CCe61e95fB4B451c0FfF0dD5164F2E48e79d1`](https://testnet.monadvision.com/address/0xE47CCe61e95fB4B451c0FfF0dD5164F2E48e79d1) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0xE47CCe61e95fB4B451c0FfF0dD5164F2E48e79d1) | The same V2 bytecode bound to TESTUSD. |
 | NivPayNames | [`0x798f4a11c16C96561fE7834365420505542e280D`](https://testnet.monadvision.com/address/0x798f4a11c16C96561fE7834365420505542e280D) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0x798f4a11c16C96561fE7834365420505542e280D) | The username registry, one for both pot instances. No owner, no admin, no fee. See [Usernames for accounts](#usernames-for-accounts). |
 | NivPayTestDollar (TESTUSD) | [`0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7`](https://testnet.monadvision.com/address/0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7) | [exact match](https://sourcify-api-monad.blockvision.org/v2/contract/10143/0x9FD60818e0DFee982d677cd72FbC3601Cc2eB6f7) | A worthless test token anyone can mint, 100,000 per call. Testnet only. |
 | AUSD (Agora) | [`0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC`](https://testnet.monadvision.com/address/0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC) | [Monadscan](https://testnet.monadscan.com/address/0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC#code): proxy `AgoraDollarErc1967Proxy`, implementation `AgoraDollar`, both exact matches; not on Monad's Sourcify | Agora's six decimal dollar. Not ours. |
@@ -478,8 +481,9 @@ All of this is visible before anyone puts money in, but only if they look:
 
 ### NivPayPotsV2, each claim and the line that proves it
 
-Checked on 17 Oct 2026 against `src/NivPayPotsV2.sol` at this commit. Not
-deployed yet (its staging copy, below, runs this exact source). Everything
+Checked on 17 Oct 2026 against `src/NivPayPotsV2.sol` at this commit, the
+source both deployed instances are built from, byte for byte (see Deploying
+the contracts). Everything
 in the V1 table above holds for V2 as well, at the same functions; the lines
 below are V2's.
 
@@ -2406,7 +2410,25 @@ forge verify-contract `
 
 ### NivPayPotsV2, pots that can change
 
-**Not deployed yet.** One per token, next to each NivPayPots, which is not
+**Deployed** on 19 Oct 2026, AUSD first, then TESTUSD:
+
+| Token | Address | Transaction | Block |
+| --- | --- | --- | --- |
+| AUSD | `0xa41e0DdC0c94a795f200c5e850321242975dFA93` | `0x490c2e41598bcae2a69bc9f84c7ee383bd1e92105d92dbd3b858313243221a8d` | 72,436,819 |
+| TESTUSD | `0xE47CCe61e95fB4B451c0FfF0dD5164F2E48e79d1` | `0xe399f8493f48bd81ec2df18661f48274d7569ce1003c0fb13c8e8ad47128c86c` | 72,438,051 |
+
+Both receipts are committed under `broadcast/DeployPotsV2.s.sol/10143/` (one
+`run-*.json` each; `app/src/lib/config.test.ts` checks `POTS_V2` and its
+blocks against them). Checked on the chain after deploying: each is bound to
+the token in its row (AUSD and TESTUSD, both six decimals), with
+`EXIT_WINDOW` 259,200 seconds (72 hours), `APPLY_PERIOD` 604,800 seconds (7
+days), 50 bps, a 50 AUSD fee cap and the same fee recipient as NivPayPots.
+Each one's live code is byte for byte a build of this source with the
+`deploy` profile: 21,581 bytes, identical outside the 28 places the compiler
+leaves for immutables (which hold exactly those values), metadata trailer
+and so source hash included. Both are exact matches on Sourcify.
+
+How they were made: one per token, next to each NivPayPots, which is not
 touched. `script/DeployPotsV2.s.sol` takes no fee settings from the
 environment: it reads the token, `feeBps`, `feeCap` and `feeRecipient` off
 the live NivPayPots for that token, refuses any chain but `10143` and any
@@ -2441,13 +2463,11 @@ forge script script/DeployPotsV2.s.sol:DeployPotsV2 `
 
 The dry run against the live chain, on 17 Oct 2026, on the final source,
 reports **5,024,967 gas** for each, about **1.02 MON** at a 203 gwei max
-fee, and logs `exit window s 259200` and `apply period s 604800`. Note each
-`NivPayPotsV2` address it prints and the block of its transaction. Then, in
-`app/src/lib/config.ts`, set `POTS_V2` to `{ ausd: "<AUSD one>", testusd:
-"<TESTUSD one>" }` and `POTS_V2_DEPLOY_BLOCK` to their blocks, and the same
-`POTS_V2` in `app/api/notify/index.ts` (its test fails if the two differ).
-From that build on, new pots are made on V2, and pots on NivPayPots keep
-working there as before.
+fee, and logs `exit window s 259200` and `apply period s 604800`. Their
+addresses and blocks are set in `app/src/lib/config.ts` (`POTS_V2`,
+`POTS_V2_DEPLOY_BLOCK`), and the same `POTS_V2` in `app/api/notify/index.ts`
+(its test fails if the two differ). New pots are made on V2; pots on
+NivPayPots keep working there as before.
 
 Verify each, with its constructor arguments read from the NivPayPots next to it:
 
