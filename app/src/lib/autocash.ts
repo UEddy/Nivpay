@@ -138,6 +138,15 @@ export function cleanSettings(raw: unknown, currencies: readonly string[]): Auto
   return { on: r.on, ...req, since: r.since, pending };
 }
 
+/**
+ * The dollar's allowance the person signs for the desk: exactly the cap in
+ * force, as a total. It is not a daily allowance on the chain; the chain only
+ * counts it down as the desk moves money. The server keeps each 24 hours to
+ * the cap. A higher cap still waiting for its 24 hours is not signed for
+ * early: once it applies, "Allow again" signs it.
+ */
+export const allowanceToSign = (s: Pick<AutoCashSettings, "cap">): bigint => BigInt(s.cap);
+
 /** Dollars moved in the last 24 hours. */
 export function movedToday(moves: readonly { dollars: string; at: number }[], now: number): bigint {
   return moves.filter((m) => now - m.at < DAY_MS && now >= m.at).reduce((sum, m) => sum + BigInt(m.dollars), 0n);

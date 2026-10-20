@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Address } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
-import { cleanBankName, DEFAULT_CAP, lastFour, MAX_CAP, MIN_MOVE, type AutoCashRequest, type Bank } from "../lib/autocash.ts";
-import { ALLOWANCE_ABI, allowanceData, allowanceLabel, autoCashOff, AutoCashLocalStore, cancelAutoCashChange, readAutoCash, saveAutoCash, type AutoCashInfo } from "../lib/autocashLive.ts";
+import { allowanceToSign, cleanBankName, DEFAULT_CAP, lastFour, MAX_CAP, MIN_MOVE, type AutoCashRequest, type Bank } from "../lib/autocash.ts";
+import { ALLOWANCE_ABI, allowanceData, allowanceFor, allowanceLabel, autoCashOff, AutoCashLocalStore, cancelAutoCashChange, readAutoCash, saveAutoCash, type AutoCashInfo } from "../lib/autocashLive.ts";
 import { liveWriteChain } from "../lib/chain.ts";
 import { DEPLOYMENT, DOLLAR } from "../lib/deployment.ts";
 import { AppError, describeFailure } from "../lib/errors.ts";
 import { idbWriteStore } from "../lib/idb.ts";
-import { LIMIT_DECIMALS, LimitStore, limitNow } from "../lib/limits.ts";
+import { LIMIT_DECIMALS } from "../lib/limits.ts";
 import { dateLocale } from "../lib/locale.ts";
 import { amountForField, amountIn, formatAmount } from "../lib/money.ts";
 import { currencyFor, defaultCurrency } from "../lib/ramp.ts";
@@ -99,13 +99,13 @@ export function AutoCashSection(props: { account: Address }) {
     setOff(null);
     setBusy(copy.autoCashSaving);
     try {
-      const pending = await saveAutoCash(me, req, sign);
+      const { cap, pending } = await saveAutoCash(me, req, sign);
       const before = local.get();
       // The bank in force stays until a new one has waited its 24 hours.
       local.set({ bank: pending?.bank && before ? before.bank : req.bank, currency: req.currency, ...(pending?.bank ? { next: req.bank } : {}) });
-      // Up to the most a day, and the higher one waiting, so the desk can carry on once it applies.
-      const target = [BigInt(req.cap), BigInt(pending?.cap ?? "0")].reduce((a, b) => (a > b ? a : b));
-      if (allowance === null || allowance < target) await allow(info.desk, target);
+      // Exactly the cap in force, as a total (lib/autocash.ts allowanceToSign); a higher cap waiting is signed once it applies.
+      const target = allowanceFor(info.desk, cap);
+      if (allowance !== target.amount) await allow(info.desk, target.amount);
       if (alive.current) setEditing(false);
     } catch (e) {
       if (alive.current) setNotice(failure(e));
@@ -171,7 +171,7 @@ export function AutoCashSection(props: { account: Address }) {
   return (
     <section className="settings-screen autocash">
       <TestModeLine />
-      {!info.enabled && <NoticeLine notice={{ tone: "bad", text: copy.autoCashDeskOff, code: ERROR_CODES.RAMP_PAUSED }} />}
+      {!info.enabled && <NoticeLine notice={{ tone: "bad", text: copy.autoCashDeskOff, code: ERROR_CODES.AUTOCASH_PAUSED }} />}
       {off !== null && (
         <p className="success" role="status">
           {off === "taking" ? copy.autoCashTakingBack : off === "done" ? copy.autoCashOffDone : copy.autoCashOffNeedsFingerprint}
@@ -198,8 +198,8 @@ export function AutoCashSection(props: { account: Address }) {
           )}
           {allowance !== null && allowance < capLeft && (
             <>
-              <p className="hint">{copy.autoCashAllowanceLow(usd(allowance))}</p>
-              <button type="button" className="btn" disabled={busy !== null || !info.desk} onClick={() => info.desk && void allow(info.desk, cap).then(load, (e) => setNotice(failure(e))).finally(() => setBusy(null))}>
+              <p className="hint">{copy.autoCashAllowanceLow(usd(allowance), usd(cap))}</p>
+              <button type="button" className="btn" disabled={busy !== null || !info.desk} onClick={() => info.desk && void allow(info.desk, allowanceToSign({ cap: cap.toString() })).then(load, (e) => setNotice(failure(e))).finally(() => setBusy(null))}>
                 {copy.autoCashAllowAgain}
               </button>
             </>
@@ -259,19 +259,13 @@ function AutoCashForm(props: {
   const [capText, setCapText] = useState(amountForField(props.initial.cap ? BigInt(props.initial.cap) : DEFAULT_CAP, LIMIT_DECIMALS));
   const [tried, setTried] = useState(false);
 
-  let dailyLimit = 1_000_000_000n;
-  try {
-    dailyLimit = limitNow(new LimitStore(localStorage, DEPLOYMENT, props.account).get(), Date.now());
-  } catch {
-    // Storage refused: the default daily limit.
-  }
   const cap = amountIn(capText, LIMIT_DECIMALS);
   const keep = keepOn ? amountIn(keepText, LIMIT_DECIMALS) : null;
   const name = cleanBankName(bankName);
   // Changing it: an empty account number keeps the bank in force, if this phone knows it.
   const keepBank = props.changing && props.initial.bank !== null && accountNumber.trim() === "" && bankName.trim() === props.initial.bank.name;
   const last4 = keepBank ? props.initial.bank!.last4 : lastFour(accountNumber);
-  const capProblem = cap === null || cap < MIN_MOVE || cap > MAX_CAP ? copy.autoCashCapRange : cap > dailyLimit ? copy.autoCashCapOverLimit(usd(dailyLimit)) : null;
+  const capProblem = cap === null || cap < MIN_MOVE || cap > MAX_CAP ? copy.autoCashCapRange : null;
   const ok = name !== null && last4 !== null && capProblem === null && (!keepOn || keep !== null);
 
   const submit = () => {
@@ -327,7 +321,7 @@ function AutoCashForm(props: {
         <input inputMode="decimal" value={capText} disabled={props.busy !== null} onChange={(e) => setCapText(e.target.value)} />
       </label>
       <AmountUnderstood text={capText} decimals={LIMIT_DECIMALS} />
-      {capProblem ? <p className="error">{capProblem}</p> : <p className="hint">{copy.autoCashCapHint(usd(dailyLimit))}</p>}
+      <p className={capProblem ? "error" : "hint"}>{copy.autoCashCapRange}</p>
 
       {cap !== null && capProblem === null && <p className="autocash-desk">{copy.autoCashDeskCan(usd(cap))}</p>}
       <p className="hint">{copy.autoCashFingerprints}</p>

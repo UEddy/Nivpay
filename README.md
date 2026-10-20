@@ -24,6 +24,50 @@ Released under the MIT License, see [LICENSE](./LICENSE). The hackathon
 checklist is in [docs/SUBMISSION.md](./docs/SUBMISSION.md), and the use of AI
 coding tools is disclosed under [AI disclosure](#ai-disclosure).
 
+## Changes since submission
+
+The version judged is the tag
+[`submission-2026-10-13`](https://github.com/UEddy/Nivpay/tree/submission-2026-10-13)
+(commit `843cbbe`): the production deploy of 13 Oct 2026 at 18:59 UTC, live
+when the entry was submitted, about 19:59 UTC, 8 hours before the 23:59 US
+Eastern deadline. The judges confirmed building could go on. Everything below
+came after it
+([the full list of commits](https://github.com/UEddy/Nivpay/compare/submission-2026-10-13...master)):
+
+* **Safety around pots and payments.** A Who controls this pot card before
+  putting money in; pots from people you may not know held in a New pots list
+  with Keep, Hide and Report; contacts, with warnings on a first payment to
+  someone; a daily limit on money leaving the account ($1,000 by default,
+  raised only after 24 hours).
+* **Usernames.** NivPayNames, a new contract: choose an @username, send to
+  one, and see it beside names, with a check of the last 4 characters on a
+  first payment.
+* **Pots that can change.** NivPayPotsV2, a new contract next to the
+  untouched NivPayPots: deciders can add a payee, change a limit, remove a
+  payee or close later, and changes that widen spending wait 72 hours so
+  anyone who disagrees can take their part out first.
+* **Where your money went.** On a pot's screen, each person's money in, their
+  part of each payment and of the fees, and what is left.
+* **The pot map.** Each person at their city on a world map, opt in and city
+  only, moved and zoomed by hand.
+* **Profile and the app around it.** A tab bar, Profile laid out like a
+  phone's settings, a display name, profile photos, Devices and sessions, Log
+  out, Help and support, an install banner, dark mode that follows the phone,
+  and History on Home.
+* **Languages.** French, Spanish and Portuguese, written by AI and awaiting
+  native review, with amounts and dates the reader's way.
+* **Notifications.** A bell in the app, and pushes on the phone, opt in per
+  phone; asking someone for money directly, sealed so only their phones read
+  it.
+* **Voice.** Voice commands on Send and on a pot, paying only contacts
+  trusted for voice after 10 payments together, at most $200; "Hey NivPay",
+  heard on the phone while the app is open, shown by the Pots logo glowing;
+  and hands free: the payment read back aloud, a spoken yes, then the
+  fingerprint, which is still needed every time.
+* **Auto cash out**, in test mode like Add money and Cash out: dollars that
+  arrive go to the bank by the test desk, a simulation in which no bank is
+  paid.
+
 ## The problem, and who it is for
 
 Every group that collects money for one thing has the same two fears. The
@@ -2698,15 +2742,19 @@ check identities itself.
 * **Turning it on.** A currency from the same 18, a bank (its name, the
   account name and the account number), what to cash out (everything that
   arrives, or everything above a balance to keep, such as "keep $100"), and
-  the most a day, $500 unless chosen, no more than the daily limit. Only the
+  the most a day, $500 unless chosen, $1 to $1,000. Only the
   bank's name and the last 4 digits of the account number leave the phone:
   the account name and the full number are never stored, sent or logged. The
   choices are kept in the private Blob store under the account, sent with a
   proof the account's passkey signs (one fingerprint). A second fingerprint
-  signs the dollar's own allowance letting the desk's account move up to the
-  most a day, through `sendWrite` like every write, and the screen says it
-  plainly: "NivPay's cash-out desk can move up to $500 a day from your
-  account to your bank. Turn this off any time."
+  signs the dollar's own allowance for the desk's account, through
+  `sendWrite` like every write: exactly the cap in force, as a total
+  (`allowanceToSign`, tested), never a higher cap still waiting. The screen
+  says what the chain and the server each do: "One fingerprint lets NivPay's
+  cash-out desk move up to $500 in total from your account to your bank.
+  NivPay's server sends at most $500 of it in any 24 hours, and once the $500
+  is used up nothing more moves until you allow it again. Turn this off any
+  time."
 * **How it runs.** The same trigger as notifications: when a payment is final,
   the sender's app calls `/api/notify` with its transaction, and `/api/notify`
   asks `/api/autocash` about each account it is telling "received" for
@@ -2743,26 +2791,26 @@ check identities itself.
   balance apply at once. A new bank, or a higher cap, waits 24 hours, like
   the daily limit, with "Your new bank is used from Tue 20 Oct, 09:40" and
   Cancel; until then the old ones are used.
-* **The daily limit.** The desk can't see the phone's daily limit, so the
-  cap can be no more than it when chosen, and each move counts towards it
-  on the phone once the phone hears of it (`recordAutoCash`), so later sends
-  that day are limited by it. Payments made on the phone don't lower what
-  the desk may move that day.
-* **The allowance is a total, not a day.** The dollar's allowance counts down
-  as the desk moves money; the cap of what moves in any 24 hours is the
-  server's rule. Once the allowance is used up, money stays in the account,
-  the person is told, and one fingerprint ("Allow again") sets it back to the
-  cap. A contract could make it a true daily allowance on the chain; none was
-  deployed for this.
+* **Apart from the daily limit.** Auto cash out does not count towards the
+  [daily limit](#daily-limit), which lives on the phone, where the desk
+  can't see it and the server can't enforce it. It is bounded by its own cap
+  instead, which the server keeps.
+* **The allowance is a total, not a day.** The chain only counts the
+  dollar's allowance down as the desk moves money; nothing on the chain
+  resets it each day. Keeping each 24 hours to the cap is the server's rule.
+  Once the allowance is used up, money stays in the account, the person is
+  told, and one fingerprint ("Allow again") sets it back to the cap. A
+  contract could make a daily allowance on the chain; none was deployed for
+  this.
 * **Limits.** The `RAMP_ENABLED` kill switch (money that arrives is told as
   staying, nothing is claimed, and the key is never read), same origin only,
   a 1 KB body cap, a proof under 5 minutes old for every change but off, 10
   requests a minute and 6 moves an hour for one account, and the desk's 30
   transactions an hour, shared with Add money. The desk key is read only once
   a move is due, after every check, and never logged; logs carry the account,
-  amounts and transactions, never the bank. Error codes 63 to 67 cover it, as
-  they cover Cash out (`docs/ERROR-CODES.md`): every two digit code was
-  already taken.
+  amounts and transactions, never the bank. Its error codes are its own, 100
+  to 104 (`docs/ERROR-CODES.md`), apart from Cash out's 63 to 67: every two
+  digit code was already taken.
 
 ## Mainnet plan: money in and out in any currency
 

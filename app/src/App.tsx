@@ -44,7 +44,6 @@ import { dismiss, fromArrivals, fromAutoCash, fromPoll, fromRequests, markAllRea
 import { readComing } from "./lib/changesLive.ts";
 import { MutedStore } from "./lib/inbox.ts";
 import { VoiceStore } from "./lib/voice.ts";
-import { spendAutoCash } from "./lib/spending.ts";
 import { AutoCashLocalStore, AutoCashSeenStore, checkArrivals, readAutoCash } from "./lib/autocashLive.ts";
 import { askToListen, asksForVoice, onVoiceSettings, withoutVoiceAsk } from "./lib/voiceAsk.ts";
 import { voiceReady, wakeReady } from "./lib/voiceOn.ts";
@@ -915,14 +914,13 @@ function Home(props: {
   const autoSeen = useMemo(() => new AutoCashSeenStore(localStorage, DEPLOYMENT, owner), [owner]);
   const [autoCash, setAutoCash] = useState<ReadonlySet<string>>(() => autoSeen.all());
   const autoOn = useRef(false);
-  /** What Auto cash out did lately: in the bell, in History, and towards the daily limit. */
+  /** What Auto cash out did lately: in the bell and in History. It is kept to its own cap, apart from the daily limit. */
   const readAutoCashNow = useCallback(async () => {
     if (DEPLOYMENT !== "ausd") return;
     const info = await readAutoCash(owner);
     autoOn.current = info.on;
     const mine = new AutoCashLocalStore(localStorage, DEPLOYMENT, owner).get();
     setAutoCash(autoSeen.add(info.moves.map((m) => m.tx)));
-    spendAutoCash(owner, info.moves);
     setNotes(notesStore.update((st) => fromAutoCash(st, info, mine ? copy.bankEnding(mine.bank.name, mine.bank.last4) : undefined)));
   }, [owner, autoSeen, notesStore]);
   useEffect(() => {

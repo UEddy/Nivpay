@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { amountToMove, cancelPending, change, cleanBankName, cleanRequest, cleanSettings, DAY_MS, DEFAULT_CAP, lastFour, movedToday, settle, turnOff, WAIT_MS, type AutoCashRequest } from "./autocash.ts";
+import { decodeFunctionData, getAddress } from "viem";
+import { allowanceToSign, amountToMove, cancelPending, change, cleanBankName, cleanRequest, cleanSettings, DAY_MS, DEFAULT_CAP, lastFour, movedToday, settle, turnOff, WAIT_MS, type AutoCashRequest } from "./autocash.ts";
+import { ALLOWANCE_ABI, allowanceFor } from "./autocashLive.ts";
 
 const $ = (n: number) => BigInt(Math.round(n * 100)) * 10_000n;
 const FIRST = { name: "First Bank", last4: "6789" };
@@ -109,4 +111,25 @@ test("stored settings are read back only if every field is well formed", () => {
   assert.equal(cleanSettings({ ...s, bank: { name: "First Bank", last4: "0123456789" } }, ["NGN"]), null);
   assert.equal(cleanSettings({ ...s, pending: { bank: { name: "x", last4: "1" }, startsAt: 1 } }, ["NGN"]), null);
   assert.equal(cleanSettings(null, ["NGN"]), null);
+});
+
+test("the allowance signed is exactly the cap in force, a total: never a cap still waiting, never more", () => {
+  const desk = getAddress("0x7EAf7f3e330ac388A0e951e80957B7274597297c");
+  const signed = (cap: string) => {
+    const { amount, data } = allowanceFor(desk, cap);
+    const call = decodeFunctionData({ abi: ALLOWANCE_ABI, data });
+    assert.equal(call.functionName, "approve");
+    assert.deepEqual(call.args, [desk, amount]);
+    return amount;
+  };
+  const on = change(null, ask(), T0);
+  assert.equal(signed(on.cap), DEFAULT_CAP);
+  assert.equal(allowanceToSign(on), DEFAULT_CAP);
+  // A higher cap waits 24 hours: the allowance stays the cap in force until it applies.
+  const raised = change(on, ask({ cap: $(800).toString() }), T0 + 1);
+  assert.equal(signed(raised.cap), DEFAULT_CAP);
+  assert.equal(signed(settle(raised, T0 + 1 + WAIT_MS).cap), $(800));
+  // A lower cap applies at once, and so does the allowance.
+  assert.equal(signed(change(on, ask({ cap: $(100).toString() }), T0 + 2).cap), $(100));
+  for (const cap of [$(1), $(37.5), $(1000)]) assert.equal(signed(cap.toString()), cap);
 });

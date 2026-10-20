@@ -120,7 +120,8 @@ test("vendors and people are shown as 'account ending', never a 0x form", () => 
 });
 
 test("every error code is shown as a short neutral 'Code N'", () => {
-  for (const n of Object.values(ERROR_CODES)) assert.match(copy.code(n), /^Code \d{2}$/);
+  // Two digits, and from 100 three: Auto cash out has its own, 100 to 104, as every two digit code was taken.
+  for (const n of Object.values(ERROR_CODES)) assert.match(copy.code(n), /^Code (\d{2}|1\d{2})$/);
   const codes = Object.values(ERROR_CODES);
   assert.equal(new Set(codes).size, codes.length, "codes are unique");
 });

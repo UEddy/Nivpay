@@ -95,7 +95,17 @@ export function StatementScreen(props: { account: StoredAccount; tx: Hex; curren
     setFailed(null);
     askStatement(me, props.currency, props.tx)
       .then((s) => live && setStatement(s))
-      .catch((e) => live && setFailed({ tone: "bad", ...(e instanceof AppError ? { text: e.message, code: e.code } : describeFailure(e)) }));
+      .catch((e) => {
+        // Auto cash out's own codes (100 to 104), never Cash out's.
+        const code = e instanceof AppError ? e.code : null;
+        const notice =
+          code === ERROR_CODES.RAMP_UNREACHABLE
+            ? { text: copy.errAutoCashUnreachable, code: ERROR_CODES.AUTOCASH_UNREACHABLE }
+            : code === ERROR_CODES.RAMP_PAUSED
+              ? { text: copy.errAutoCashPaused, code: ERROR_CODES.AUTOCASH_PAUSED }
+              : { text: copy.errAutoCashStatement, code: ERROR_CODES.AUTOCASH_STATEMENT };
+        if (live) setFailed({ tone: "bad", ...notice });
+      });
     return () => {
       live = false;
     };

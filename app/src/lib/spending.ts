@@ -2,7 +2,7 @@ import type { Address } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
 import { DEPLOYMENT } from "./deployment.ts";
 import { AppError } from "./errors.ts";
-import { checkSpend, finishSpend, LIMIT_DECIMALS, LimitStore, recordAutoCash, recordSpend, type SpendKind } from "./limits.ts";
+import { checkSpend, finishSpend, LIMIT_DECIMALS, LimitStore, recordSpend, type SpendKind } from "./limits.ts";
 import { formatAmount } from "./money.ts";
 
 /**
@@ -40,20 +40,6 @@ export function spendEnded(account: Address, write: { nonce: number }, outcome: 
   if (outcome === "stuck") return;
   try {
     store(account).update((s) => finishSpend(s, String(write.nonce), outcome === "final" ? "final" : "failed"));
-  } catch {
-    // As above.
-  }
-}
-
-/**
- * Auto cash out's moves (api/autocash) count towards the daily limit too, from
- * when the desk made them, each once by its transaction. The desk can't see
- * this phone's limit, so a move is counted here once the phone hears of it.
- */
-export function spendAutoCash(account: Address, moves: readonly { tx: string; dollars: bigint; at: number }[]): void {
-  if (!moves.length) return;
-  try {
-    store(account).update((s) => recordAutoCash(s, moves));
   } catch {
     // As above.
   }

@@ -1,6 +1,6 @@
 import { encodeFunctionData, getAddress, isAddress, type Address, type Hex } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
-import type { AutoCashRequest, Bank } from "./autocash.ts";
+import { allowanceToSign, type AutoCashRequest, type Bank } from "./autocash.ts";
 import { AppError } from "./errors.ts";
 import { proofMessage, sha256Hex } from "./proof.ts";
 
@@ -46,16 +46,17 @@ async function call(fetcher: Fetch, init?: RequestInit, query = ""): Promise<Res
   try {
     return await fetcher(`/api/autocash${query}`, init);
   } catch {
-    throw new AppError(copy.errRampUnreachable, ERROR_CODES.RAMP_UNREACHABLE);
+    throw new AppError(copy.errAutoCashUnreachable, ERROR_CODES.AUTOCASH_UNREACHABLE);
   }
 }
 
 const post = (body: Record<string, unknown>): RequestInit => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
+/** Auto cash out's own codes, 100 to 104, never Cash out's. */
 function refused(status: number): AppError {
-  if (status === 503) return new AppError(copy.errRampPaused, ERROR_CODES.RAMP_PAUSED);
-  if (status >= 500) return new AppError(copy.errRampFailed, ERROR_CODES.RAMP_FAILED);
-  return new AppError(copy.errRampRefused, ERROR_CODES.RAMP_REFUSED);
+  if (status === 503) return new AppError(copy.errAutoCashPaused, ERROR_CODES.AUTOCASH_PAUSED);
+  if (status >= 500) return new AppError(copy.errAutoCashFailed, ERROR_CODES.AUTOCASH_FAILED);
+  return new AppError(copy.errAutoCashRefused, ERROR_CODES.AUTOCASH_REFUSED);
 }
 
 export async function readAutoCash(account: Address, fetcher: Fetch = fetch): Promise<AutoCashInfo> {
@@ -81,15 +82,20 @@ export async function readAutoCash(account: Address, fetcher: Fetch = fetch): Pr
   };
 }
 
-/** Turns it on, or changes it: one fingerprint signs the settings, and the server applies its rules (lib/autocash.ts). */
-export async function saveAutoCash(account: Address, req: AutoCashRequest, sign: Sign, fetcher: Fetch = fetch, now = Date.now()): Promise<AutoCashInfo["pending"]> {
+/**
+ * Turns it on, or changes it: one fingerprint signs the settings, and the
+ * server applies its rules (lib/autocash.ts). Returns the cap in force after
+ * it, which is what the allowance is set to, and any change waiting.
+ */
+export async function saveAutoCash(account: Address, req: AutoCashRequest, sign: Sign, fetcher: Fetch = fetch, now = Date.now()): Promise<{ cap: string; pending: AutoCashInfo["pending"] }> {
   const time = Math.floor(now / 1000);
   const data = `sha256:${await sha256Hex(new TextEncoder().encode(requestText(req)))}`;
   const signature = await sign(proofMessage({ subject: "autocash", action: "on", account, data, time, site: location.host }));
   const res = await call(fetcher, post({ kind: "set", account: getAddress(account), settings: JSON.parse(requestText(req)), time, signature }));
   if (!res.ok) throw refused(res.status);
-  const b = (await res.json().catch(() => ({}))) as { pending?: AutoCashInfo["pending"] };
-  return b.pending ?? null;
+  const b = (await res.json().catch(() => ({}))) as { cap?: unknown; pending?: AutoCashInfo["pending"] };
+  if (!isAmount(b.cap)) throw new AppError(copy.errAutoCashFailed, ERROR_CODES.AUTOCASH_FAILED);
+  return { cap: b.cap, pending: b.pending ?? null };
 }
 
 /** Drops a change still waiting for its 24 hours. One fingerprint. */
@@ -123,6 +129,12 @@ export { ALLOWANCE_ABI };
 
 /** The dollar's own call that lets the desk move up to `amount` from this account; 0 takes it back. */
 export const allowanceData = (desk: Address, amount: bigint) => encodeFunctionData({ abi: ALLOWANCE_ABI, functionName: "approve", args: [desk, amount] });
+
+/** The allowance write for the cap in force (lib/autocash.ts allowanceToSign): its amount and its data. */
+export function allowanceFor(desk: Address, cap: string): { amount: bigint; data: Hex } {
+  const amount = allowanceToSign({ cap });
+  return { amount, data: allowanceData(desk, amount) };
+}
 
 /** Label for the allowance's pending write: "autocash <desk> <amount>". */
 export const allowanceLabel = (desk: Address, amount: bigint) => `autocash ${desk} ${amount}`;
