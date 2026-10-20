@@ -23,13 +23,21 @@
 //    hours, not seconds, which leaves time for the kill switch.
 //  * Request bodies over MAX_BODY_BYTES are refused unread.
 //
+// A broadcast that times out or errors may still have gone out. The grant is
+// signed first, so its hash is known before it is sent, and on any broadcast
+// error the handler looks for that hash (mined, or pending) and, if it isn't
+// seen, sends the same signed bytes once more, which can only ever be that one
+// grant. Only when it truly didn't go out is SEND_FAILED answered. One request
+// is one signed grant at one nonce: a nonce conflict moves to the next nonce
+// only after checking that this request's own grant isn't the one that took it.
+//
 // The funder key is read only after every check has passed, never when
 // FUNDING_ENABLED is off, and never logged. Logs carry the address, the
 // amount and the transaction hash, and nothing else from the request.
 
 import {
   createPublicClient,
-  createWalletClient,
+  keccak256,
   getAddress,
   http,
   isAddress,
@@ -74,8 +82,12 @@ export interface FundChain {
   /** Transactions this address has sent, counting pending ones. */
   sentCount(address: Address): Promise<number>;
   fees(): Promise<Fees>;
-  /** Sends GRANT from the funder with this nonce. Throws on a nonce conflict. */
-  sendGrant(to: Address, nonce: number, fees: Fees): Promise<Hex>;
+  /** Signs GRANT from the funder at this nonce, without sending it: its raw bytes and its hash. The key is read here. */
+  signGrant(to: Address, nonce: number, fees: Fees): Promise<{ raw: Hex; hash: Hex }>;
+  /** Sends signed bytes. Throws on a nonce conflict, a timeout or any refusal. */
+  broadcast(raw: Hex): Promise<void>;
+  /** Whether a transaction is mined, waiting to be (pending), or not seen at all. Read failures count as not seen. */
+  grantSeen(hash: Hex): Promise<"mined" | "pending" | null>;
   funderNonce(): Promise<number>;
   /** The newest block number. */
   latestBlock(): Promise<bigint>;
@@ -122,12 +134,39 @@ export function forgetRecentGrants(): void {
   recent.clear();
 }
 
+/** How many times, and how far apart, a grant whose broadcast failed is looked for before answering. */
+export const LOOKS = 3;
+export const LOOK_EVERY_MS = 2_000;
+
+/**
+ * After a broadcast that errored: did this grant go out? Looks for its hash a
+ * few times, then sends the same signed bytes once more (the same grant, so
+ * never a second one) and looks again. "mined" or "pending" if it went out;
+ * null only if it truly didn't.
+ */
+async function wentOut(chain: FundChain, grant: { raw: Hex; hash: Hex }, pause: (ms: number) => Promise<void>): Promise<"mined" | "pending" | null> {
+  for (let i = 0; i < LOOKS; i++) {
+    const seen = await chain.grantSeen(grant.hash).catch(() => null);
+    if (seen) return seen;
+    await pause(LOOK_EVERY_MS);
+  }
+  try {
+    await chain.broadcast(grant.raw);
+    return "pending";
+  } catch (error) {
+    // The node already holds these exact bytes: it went out.
+    if (/already known/i.test(String((error as { details?: string; message?: string })?.details ?? (error as Error)?.message ?? error))) return "pending";
+  }
+  return chain.grantSeen(grant.hash).catch(() => null);
+}
+
 export async function handleFund(
   request: Request,
   env: FundEnv,
   makeChain: (env: FundEnv) => FundChain,
   log: Logger = (e) => console.log(JSON.stringify(e)),
   now: () => number = Date.now,
+  pause: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
 ): Promise<Response> {
   if (request.method !== "POST") return json(405, { error: "use POST" });
 
@@ -180,14 +219,20 @@ export async function handleFund(
     if ((await chain.balance(funder)) - cost < FLOOR) return refuse(503, "funding is paused, the funder is at its floor");
 
     stage = "send";
-    const hash = await serialized(async () => {
+    const { hash, state } = await serialized(async () => {
       let lastError: unknown;
       for (let attempt = 0; attempt < 4; attempt++) {
         const nonce = await chain.funderNonce();
+        const grant = await chain.signGrant(address, nonce, fees);
         try {
-          return await chain.sendGrant(address, nonce, fees);
+          await chain.broadcast(grant.raw);
+          return { hash: grant.hash, state: "sent" as const };
         } catch (error) {
           lastError = error;
+          // A timeout or any other error: it may have gone out all the same. Look before answering.
+          // A nonce conflict too: if it was this request's own grant that took the nonce, it is the one.
+          const seen = isNonceConflict(error) ? await chain.grantSeen(grant.hash).catch(() => null) : await wentOut(chain, grant, pause);
+          if (seen) return { hash: grant.hash, state: seen };
           if (!isNonceConflict(error)) break;
         }
       }
@@ -195,8 +240,9 @@ export async function handleFund(
     });
 
     recent.set(address, now());
-    log({ event: "grant", address, amountWei: GRANT.toString(), hash });
-    return json(200, { hash });
+    log({ event: "grant", address, amountWei: GRANT.toString(), hash, ...(state === "sent" ? {} : { after: `the broadcast errored, then found ${state}` }) });
+    // Mined or pending, the app waits for it to be final (app/src/lib/send.ts ensureGas), as for any grant.
+    return json(200, { hash, ...(state === "pending" ? { pending: true } : {}) });
   } catch (error) {
     // Only a short category and a sanitized one line detail are logged and
     // returned, never the raw error: it could carry configuration details.
@@ -244,14 +290,16 @@ export function liveChain(env: FundEnv): FundChain {
   const transport = http(RPC_URL, { timeout: 10_000, retryCount: 1 });
   const client = createPublicClient({ chain: monadTestnet, transport });
   const funderAddress = getAddress(env.FUNDER_ADDRESS ?? "");
-  let wallet: ReturnType<typeof createWalletClient> | undefined;
-  const walletClient = () => {
-    if (wallet) return wallet;
+  let signer: ReturnType<typeof privateKeyToAccount> | undefined;
+  const funderSigner = () => {
+    if (signer) return signer;
     const account = privateKeyToAccount(normalizeFunderKey(env.FUNDER_PRIVATE_KEY));
     if (account.address !== funderAddress) throw new FundConfigError("FUNDER_KEY_MISMATCH");
-    wallet = createWalletClient({ account, chain: monadTestnet, transport: http(RPC_URL, { timeout: 10_000, retryCount: 0 }) });
-    return wallet;
+    signer = account;
+    return signer;
   };
+  // Broadcasts: one attempt per call, so a timeout is answered by looking for the grant, never by a blind resend.
+  const broadcaster = createPublicClient({ chain: monadTestnet, transport: http(RPC_URL, { timeout: 10_000, retryCount: 0 }) });
   return {
     chainId: () => client.getChainId(),
     hasCode: async (a) => ((await client.getCode({ address: a })) ?? "0x") !== "0x",
@@ -265,17 +313,20 @@ export function liveChain(env: FundEnv): FundChain {
       const maxFeePerGas = (price * 105n) / 100n;
       return { maxFeePerGas, maxPriorityFeePerGas: tip < maxFeePerGas ? tip : maxFeePerGas };
     },
-    sendGrant: (to, nonce, fees) => {
-      const w = walletClient();
-      return w.sendTransaction({
-        account: w.account!,
-        chain: monadTestnet,
-        to,
-        value: GRANT,
-        gas: GRANT_GAS,
-        nonce,
-        ...fees,
-      });
+    signGrant: async (to, nonce, fees) => {
+      const raw = await funderSigner().signTransaction({ chainId: CHAIN_ID, type: "eip1559", to, value: GRANT, gas: GRANT_GAS, nonce, ...fees });
+      return { raw, hash: keccak256(raw) };
+    },
+    broadcast: async (raw) => {
+      await broadcaster.sendRawTransaction({ serializedTransaction: raw });
+    },
+    grantSeen: async (hash) => {
+      try {
+        const tx = await client.getTransaction({ hash });
+        return tx.blockNumber === null ? "pending" : "mined";
+      } catch {
+        return null;
+      }
     },
   };
 }

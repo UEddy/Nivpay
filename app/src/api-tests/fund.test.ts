@@ -47,8 +47,16 @@ type Script = {
   historyFails?: boolean;
 };
 
+/** A grant's signed bytes and hash, from its nonce alone, as the scripted chain makes them. */
+const rawOf = (nonce: number) => `0x${nonce.toString(16).padStart(8, "0")}` as Hex;
+const hashOf = (nonce: number) => `0x${nonce.toString(16).padStart(64, "0")}` as Hex;
+const nonceOf = (raw: Hex) => parseInt(raw.slice(2), 16);
+const noPause = async () => {};
+
 function chain(s: Script = {}) {
   const sentWith: number[] = [];
+  /** Grants the scripted chain holds, by hash: mined once broadcast, unless a test says otherwise. */
+  const seen = new Map<string, "mined" | "pending">();
   let nextNonce = 40;
   let conflicts = s.conflictsFirst ?? 0;
   const c: FundChain = {
@@ -64,18 +72,21 @@ function chain(s: Script = {}) {
       if (s.historyFails) throw new Error("missing trie node");
       return s.nonceHourAgo ?? 40;
     },
-    sendGrant: async (_to: Address, nonce: number) => {
+    signGrant: async (_to: Address, nonce: number) => ({ raw: rawOf(nonce), hash: hashOf(nonce) }),
+    broadcast: async (raw: Hex) => {
+      const nonce = nonceOf(raw);
       if (conflicts > 0) {
         conflicts--;
         throw new Error("nonce too low");
       }
       if (sentWith.includes(nonce)) throw new Error("nonce too low");
       sentWith.push(nonce);
+      seen.set(hashOf(nonce), "mined");
       nextNonce = nonce + 1;
-      return `0x${nonce.toString(16).padStart(64, "0")}` as Hex;
     },
+    grantSeen: async (hash: Hex) => seen.get(hash) ?? null,
   };
-  return { c, sentWith };
+  return { c, sentWith, seen };
 }
 
 beforeEach(() => forgetRecentGrants());
@@ -279,7 +290,7 @@ test("a failed send answers 502 with a code, and logs the code without the key",
   const { lines, log } = capture();
   const configBroken: FundChain = {
     ...chain().c,
-    sendGrant: async () => {
+    signGrant: async () => {
       throw new FundConfigError("FUNDER_KEY_MALFORMED");
     },
   };
@@ -290,11 +301,11 @@ test("a failed send answers 502 with a code, and logs the code without the key",
 
   const rpcDown: FundChain = {
     ...chain().c,
-    sendGrant: async () => {
+    broadcast: async () => {
       throw new Error(`send failed, raw 0x${"ef".repeat(120)}`);
     },
   };
-  const res2 = await handleFund(req({ address: USER }), env(), () => rpcDown, log);
+  const res2 = await handleFund(req({ address: USER }), env(), () => rpcDown, log, Date.now, noPause);
   assert.equal(((await res2.json()) as { code: string }).code, "SEND_FAILED");
   const last = lines.at(-1) ?? {};
   assert.equal(last.code, "SEND_FAILED");
@@ -362,10 +373,10 @@ test("an attacker with endless fresh addresses gets GRANTS_PER_HOUR an hour, not
     ...chain().c,
     funderNonce: async () => nonce,
     funderNonceAt: async () => startNonce,
-    sendGrant: async (_to, n) => {
-      sentWith.push(n);
-      nonce = n + 1;
-      return `0x${n.toString(16).padStart(64, "0")}` as Hex;
+    signGrant: async (_to, n) => ({ raw: rawOf(n), hash: hashOf(n) }),
+    broadcast: async (raw) => {
+      sentWith.push(nonceOf(raw));
+      nonce = nonceOf(raw) + 1;
     },
   };
   let granted = 0;
@@ -390,4 +401,107 @@ test("what one address and what everyone together can take: 30 grants (3 MON) an
   assert.equal(RECENT_MS, 120_000);
   assert.equal(MAX_BODY_BYTES, 1_024);
   assert.equal(FLOOR, parseEther("1"));
+});
+
+// ---------------------------------------------------------------------------
+// A broadcast that times out or errors: the grant is looked for by its hash
+// before answering, and SEND_FAILED only when it truly didn't go out.
+// ---------------------------------------------------------------------------
+
+/** A chain whose broadcast of a grant throws, but the grant goes out anyway (or doesn't), as scripted. */
+function flaky(outcome: "mined" | "pending" | "lost", opts: { afterLooks?: number } = {}) {
+  const base = chain();
+  const broadcasts: Hex[] = [];
+  let looks = 0;
+  const c: FundChain = {
+    ...base.c,
+    broadcast: async (raw) => {
+      broadcasts.push(raw);
+      // The first send of these bytes times out, though the node may have taken them.
+      if (broadcasts.length === 1) {
+        if (outcome !== "lost") base.seen.set(hashOf(nonceOf(raw)), outcome);
+        throw new Error("The request took too long to respond.");
+      }
+      // Sent again: the same bytes. Lost ones are refused for good; ones it holds are "already known".
+      if (outcome === "lost") throw new Error("The request took too long to respond.");
+      throw new Error("already known");
+    },
+    grantSeen: async (hash) => {
+      looks++;
+      // A grant that went out may only be seen after a look or two.
+      if (opts.afterLooks && looks <= opts.afterLooks) return null;
+      return base.seen.get(hash) ?? null;
+    },
+  };
+  return { c, broadcasts, looks: () => looks };
+}
+
+test("a broadcast that timed out but was mined answers the grant, not SEND_FAILED, and sends nothing new", async () => {
+  const { lines, log } = capture();
+  const f = flaky("mined", { afterLooks: 1 });
+  const res = await handleFund(req({ address: USER }), env(), () => f.c, log, Date.now, noPause);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { hash: hashOf(40) });
+  assert.equal(f.broadcasts.length, 1, "found by its hash: not sent again");
+  assert.equal(lines.at(-1)?.event, "grant");
+  assert.equal(lines.at(-1)?.after, "the broadcast errored, then found mined");
+});
+
+test("a broadcast that timed out and is pending answers the grant as pending, which the app waits for", async () => {
+  const f = flaky("pending");
+  const res = await handleFund(req({ address: USER }), env(), () => f.c, () => {}, Date.now, noPause);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { hash: hashOf(40), pending: true });
+  assert.equal(f.broadcasts.length, 1);
+});
+
+test("a grant the node holds but no read sees yet: the same bytes sent again are already known, so it is pending", async () => {
+  const f = flaky("pending", { afterLooks: 99 });
+  const res = await handleFund(req({ address: USER }), env(), () => f.c, () => {}, Date.now, noPause);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { hash: hashOf(40), pending: true });
+  assert.deepEqual(f.broadcasts, [rawOf(40), rawOf(40)], "only ever the same signed grant");
+});
+
+test("a grant that truly didn't go out answers SEND_FAILED, after looking, and never signs a second grant", async () => {
+  const { lines, log } = capture();
+  let signed = 0;
+  const f = flaky("lost");
+  const c: FundChain = { ...f.c, signGrant: async (to, nonce, fees) => (signed++, f.c.signGrant(to, nonce, fees)) };
+  const res = await handleFund(req({ address: USER }), env(), () => c, log, Date.now, noPause);
+  assert.equal(res.status, 502);
+  assert.equal(((await res.json()) as { code: string }).code, "SEND_FAILED");
+  assert.equal(signed, 1, "one request, one signed grant");
+  assert.deepEqual(f.broadcasts, [rawOf(40), rawOf(40)], "sent again only as the same bytes");
+  assert.ok(f.looks() >= 3, "looked for it before saying it failed");
+  assert.equal(lines.at(-1)?.event, "failed");
+});
+
+test("a nonce conflict on this request's own grant is that grant, not a reason to send another", async () => {
+  const base = chain();
+  let sends = 0;
+  const c: FundChain = {
+    ...base.c,
+    broadcast: async (raw) => {
+      sends++;
+      // It went out, but the answer that came back was a conflict on its own nonce.
+      base.seen.set(hashOf(nonceOf(raw)), "pending");
+      throw new Error("nonce too low");
+    },
+  };
+  const res = await handleFund(req({ address: USER }), env(), () => c, () => {}, Date.now, noPause);
+  assert.deepEqual(await res.json(), { hash: hashOf(40), pending: true });
+  assert.equal(sends, 1);
+});
+
+test("every cap still holds with the new send: the hourly cap, the floor, the threshold and the recent grant", async () => {
+  const f = flaky("mined");
+  assert.equal((await handleFund(req({ address: USER }), env(), () => ({ ...f.c, funderNonceAt: async () => 40 - GRANTS_PER_HOUR }), () => {}, Date.now, noPause)).status, 503);
+  assert.equal((await handleFund(req({ address: USER }), env(), () => chain({ funderBalance: 10n ** 18n }).c, () => {}, Date.now, noPause)).status, 503);
+  assert.equal((await handleFund(req({ address: USER }), env(), () => chain({ userBalance: 10n ** 18n }).c, () => {}, Date.now, noPause)).status, 409);
+  forgetRecentGrants();
+  const ok = flaky("pending");
+  assert.equal((await handleFund(req({ address: USER }), env(), () => ok.c, () => {}, Date.now, noPause)).status, 200);
+  // A pending grant counts as granted: the same address is refused while it lands.
+  assert.equal((await handleFund(req({ address: USER }), env(), () => chain().c, () => {}, Date.now, noPause)).status, 409);
 });

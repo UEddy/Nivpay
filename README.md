@@ -807,6 +807,7 @@ person's own. Sizes come from the gas measured in
 | The same address again, on the same instance | refused for 2 minutes after a grant | closes the window while the first grant is still landing |
 | Request body | 1 KB at most | refused unread above that |
 | Kill switch | `FUNDING_ENABLED` not `true` | answers "funding is paused" without reading the key |
+| A broadcast that times out or errors | looked for before answering | the grant is signed first, so its hash is known; it is looked for 3 times, 2 s apart, and the same signed bytes are sent once more. Mined or pending, the answer is the grant (`pending: true` when not mined yet), which the app waits for as for any grant; only a grant that truly didn't go out answers `SEND_FAILED` (Code 16). One request is one signed grant at one nonce, so this never makes two |
 
 `GET /api/fund/status` returns only whether funding is on, whether the
 funder key derives `FUNDER_ADDRESS` (`keyMatches`, true or false, nothing
