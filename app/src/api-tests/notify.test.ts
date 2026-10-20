@@ -223,7 +223,9 @@ test("auto cash out: amounts off keep the bank and drop what it got; part of it 
     assert.deepEqual(JSON.parse(payloadFor(sub, held[0]!)!), { k: "autoCashOut", l: "en", w: as });
   }
   // Off, kept, nothing to do, or no answer: the arrival is told as always.
-  for (const result of ["off", "kept", "none", "already", "unknown"]) assert.deepEqual(server.withAutoCash([rx], [{ account: IDARA, result }]), [rx]);
+  for (const result of ["off", "kept", "none", "unknown", "pending"]) assert.deepEqual(server.withAutoCash([rx], [{ account: IDARA, result }]), [rx]);
+  // Already claimed: whoever claimed it has told the person, so this call says nothing more.
+  assert.deepEqual(server.withAutoCash([rx], [{ account: IDARA, result: "already" }]), []);
   assert.deepEqual(server.withAutoCash([rx], []), [rx]);
   // Only dollars: CTK arriving is never cashed out.
   const ctk = { ...rx, symbol: "CTK", decimals: 18 };

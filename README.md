@@ -2770,10 +2770,17 @@ check identities itself.
   before it was turned on, except what is above the balance to keep; move the
   account's own transactions, money from the desk (Add money), the faucet, or
   money minted; take money out of a pot (it only ever moves from the account
-  itself); move a transaction twice for an account (a claim is written to the
-  store before anything moves, on every server instance, and never let go:
-  a move lost after it was sent is never tried again); move past the
-  allowance the person signed.
+  itself); move a transaction twice for an account; move past the allowance
+  the person signed. A transaction is claimed before anything moves, in one
+  file per account (`autocash/<account>/claims.json`) changed only by a
+  conditional write: read past the cache with its ETag, written back with
+  `ifMatch`, which Vercel Blob refuses (412) if another server instance wrote
+  in between; the loser reads again and finds it claimed, and its
+  notification says nothing more. A missing file is created with no
+  overwrite. The file keeps the last 500 arrivals and two floors, the block
+  it was last turned on at and the highest block ever pruned, and refuses
+  any arrival at or below either, so a pruned one is never moved again. A
+  claim is never let go: a move lost after it was sent is never tried again.
 * **Telling the person.** One push, in their language: "$50 arrived and was
   sent to your bank: ₦76,725.00, First Bank ending 6789. Test mode.", whose
   tap opens the statement. With "Show amounts on the lock screen" off, the

@@ -162,7 +162,8 @@ export type AutoCash = (tx: Hex, accounts: Address[]) => Promise<AutoCashOutcome
 /**
  * Auto cash out's answer folded into who is told what: a whole move replaces
  * "received" with "autoCashOut"; part of it adds "autoCashOut" after
- * "received"; money that stayed replaces "received" with "autoCashOut" and why.
+ * "received"; money that stayed replaces "received" with "autoCashOut" and why;
+ * already claimed by another call says nothing, as that call told the person.
  */
 export function withAutoCash(tells: Tell[], outcomes: AutoCashOutcome[]): Tell[] {
   return tells.flatMap((t): Tell[] => {
@@ -174,6 +175,8 @@ export function withAutoCash(tells: Tell[], outcomes: AutoCashOutcome[]): Tell[]
       const cash: Tell = { account: t.account, kind: "autoCashOut", amount: moved, decimals: 6, symbol: "$", cash: { currency: o.move.currency, bankGets: BigInt(o.move.bankGets), bank: o.bank.name, last4: o.bank.last4, tx: o.move.tx as Hex, part } };
       return part ? [t, cash] : [cash];
     }
+    // Already claimed by another call: whoever claimed it told the person, so nothing more from this one.
+    if (o?.result === "already") return [];
     if (o?.result === "held" && o.hold) {
       const held = o.hold.why === "cap" || o.hold.why === "allowance" ? o.hold.why : "desk";
       return [{ account: t.account, kind: "autoCashOut", amount: t.amount, decimals: 6, symbol: "$", cash: { held } }];

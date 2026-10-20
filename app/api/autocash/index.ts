@@ -30,7 +30,17 @@
 //  * never more than arrived, never below the balance to keep, never past
 //    the day's cap or the allowance, and nothing under $1;
 //  * each transaction once for each account, across every server instance,
-//    by a claim written to the store before anything moves;
+//    by a claim written to the store before anything moves. Claims live in
+//    one file per account, autocash/<account>/claims.json, changed only by a
+//    conditional write: read uncached with its ETag, then written back with
+//    ifMatch, which Vercel Blob refuses (412) if anyone wrote in between, so
+//    two instances can never both claim one arrival. The loser reads again
+//    and finds it claimed. A missing file is created with allowOverwrite
+//    false, and "already exists" is answered by reading again. The file
+//    keeps the last MAX_CLAIMS arrivals and two floors: the block auto cash
+//    out was last turned on at, and the highest block ever pruned from the
+//    list. An arrival at or below either is refused before any claim, so a
+//    pruned arrival can never be cashed out again;
 //  * only from the account itself: never from a pot, whose money stays there.
 //
 // Abuse limits, in the style of /api/ramp:
@@ -51,7 +61,7 @@
 // app/src/api-tests/autocash.test.ts fails if they ever differ.
 
 import { createHash } from "node:crypto";
-import { get, list, put, del } from "@vercel/blob";
+import { BlobPreconditionFailedError, get, list, put, del } from "@vercel/blob";
 import {
   createPublicClient,
   createWalletClient,
@@ -279,7 +289,7 @@ export type Fees = { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint };
 export type Moved = { from: Address; to: Address; value: bigint };
 
 /** A transaction, once in a finalized block: who sent it, when, whether it went through, and its AUSD transfers. */
-export type Arrival = { sender: Address; time: bigint; ok: boolean; transfers: Moved[] };
+export type Arrival = { sender: Address; block: bigint; time: bigint; ok: boolean; transfers: Moved[] };
 
 /** Everything the handler needs from the chain, so tests can script it. */
 export interface AutoCashChain {
@@ -302,6 +312,10 @@ export interface AutoCashStore {
   read(path: string): Promise<Uint8Array | null>;
   /** Writes; with `create`, only if nothing is there yet, and false if something was. */
   write(path: string, bytes: Uint8Array, create: boolean): Promise<boolean>;
+  /** Reads past any cache, with the blob's ETag; null if there is nothing there. */
+  readTagged(path: string): Promise<{ bytes: Uint8Array; etag: string } | null>;
+  /** Writes only if the blob's ETag is still `etag`: "ok", or "changed" if someone wrote in between (412). */
+  writeIfMatch(path: string, bytes: Uint8Array, etag: string): Promise<"ok" | "changed">;
   list(prefix: string): Promise<string[]>;
   remove(path: string): Promise<void>;
 }
@@ -375,6 +389,83 @@ async function named(store: AutoCashStore, prefix: string): Promise<{ at: number
   return out.sort((x, y) => y.at - x.at);
 }
 
+// ---------------------------------------------------------------------------
+// Claims: one file per account, changed only by a conditional write
+// ---------------------------------------------------------------------------
+
+/** How many arrivals claims.json keeps; older ones are pruned and raise the floor. */
+export const MAX_CLAIMS = 500;
+/** How many times a claim is tried when another instance wrote first (412), before answering "try again". */
+export const CLAIM_TRIES = 5;
+
+export type Claims = {
+  /** The block auto cash out was last turned on at: nothing at or below it is ever moved. */
+  onBlock: string;
+  /** The highest block ever pruned from `txs`: nothing at or below it is ever claimed again. */
+  floor: string;
+  txs: { tx: string; block: string }[];
+};
+const EMPTY_CLAIMS: Claims = { onBlock: "0", floor: "0", txs: [] };
+const claimsPath = (a: Address) => `autocash/${a}/claims.json`;
+
+function parseClaims(bytes: Uint8Array): Claims {
+  try {
+    const raw = JSON.parse(new TextDecoder().decode(bytes)) as Partial<Claims>;
+    const num = (v: unknown) => (typeof v === "string" && /^\d{1,30}$/.test(v) ? v : "0");
+    const txs = Array.isArray(raw.txs) ? raw.txs.filter((x) => x && typeof x.tx === "string" && /^0x[0-9a-f]{64}$/.test(x.tx) && typeof x.block === "string" && /^\d{1,30}$/.test(x.block)) : [];
+    return { onBlock: num(raw.onBlock), floor: num(raw.floor), txs };
+  } catch {
+    // Unreadable: refuse everything rather than risk moving an arrival twice.
+    return { onBlock: (2n ** 64n).toString(), floor: (2n ** 64n).toString(), txs: [] };
+  }
+}
+
+/** Keeps the newest MAX_CLAIMS by block, and raises the floor to the highest block pruned. */
+export function pruneClaims(c: Claims): Claims {
+  if (c.txs.length <= MAX_CLAIMS) return c;
+  const sorted = [...c.txs].sort((x, y) => (BigInt(x.block) < BigInt(y.block) ? -1 : BigInt(x.block) > BigInt(y.block) ? 1 : 0));
+  const pruned = sorted.slice(0, sorted.length - MAX_CLAIMS);
+  const top = pruned.reduce((m, x) => (BigInt(x.block) > m ? BigInt(x.block) : m), BigInt(c.floor));
+  return { ...c, floor: top.toString(), txs: sorted.slice(sorted.length - MAX_CLAIMS) };
+}
+
+/**
+ * Changes claims.json by a conditional write. `change` gets what is there now
+ * (EMPTY_CLAIMS if nothing) and returns the new claims, or a verdict to stop
+ * with. A 412, or a create beaten by another, reads again, CLAIM_TRIES times.
+ */
+async function changeClaims<V extends string>(store: AutoCashStore, a: Address, change: (c: Claims) => Claims | V): Promise<"ok" | "busy" | V> {
+  const path = claimsPath(a);
+  for (let i = 0; i < CLAIM_TRIES; i++) {
+    const now = await store.readTagged(path);
+    const next = change(now ? parseClaims(now.bytes) : EMPTY_CLAIMS);
+    if (typeof next === "string") return next;
+    const bytes = enc(pruneClaims(next));
+    if (!now) {
+      if (await store.write(path, bytes, true)) return "ok";
+      continue; // Created by someone else first: read it.
+    }
+    if ((await store.writeIfMatch(path, bytes, now.etag)) === "ok") return "ok";
+  }
+  return "busy";
+}
+
+/** Claims one arrival for one account, or says why not: before it was turned on, already claimed (or pruned), or busy. */
+export function claimArrival(store: AutoCashStore, a: Address, tx: Hex, block: bigint) {
+  const key = tx.toLowerCase();
+  return changeClaims(store, a, (c): Claims | "before" | "already" => {
+    if (block <= BigInt(c.onBlock)) return "before";
+    if (block <= BigInt(c.floor)) return "already";
+    if (c.txs.some((x) => x.tx === key)) return "already";
+    return { ...c, txs: [...c.txs, { tx: key, block: block.toString() }] };
+  });
+}
+
+/** Turned on: nothing at or below this block is ever moved. Only ever raised. */
+function markOn(store: AutoCashStore, a: Address, block: bigint) {
+  return changeClaims(store, a, (c): Claims => ({ ...c, onBlock: (block > BigInt(c.onBlock) ? block : BigInt(c.onBlock)).toString() }));
+}
+
 let queue: Promise<unknown> = Promise.resolve();
 function serialized<T>(fn: () => Promise<T>): Promise<T> {
   const run = queue.then(fn, fn);
@@ -424,7 +515,12 @@ async function handleArrival(store: AutoCashStore, chain: AutoCashChain, env: Au
   };
   // Switched off: told, nothing claimed, so nothing moves later either.
   if (!deskOn(env) || !desk) return hold("paused", arrived);
-  if (!(await store.write(arrivalPath(account, tx), enc({ state: "claimed", at: now }), true))) return { account, result: "already" };
+  const claim = await claimArrival(store, account, tx, arrival.block);
+  if (claim === "before") return { account, result: "none" };
+  if (claim === "already") return { account, result: "already" };
+  // Another instance kept writing first: nothing claimed, nothing moved; the next check tries again.
+  if (claim === "busy") return { account, result: "pending" };
+  await store.write(arrivalPath(account, tx), enc({ state: "claimed", at: now }), false).catch(() => {});
 
   let sending = false;
   try {
@@ -576,6 +672,16 @@ export async function handleAutoCash(
   if (!isAddressEqual(signer, account)) return json(401, { error: "the proof doesn't check out" });
   const current = await readSettings(store, account, t);
   const next = req ? change(current, req, t) : current ? cancelPending(current) : null;
+  // Turned on: the block now becomes the floor below which nothing is ever moved (claims.json), before the settings say on.
+  if (next?.on && !current?.on) {
+    let block: bigint;
+    try {
+      block = await makeChain(env).latestBlock();
+    } catch {
+      return json(502, { error: "could not read the chain, try again in a minute" });
+    }
+    if ((await markOn(store, account, block)) !== "ok") return json(503, { error: "busy, try again in a minute" });
+  }
   if (next) await store.write(settingsPath(account), enc(next), false);
   log({ event: String(kind), account, waiting: next?.pending ? "yes" : "no" });
   return json(200, { on: next?.on ?? false, currency: next?.currency, cap: next?.cap, keep: next?.keep, since: next?.since, pending: next?.pending ? { startsAt: next.pending.startsAt, bank: next.pending.bank !== undefined, ...(next.pending.cap ? { cap: next.pending.cap } : {}) } : null });
@@ -657,7 +763,7 @@ export function liveChain(env: AutoCashEnv): AutoCashChain {
       const transfers = parseEventLogs({ abi: ERC20_ABI, eventName: "Transfer", logs: receipt.logs })
         .filter((l) => isAddressEqual(l.address, AUSD))
         .map((l) => ({ from: getAddress(l.args.from), to: getAddress(l.args.to), value: l.args.value }));
-      return { sender: getAddress(receipt.from), time: block.timestamp, ok: receipt.status === "success", transfers };
+      return { sender: getAddress(receipt.from), block: receipt.blockNumber, time: block.timestamp, ok: receipt.status === "success", transfers };
     },
     dollars: (a) => client.readContract({ address: AUSD, abi: ERC20_ABI, functionName: "balanceOf", args: [a] }),
     allowance: (owner, spender) => client.readContract({ address: AUSD, abi: ERC20_ABI, functionName: "allowance", args: [owner, spender] }),
@@ -703,6 +809,21 @@ export function blobStore(env: AutoCashEnv): AutoCashStore {
     list: async (prefix) => (await list({ prefix, limit: 200, token })).blobs.map((b) => b.pathname),
     remove: async (path) => {
       await del(path, { token });
+    },
+    // Past the CDN cache, straight from origin storage, with the ETag a conditional write needs.
+    readTagged: async (path) => {
+      const found = await get(path, { access: "private", token, useCache: false }).catch(() => null);
+      if (!found || found.statusCode !== 200) return null;
+      return { bytes: new Uint8Array(await new Response(found.stream).arrayBuffer()), etag: found.blob.etag };
+    },
+    writeIfMatch: async (path, bytes, etag) => {
+      try {
+        await put(path, Buffer.from(bytes), { access: "private", contentType: "application/json", addRandomSuffix: false, allowOverwrite: true, ifMatch: etag, token });
+        return "ok";
+      } catch (error) {
+        if (error instanceof BlobPreconditionFailedError) return "changed";
+        throw error;
+      }
     },
   };
 }

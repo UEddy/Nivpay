@@ -78,15 +78,38 @@ function env(extra: Partial<AutoCashEnv> = {}): AutoCashEnv {
   return { RAMP_ENABLED: "true", RAMP_DESK_ADDRESS: DESK, RAMP_DESK_PRIVATE_KEY: KEY_MARKER, BLOB_READ_WRITE_TOKEN: "token", ...extra };
 }
 
+/** A turn of the event loop, so calls running at once really interleave between a read and its write. */
+const yieldNow = () => new Promise((r) => setImmediate(r));
+
+/** Vercel Blob as far as the claims need it: ETags that change on every write, ifMatch enforced (412), create refused if it exists. */
 class MemoryStore implements AutoCashStore {
   files = new Map<string, Uint8Array>();
+  versions = new Map<string, number>();
+  preconditionFailures = 0;
   async read(path: string) {
     return this.files.get(path) ?? null;
   }
   async write(path: string, bytes: Uint8Array, create: boolean) {
+    await yieldNow();
     if (create && this.files.has(path)) return false;
     this.files.set(path, bytes);
+    this.versions.set(path, (this.versions.get(path) ?? 0) + 1);
     return true;
+  }
+  async readTagged(path: string) {
+    await yieldNow();
+    const bytes = this.files.get(path);
+    return bytes ? { bytes, etag: `"v${this.versions.get(path)}"` } : null;
+  }
+  async writeIfMatch(path: string, bytes: Uint8Array, etag: string) {
+    await yieldNow();
+    if (`"v${this.versions.get(path)}"` !== etag) {
+      this.preconditionFailures++;
+      return "changed" as const;
+    }
+    this.files.set(path, bytes);
+    this.versions.set(path, (this.versions.get(path) ?? 0) + 1);
+    return "ok" as const;
   }
   async list(prefix: string) {
     return [...this.files.keys()].filter((k) => k.startsWith(prefix));
@@ -130,7 +153,10 @@ let store: MemoryStore;
 let chain: ScriptedChain;
 let logs: Record<string, string>[];
 let clock: number;
-const arrivalOf = (dollars: number, extra: Partial<Arrival> = {}): Arrival => ({ sender: SENDER, time: BigInt(Math.floor(clock / 1000) + 5), ok: true, transfers: [{ from: SENDER, to: ME, value: usd(dollars) }], ...extra });
+// Each arrival a block after the last, all after the block it was turned on at (latestBlock, 50,000).
+let nextBlock = 50_001n;
+const arrivalOf = (dollars: number, extra: Partial<Arrival> = {}): Arrival => ({ sender: SENDER, block: nextBlock++, time: BigInt(Math.floor(clock / 1000) + 5), ok: true, transfers: [{ from: SENDER, to: ME, value: usd(dollars) }], ...extra });
+const claimsOf = (a: Address = ME) => JSON.parse(new TextDecoder().decode(store.files.get(`autocash/${a}/claims.json`)!)) as server.Claims;
 
 beforeEach(() => {
   forgetRecent();
@@ -297,7 +323,7 @@ test("the kill switch: money stays, the person is told, the key is never read an
   const out = (await res.json()).outcomes[0];
   assert.deepEqual([out.result, out.hold.why], ["held", "paused"]);
   assert.equal(chain.pulls.length, 0);
-  assert.ok(![...store.files.keys()].some((k) => k.includes("/arrivals/")));
+  assert.deepEqual(claimsOf().txs, [], "nothing claimed");
 });
 
 test("the desk short of what it runs on, or busy: money stays and the person is told", async () => {
@@ -344,4 +370,128 @@ test("a new bank waits 24 hours; GET says one waits, and cancel drops it", async
 test("the desk key is accepted as pasted, and never repeated in an error", () => {
   assert.equal(normalizeDeskKey(" " + "ab".repeat(32) + "\n"), "0x" + "ab".repeat(32));
   assert.throws(() => normalizeDeskKey("0x1234"), (e: Error) => !e.message.includes("1234"));
+});
+
+// ---------------------------------------------------------------------------
+// Claims: atomic by a conditional write, with two floors
+// ---------------------------------------------------------------------------
+
+test("turning on records the block it happened at; an arrival at or below it never moves", async () => {
+  await turnOn();
+  assert.equal(claimsOf().onBlock, "50000");
+  clock += 60_000;
+  chain.s.balance += usd(20);
+  chain.s.arrivals.set(txOf(200), arrivalOf(20, { block: 50_000n }));
+  const out = (await (await call({ kind: "arrived", tx: txOf(200), accounts: [ME] })).json()).outcomes[0];
+  assert.equal(out.result, "none");
+  assert.equal(chain.pulls.length, 0);
+});
+
+test("an arrival whose claim was pruned is refused by the floor, never cashed out again", async () => {
+  await turnOn({ cap: usd(1000).toString() });
+  chain.s.allowance = usd(100_000);
+  const firstBlock = nextBlock;
+  const first = await arrive(5, 300);
+  assert.equal(first.result, "moved");
+  // Fill the list past MAX_CLAIMS with later arrivals, so the first is pruned.
+  const c = claimsOf();
+  const later = Array.from({ length: server.MAX_CLAIMS }, (_, i) => ({ tx: txOf(10_000 + i).toLowerCase(), block: (60_000 + i).toString() }));
+  store.files.set(`autocash/${ME}/claims.json`, new TextEncoder().encode(JSON.stringify(server.pruneClaims({ ...c, txs: [...c.txs, ...later] }))));
+  const pruned = claimsOf();
+  assert.ok(!pruned.txs.some((x) => x.tx === txOf(300).toLowerCase()), "the first arrival's hash is gone from the list");
+  assert.ok(BigInt(pruned.floor) >= firstBlock, "the floor is at or above the pruned arrival's block");
+  // Asked about it again, from any instance: refused by the floor, nothing moves.
+  forgetRecent();
+  const again = (await (await call({ kind: "check", account: ME, txs: [txOf(300)] })).json()).outcomes[0];
+  assert.equal(again.result, "already");
+  assert.equal(chain.pulls.length, 1);
+});
+
+test("a write that loses a race (412) reads again and claims nothing twice; after CLAIM_TRIES it answers try again", async () => {
+  await turnOn();
+  const tx = txOf(400);
+  // Another instance writes claims.json between this one's read and write, every time.
+  const busy: AutoCashStore = {
+    ...store,
+    read: (p) => store.read(p),
+    write: (p, b, c) => store.write(p, b, c),
+    list: (p) => store.list(p),
+    remove: (p) => store.remove(p),
+    readTagged: async (p) => {
+      const now = await store.readTagged(p);
+      if (p.endsWith("claims.json") && now) await store.write(p, now.bytes, false);
+      return now;
+    },
+    writeIfMatch: (p, b, e) => store.writeIfMatch(p, b, e),
+  };
+  const out = await server.claimArrival(busy, ME, tx, 60_000n);
+  assert.equal(out, "busy");
+  assert.equal(store.preconditionFailures, server.CLAIM_TRIES);
+  assert.ok(!claimsOf().txs.some((x) => x.tx === tx.toLowerCase()), "a busy claim claims nothing");
+  // Without the interference, the same claim goes through once, and only once.
+  assert.equal(await server.claimArrival(store, ME, tx, 60_000n), "ok");
+  assert.equal(await server.claimArrival(store, ME, tx, 60_000n), "already");
+});
+
+test("claims.json missing at claim time: created with no overwrite; a create beaten by another reads again", async () => {
+  const a = getAddress("0x000000000000000000000000000000000000c1a1");
+  const [x, y] = await Promise.all([server.claimArrival(store, a, txOf(500), 60_000n), server.claimArrival(store, a, txOf(501), 60_001n)]);
+  assert.deepEqual([x, y], ["ok", "ok"]);
+  assert.deepEqual(claimsOf(a).txs.map((t) => t.tx).sort(), [txOf(500).toLowerCase(), txOf(501).toLowerCase()]);
+});
+
+test("two server instances get the same arrival at the same moment: exactly one move and one push, and the loser says already", async () => {
+  // Two separate copies of the modules: two instances, each with its own memory, sharing only the store.
+  // A different query string loads a separate copy of a module, as a second server instance would be.
+  const copyOf = (path: string, instance: string) => import(new URL(`${path}?instance=${instance}`, import.meta.url).href);
+  const A = (await copyOf("../../api/autocash/index.ts", "a")) as typeof server;
+  const B = (await copyOf("../../api/autocash/index.ts", "b")) as typeof server;
+  const NA = (await copyOf("../../api/notify/index.ts", "a")) as typeof import("../../api/notify/index.ts");
+  const NB = (await copyOf("../../api/notify/index.ts", "b")) as typeof import("../../api/notify/index.ts");
+  await turnOn();
+  clock += 60_000;
+  chain.s.balance += usd(50);
+  const tx = txOf(600);
+  chain.s.arrivals.set(tx, arrivalOf(50));
+  const autocashOn = (mod: typeof server): import("../../api/notify/index.ts").AutoCash => async (t, accounts) => {
+    const res = await mod.handleAutoCash(
+      new Request(`${SITE}/api/autocash`, { method: "POST", headers: { origin: SITE, "content-type": "application/json" }, body: JSON.stringify({ kind: "arrived", tx: t, accounts }) }),
+      env(),
+      () => chain,
+      () => store,
+      () => {},
+      () => clock,
+    );
+    return ((await res.json()) as { outcomes: import("../../api/notify/index.ts").AutoCashOutcome[] }).outcomes;
+  };
+  // What /api/notify reads: the receipt with one AUSD Transfer to ME, final and fresh.
+  const TRANSFER = [{ type: "event", name: "Transfer", inputs: [{ name: "from", type: "address", indexed: true }, { name: "to", type: "address", indexed: true }, { name: "value", type: "uint256", indexed: false }] }] as const;
+  const { encodeAbiParameters, encodeEventTopics } = await import("viem");
+  const log = { address: server.AUSD, topics: encodeEventTopics({ abi: TRANSFER, eventName: "Transfer", args: { from: SENDER, to: ME } }), data: encodeAbiParameters([{ type: "uint256" }], [usd(50)]), blockNumber: 1n, transactionHash: tx, logIndex: 0, blockHash: tx, transactionIndex: 0, removed: false } as never;
+  const notifyChain = {
+    receipt: async () => ({ status: "success" as const, blockNumber: 100n, from: SENDER, logs: [log] }),
+    finalized: async () => ({ number: 200n, timestamp: 0n }),
+    blockTime: async () => BigInt(Math.floor(clock / 1000) - 5),
+    members: async () => ({ deciders: [], payees: [] }),
+    potName: async () => "",
+    shares: async () => 0n,
+  };
+  const sub = { account: ME, endpoint: "https://push.example/1", keys: { p256dh: "x", auth: "y" }, lang: "en", settings: { kinds: { received: true, sent: false, chippedIn: true, askYes: true, request: true, potNamesYou: false, changeApproved: true, autoCashOut: true }, amounts: true }, muted: [], trusted: [], at: 1 };
+  const pushStore = { put: async () => {}, remove: async () => {}, list: async () => [`push/${ME}/1.json`], read: async () => new TextEncoder().encode(JSON.stringify(sub)) };
+  const pushes: Record<string, unknown>[] = [];
+  const send = async (_s: unknown, payload: string) => (pushes.push(JSON.parse(payload)), 201);
+  const PUSH_ENV = { BLOB_STORE_ID: "store", VAPID_PUBLIC_KEY: "BPub", VAPID_PRIVATE_KEY: "priv", VAPID_SUBJECT: "https://nivpay.example" };
+  const notifyReq = () => new Request(`${SITE}/api/notify`, { method: "POST", headers: { origin: SITE, "content-type": "application/json" }, body: JSON.stringify({ kind: "tx", deployment: "ausd", tx }) });
+  const [ra, rb] = await Promise.all([
+    NA.handleNotify(notifyReq(), PUSH_ENV, notifyChain, () => pushStore, send, () => {}, () => clock, autocashOn(A)),
+    NB.handleNotify(notifyReq(), PUSH_ENV, notifyChain, () => pushStore, send, () => {}, () => clock, autocashOn(B)),
+  ]);
+  assert.deepEqual([ra.status, rb.status], [200, 200]);
+  assert.equal(chain.pulls.length, 1, "exactly one move");
+  assert.equal(pushes.length, 1, "exactly one push");
+  assert.equal(pushes[0]!.k, "autoCashOut");
+  assert.ok(store.preconditionFailures >= 1, "the two instances really raced: one write was refused with 412");
+  // The loser, asked again directly, says already.
+  const again = (await (await call({ kind: "check", account: ME, txs: [tx] })).json()).outcomes[0];
+  assert.equal(again.result, "already");
 });
