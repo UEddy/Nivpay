@@ -1118,7 +1118,6 @@ export const en = {
   wakeOnPhone: "Your phone listens for “Hey NivPay” itself. No sound leaves the phone until it hears it; then your phone's speech service hears one sentence, as when you tap the microphone.",
   wakeStops: "It stops when you leave NivPay, lock the screen, or after 5 minutes without use, and says so. English only for now.",
   wakeListening: "Listening for “Hey NivPay”",
-  wakeStop: "Stop",
   wakeStarting: "Turning on the microphone…",
   wakeHeard: "Heard you. Say what to pay.",
   wakeNeedsTap: "Tap Start to listen for “Hey NivPay”.",

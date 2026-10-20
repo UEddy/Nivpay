@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { copy } from "../copy.ts";
 import { onVoiceBusy } from "../lib/voiceAsk.ts";
 import { loadModel, startMic } from "../lib/wake/mic.ts";
 import { WakeSession, type WakeState, type WakeStop } from "../lib/wake/session.ts";
 
 /**
- * Listening for "Hey NivPay" while the app is open (README, "Hey NivPay"),
- * and the bar that says so whenever the microphone is on. Shown over every
+ * Listening for "Hey NivPay" while the app is open (README, "Hey NivPay"):
+ * whenever the microphone is on, the pot mark at the bottom glows (the tab
+ * bar's, or `mark` on its own where there is no tab bar). Shown over every
  * screen while the switch in Profile, Voice is on. It stops when the app goes
  * to the background or the screen locks, after 5 minutes with no tap, and
  * says which; Listen again starts it again.
@@ -15,7 +16,7 @@ import { WakeSession, type WakeState, type WakeStop } from "../lib/wake/session.
  * if no microphone button is on screen, and asks it to listen). If nothing
  * takes the ask soon, listening comes back by itself.
  */
-export function WakeHost(props: { onHeard: () => void }) {
+export function WakeHost(props: { onHeard: () => void; mark: ReactNode }) {
   const [state, setState] = useState<WakeState>({ kind: "off" });
   const [hidden, setHidden] = useState(false);
   const sessionRef = useRef<WakeSession | null>(null);
@@ -76,27 +77,37 @@ export function WakeHost(props: { onHeard: () => void }) {
     };
   }, []);
 
+  // Listening, and a wake just heard, show as the pot mark in the tab bar glowing (pot.css, "Hey NivPay"), not a bar.
+  const glow = state.kind === "listening" || state.kind === "paused" ? state.kind : null;
+  useEffect(() => {
+    if (!glow) return;
+    document.documentElement.dataset.wake = glow;
+    return () => {
+      delete document.documentElement.dataset.wake;
+    };
+  }, [glow]);
+
   const start = () => void sessionRef.current?.start();
   if (state.kind === "off" || hidden) return null;
 
+  if (state.kind === "listening" || state.kind === "starting" || state.kind === "paused") {
+    return (
+      <>
+        <p className="sr-only wake-status" role="status" aria-live="polite">
+          {state.kind === "listening" ? copy.wakeListening : state.kind === "starting" ? copy.wakeStarting : copy.wakeHeard}
+        </p>
+        {/* On a screen with no tab bar (Send, a pot), the mark glows on its own at the bottom, so the microphone is never on unseen. */}
+        {glow && (
+          <span className="wake-float" aria-hidden="true">
+            <span className="tab-pot">{props.mark}</span>
+          </span>
+        )}
+      </>
+    );
+  }
+
   return (
     <div className={`wake-bar ${state.kind}`} role="status" aria-live="polite">
-      {state.kind === "listening" && (
-        <>
-          <span className="wake-dot" aria-hidden="true" />
-          <span className="wake-text">{copy.wakeListening}</span>
-          <button type="button" className="wake-action" onClick={() => sessionRef.current?.stop("user")}>
-            {copy.wakeStop}
-          </button>
-        </>
-      )}
-      {state.kind === "starting" && <span className="wake-text">{copy.wakeStarting}</span>}
-      {state.kind === "paused" && (
-        <>
-          <span className="wake-dot" aria-hidden="true" />
-          <span className="wake-text">{copy.wakeHeard}</span>
-        </>
-      )}
       {state.kind === "needs-tap" && (
         <>
           <span className="wake-text">{copy.wakeNeedsTap}</span>

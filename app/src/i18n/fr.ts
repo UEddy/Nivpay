@@ -1084,7 +1084,6 @@ export const fr: Dictionary = {
   wakeOnPhone: "Votre téléphone écoute « Hey NivPay » lui-même. Aucun son ne quitte le téléphone avant qu'il l'entende ; ensuite, le service vocal du téléphone entend une phrase, comme quand vous touchez le micro.",
   wakeStops: "Il s'arrête quand vous quittez NivPay, verrouillez l'écran ou après 5 minutes sans utilisation, et le dit. En anglais seulement pour l'instant.",
   wakeListening: "À l'écoute de « Hey NivPay »",
-  wakeStop: "Arrêter",
   wakeStarting: "Activation du micro…",
   wakeHeard: "Entendu. Dites quoi payer.",
   wakeNeedsTap: "Touchez Démarrer pour écouter « Hey NivPay ».",

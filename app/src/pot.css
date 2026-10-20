@@ -2578,7 +2578,56 @@ button.avatar {
   font-size: 19px;
 }
 
-/* "Hey NivPay": a bar across the top whenever the microphone listens for it, or says why it stopped. */
+/* "Hey NivPay": while the microphone listens for it, the pot mark in the tab bar glows (screens/Wake.tsx
+   sets data-wake on the page); brighter once it is heard. */
+:root[data-wake] .tab-pot .pot-mark {
+  position: relative;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px var(--primary));
+}
+/* The halo behind it; only its opacity moves (docs/MOTION.md). */
+:root[data-wake] .tab-pot::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--primary), transparent);
+  opacity: 0.45;
+  pointer-events: none;
+}
+:root[data-wake="paused"] .tab-pot::before {
+  opacity: 0.8;
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-wake="listening"] .tab-pot::before {
+    animation: wake-glow 2.4s ease-in-out infinite;
+  }
+}
+/* Where there is no tab bar, the mark on its own at the bottom; taps go through it. */
+.wake-float {
+  position: fixed;
+  left: 50%;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 40;
+  margin-left: -15px;
+  pointer-events: none;
+}
+#root:has(.tab-bar) .wake-float {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Listening, without the pulse: a steady halo. */
+  :root[data-wake="listening"] .tab-pot::before {
+    opacity: 0.35;
+  }
+}
+@keyframes wake-glow {
+  50% {
+    opacity: 0.15;
+  }
+}
+
+/* A bar across the top when listening stopped and says why, or wants a tap to start. */
 .wake-bar {
   position: sticky;
   top: 0;
@@ -2601,24 +2650,6 @@ button.avatar {
 .wake-text {
   flex: 1;
   min-width: 0;
-}
-.wake-dot {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--danger);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .wake-bar.listening .wake-dot {
-    animation: voice-pulse 1.6s ease-in-out infinite;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  /* Listening, without the pulse: a steady dot, a little dimmed. */
-  .wake-bar.listening .wake-dot {
-    opacity: 0.8;
-  }
 }
 .wake-action {
   flex: none;

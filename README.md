@@ -1345,11 +1345,13 @@ tap on the microphone does; what is said next goes through the same checks
   microphone go, Send opens (a pot's screen stays as it is) and the phone's
   speech service hears one sentence, as after a tap. The two never share the
   microphone, and listening comes back after the sentence.
-* **Always shown.** A bar across the top says "Listening for “Hey NivPay”",
-  with Stop, whenever the microphone is on for it. It stops when the app goes
-  to the background or the screen locks, after 5 minutes without a tap, key
-  or wake, if the microphone is taken away, or on Stop, and the bar says
-  which, with Listen again. A browser that wants a tap before it plays sound
+* **Always shown.** Whenever the microphone is on for it, the pot mark at the
+  bottom glows: the tab bar's Pots mark, or the mark on its own at the bottom
+  of a screen with no tab bar; screen readers hear "Listening for “Hey
+  NivPay”". It stops when the app goes to the background or the screen
+  locks, after 5 minutes without a tap, key or wake, if the microphone is
+  taken away, or with the switch in Profile, Voice, and a bar across the top
+  says which, with Listen again. A browser that wants a tap before it plays sound
   gets a Start button.
 * **Never under a confirm sheet**: while Send's confirm sheet, or a sheet over
   a pot's amount, is open, a wake changes nothing.
