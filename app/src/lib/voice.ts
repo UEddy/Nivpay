@@ -6,7 +6,8 @@ import { cleanName } from "./accounts.ts";
  * them: turning one heard sentence into a command, matching the name in it,
  * and when voice may be used at all.
  *
- * Voice only fills in a screen. It understands exactly two things, in
+ * Voice fills in a screen, or after "Hey NivPay" reads a payment back aloud
+ * (lib/voicePay.ts). It understands exactly two things, in
  * English: sending dollars to a person, and putting dollars into a pot. It
  * can never change a setting or a limit, add or trust a contact, or say yes
  * to a pot's payment: there is no command for any of that, and anything else

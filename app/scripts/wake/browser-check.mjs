@@ -57,7 +57,9 @@ const setup = (voice) => `
     start() {
       window.__sr.starts++;
       window.__sr.liveAtStart.push(window.__liveMics());
-      setTimeout(() => { this.onresult?.({ results: [[{ transcript: "send 20 dollars to Ana" }]] }); this.onend?.(); }, 1200);
+      // What is "heard": the next of window.__lines if a part set them, else one set sentence.
+      const transcript = window.__lines?.length ? window.__lines.shift() : "send 20 dollars to Ana";
+      setTimeout(() => { this.onresult?.({ results: [[{ transcript }]] }); this.onend?.(); }, 1200);
     }
     stop() {}
     abort() { this.onerror?.({ error: "aborted" }); }
@@ -66,6 +68,10 @@ const setup = (voice) => `
   window.webkitSpeechRecognition = StandIn;
   window.__buzz = [];
   navigator.vibrate = (p) => (window.__buzz.push(p), true);
+  // The phone's voice: what it was asked to say, each "said" at once.
+  window.__said = [];
+  window.speechSynthesis.speak = (u) => { window.__said.push(u.text); setTimeout(() => u.onend?.(), 50); };
+  window.speechSynthesis.cancel = () => {};
   window.__chimes = 0;
   const osc = AudioContext.prototype.createOscillator;
   AudioContext.prototype.createOscillator = function () { window.__chimes++; return osc.call(this); };
@@ -90,6 +96,7 @@ async function page(browser, voice, { grant = true, clock = false } = {}) {
 }
 
 const bar = (p) => p.locator(".wake-bar");
+const sheet = (p) => p.locator('[role="dialog"][aria-label="Hey NivPay"]');
 // Listening shows as the tab bar's pot mark glowing, not a bar; screen readers still hear it said.
 const listening = (p, timeout) => p.locator('html[data-wake="listening"] .wake-status', { hasText: "Listening for “Hey NivPay”" }).waitFor({ state: "attached", timeout });
 const isListening = async (p) => (await p.locator('html[data-wake="listening"]').count()) === 1;
@@ -115,7 +122,8 @@ if (part(1)) {
   check(facts.chimes >= 2, `a chime (two notes) played: ${facts.chimes}`);
   check(facts.buzz.length >= 1, "a buzz where the phone can");
   check(facts.live[0] === 0, "the wake word let the microphone go before the speech service listened");
-  check(await p.locator(".bar-title").first().isVisible(), "a screen with a bar opened");
+  check(await sheet(p).isVisible(), "the hands free sheet opened over Home, and no other screen opened");
+  check((await p.locator(".tab-bar").count()) === 1, "Home is still behind it");
   await p.locator("text=No contact trusted for voice is called “Ana”").waitFor({ timeout: 10_000 });
   check(true, "the sentence heard still goes through the voice rules: nobody is trusted, nothing is filled in");
   await listening(p, 15_000);
@@ -159,6 +167,60 @@ for (const [n, wav, what, seconds, strict] of [
   else console.log(`INFO  ${seconds} s of ${what}, two loops of 16: ${woke} false wakes`);
   if (strict || woke === 0) check((await isListening(p)), `still listening after ${what}`);
   await browser.close();
+}
+
+// 8. Hands free: "Hey NivPay", a trusted contact, the payment read back aloud, then yes or no.
+if (part(8)) {
+  const ANA = "0x1111111111111111111111111111111111111111";
+  const trusted = `
+    for (const d of ["ausd", "testusd"]) {
+      localStorage.setItem("nivpay.contacts.v1." + d + ".${ME}", JSON.stringify([{ account: "${ANA}", name: "Ana", addedAt: 1 }]));
+      localStorage.setItem("nivpay.paid.v1." + d + ".${ME}", JSON.stringify(["${ANA}"]));
+    }`;
+  const voice = { on: true, wake: true, trusted: [ANA], withPerson: { [ANA]: Array.from({ length: 10 }, (_, i) => "tx" + i) } };
+  for (const [answer, what] of [["no", "a no"], ["maybe", "no clear yes, twice"], ["yes", "a yes"]]) {
+    const browser = await browserWith("wake.wav");
+    const p = await page(browser, voice);
+    await p.addInitScript(trusted + `window.__lines = ["send 20 dollars to Ana", ${JSON.stringify(answer)}, ${JSON.stringify(answer)}];`);
+    // The test account holds nothing: the chain's answers to "how much does it hold" ($1,000) and "would this
+    // transfer go through" (yes) are stood in for; every other request goes to the real chain.
+    await p.route(/monad/, async (route) => {
+      const asked = route.request().postDataJSON();
+      const standIn = (q) => {
+        const data = q?.method === "eth_call" ? (q.params[0].data ?? q.params[0].input ?? "") : "";
+        if (data.startsWith("0x70a08231")) return { jsonrpc: "2.0", id: q.id, result: "0x" + (1000n * 10n ** 6n).toString(16).padStart(64, "0") };
+        if (data.startsWith("0xa9059cbb")) return { jsonrpc: "2.0", id: q.id, result: "0x" + "1".padStart(64, "0") };
+        return null;
+      };
+      const list = Array.isArray(asked) ? asked : [asked];
+      const mine = list.map(standIn);
+      if (mine.every((r) => r === null)) return route.continue();
+      const real = mine.some((r) => r === null) ? await (await route.fetch()).json() : [];
+      const realList = Array.isArray(real) ? real : [real];
+      const out = mine.map((r, i) => r ?? realList.find((x) => x.id === list[i].id));
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify(Array.isArray(asked) ? out : out[0]) });
+    });
+    await p.goto(base);
+    await listening(p, 20_000);
+    await sheet(p).waitFor({ timeout: 30_000 });
+    await sheet(p).locator("text=Send $20 to Ana?").waitFor({ timeout: 15_000 });
+    const said = () => p.evaluate(() => window.__said);
+    check((await said()).includes("Send $20 to Ana? Say yes or no."), `${what}: the payment is read back aloud, after every check Send makes`);
+    check((await p.locator(".bar-title").count()) === 0, `${what}: Send never opened`);
+    if (answer === "yes") {
+      // Past the yes, the fingerprint is next; this phone has no passkey, so the write stops before anything is sent.
+      await sheet(p).locator("button", { hasText: "Yes, send" }).waitFor({ state: "detached", timeout: 10_000 });
+      check((await sheet(p).locator("text=Cancelled").count()) === 0 && !(await said()).some((t) => t.startsWith("Cancelled")), "a yes goes on to the fingerprint, with no tap");
+    } else {
+      await sheet(p).locator("text=Cancelled. Nothing was sent.").waitFor({ timeout: 15_000 });
+      if (answer === "maybe") check((await said()).includes("Say yes or no."), "an unclear answer is asked once more");
+      check((await said()).includes("Cancelled. Nothing was sent."), `${what}: cancelled, said and shown, nothing sent`);
+      await listening(p, 15_000);
+      check(true, `${what}: after it, it listens for “Hey NivPay” again`);
+    }
+    await noCsp(p, `hands free, ${what}`);
+    await browser.close();
+  }
 }
 
 // 4. Five minutes without use.

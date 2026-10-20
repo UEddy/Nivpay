@@ -68,6 +68,7 @@ const NotesSheet = lazy(() => reloadOnce(() => import("./screens/Notes.tsx")).th
 const HistoryCard = lazy(() => reloadOnce(() => import("./screens/History.tsx")).then((m) => ({ default: m.HistoryCard })));
 const ProfilePage = lazy(() => reloadOnce(() => import("./screens/Profile.tsx")).then((m) => ({ default: m.ProfilePage })));
 const SendScreen = lazy(() => reloadOnce(() => import("./screens/Send.tsx")).then((m) => ({ default: m.SendScreen })));
+const VoicePay = lazy(() => reloadOnce(() => import("./screens/VoicePay.tsx")).then((m) => ({ default: m.VoicePay })));
 const WakeHost = lazy(() => reloadOnce(() => import("./screens/Wake.tsx")).then((m) => ({ default: m.WakeHost })));
 const passkeys = () => reloadOnce(() => import("./lib/passkey.ts"));
 const sending = () => reloadOnce(() => import("./lib/send.ts"));
@@ -316,13 +317,17 @@ function Screens() {
   }, []);
 
   /**
-   * "Hey NivPay" was heard: Send, unless a screen with a microphone button
-   * (Send, a pot) is open already, and its button listens for one sentence
-   * (lib/voiceAsk.ts).
+   * "Hey NivPay" was heard: hands free over the screen that is open
+   * (screens/VoicePay.tsx), which hears the payment, reads it back and waits
+   * for a yes and a fingerprint. On a pot's screen its own microphone button
+   * listens instead, for putting money in (lib/voiceAsk.ts).
    */
+  const [voicePay, setVoicePay] = useState(0);
+  const screenKind = useRef(screen.kind);
+  screenKind.current = screen.kind;
   const heard = useCallback(() => {
-    setScreen((s) => (s.kind === "send" || s.kind === "pot" ? s : { kind: "send", request: null }));
-    askToListen();
+    if (screenKind.current === "pot") return askToListen();
+    setVoicePay((n) => n + 1);
   }, []);
   /** A ?voice=1 link opened: Send, listening. With voice off, Home says so. */
   const openVoice = useCallback(() => {
@@ -486,6 +491,11 @@ function Screens() {
     <>
       {wake}
       {page}
+      {active && voicePay > 0 && (
+        <Suspense fallback={null}>
+          <VoicePay key={voicePay} account={active} onClose={() => setVoicePay(0)} />
+        </Suspense>
+      )}
     </>
   );
 

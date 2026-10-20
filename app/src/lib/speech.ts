@@ -68,3 +68,34 @@ export function listenOnce(lang = "en-US"): { heard: Promise<string>; stop: () =
   r.start();
   return { heard, stop: () => r.abort() };
 }
+
+/** Whether this browser can speak, for reading a voice payment back (screens/VoicePay.tsx). */
+export const speakingAvailable = () => typeof window !== "undefined" && "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
+
+/**
+ * Says `text` aloud with the phone's own voice, and resolves once it has
+ * finished, so listening never starts while the phone is still talking.
+ * Resolves at once where the browser can't speak (the words are on screen
+ * too), and after `limitMs` if the browser never says it finished.
+ */
+export function say(text: string, lang = "en-US", limitMs = 8_000): Promise<void> {
+  if (!speakingAvailable()) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(done, limitMs);
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang;
+    u.onend = done;
+    u.onerror = done;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  });
+}
+
+/** Stops anything being said. */
+export function stopSaying(): void {
+  if (speakingAvailable()) window.speechSynthesis.cancel();
+}

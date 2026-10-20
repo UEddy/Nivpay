@@ -1320,13 +1320,14 @@ listens in the background.
   payments together" and can't be marked. Pots: only ones the person is
   already in. The spoken name is matched against those contacts only; when
   two names are close, both are shown to pick from.
-* **Safety.** Voice only fills in the screen. Send's confirm sheet reads back
+* **Safety.** A tap on the microphone only fills in the screen. Send's confirm sheet reads back
   the words heard, the amount and the person, and the fingerprint is still
   needed every time; on a pot, the same read-back sits above the button, and
   the fingerprint follows it. The daily limit applies, and each voice payment
   is at most $200 (Code 68), even if the amount is changed afterwards. Voice
   has no command to change settings or limits, add contacts or mark them
-  trusted, or say yes to a pot's payment.
+  trusted, or say yes to a pot's payment. After "Hey NivPay", the same rules
+  hold, read back aloud instead of on a filled in screen (below).
 
 ## Hey NivPay
 
@@ -1342,9 +1343,25 @@ tap on the microphone does; what is said next goes through the same checks
 * **Heard on the phone, only while the app is open.** The wake word is found
   in the page itself; no sound leaves the phone until it is heard. Then a
   chime and a short buzz (where the phone can buzz), the wake word lets the
-  microphone go, Send opens (a pot's screen stays as it is) and the phone's
-  speech service hears one sentence, as after a tap. The two never share the
-  microphone, and listening comes back after the sentence.
+  microphone go, and the phone's speech service hears one sentence, as after
+  a tap. The two never share the microphone, and listening comes back once
+  the payment is done or dropped.
+* **Hands free** (`app/src/screens/VoicePay.tsx`, `app/src/lib/voicePay.ts`):
+  no screen opens. A sheet over the screen that is open shows and says each
+  step. The sentence goes through voice's rules (a trusted contact, at most
+  $200, two close names shown to pick from) and every check Send makes before
+  its confirm sheet (balance at finalized, not a contract, the daily limit,
+  a transfer the dollar would refuse). Then it says "Send $20 to Ana? Say yes
+  or no." and listens. Only a whole yes ("yes", "yeah, send it") pays; any no
+  or stop cancels; anything else is asked once more, then nothing is sent.
+  Yes and No are buttons too. The daily limit is checked again, then one
+  fingerprint signs the same write Send makes (`sendWrite`, labelled as
+  Send's, so a payment cut off by a reload is picked up on Send), and "Done"
+  is said only at Finalized. Where the phone wants a tap before the
+  fingerprint (Safari on iPhone), one big Confirm with your fingerprint button
+  shows; nothing was sent before it. On a pot's screen, its own microphone
+  button listens instead, for putting money in, as before. A ?voice=1 link
+  still opens Send, listening.
 * **Always shown.** Whenever the microphone is on for it, the pot mark at the
   bottom glows: the tab bar's Pots mark, or the mark on its own at the bottom
   of a screen with no tab bar; screen readers hear "Listening for “Hey
@@ -1354,7 +1371,9 @@ tap on the microphone does; what is said next goes through the same checks
   says which, with Listen again. A browser that wants a tap before it plays sound
   gets a Start button.
 * **Never under a confirm sheet**: while Send's confirm sheet, or a sheet over
-  a pot's amount, is open, a wake changes nothing.
+  a pot's amount, is open, a wake changes nothing on it; the hands free sheet
+  opens over it and keeps the wake word paused while it listens, asks or
+  signs.
 * **English only**, like the rest of voice.
 
 ### The engine, and why this one
@@ -1414,9 +1433,9 @@ Measured on 8 of Kokoro's voices it never trained on (`evaluate.py`):
 83 of the 105 similar phrases never woke it. The ones that sometimes do are
 the closest: "hey, did Niv pay" and "hey, Liv paid" (3 times in 8), "hey,
 need pay" and "hey Liv, pay" (2 in 8), and 18 others once in 8, such as "hey
-NetPay", "hey Nick, pay" and "open NivPay". A false wake only opens Send to
-hear one sentence; nothing is paid without a trusted contact, the read back
-and a fingerprint. These are synthetic voices: real people, accents and rooms
+NetPay", "hey Nick, pay" and "open NivPay". A false wake only listens for
+one sentence; nothing is paid without a trusted contact, the spoken read back,
+a yes and a fingerprint. These are synthetic voices: real people, accents and rooms
 will differ.
 
 ### Open NivPay ready to listen: ?voice=1, Siri and Google

@@ -26,7 +26,7 @@ import { followSequence, followToFinality, type PendingWrite } from "../lib/writ
 import { AmountUnderstood, Icon, type Notice, NoticeLine, Sheet, STOPPED, useCancellable, useOnline } from "./ui.tsx";
 import { beforePasskey } from "../lib/cancel.ts";
 import { checkDailyLimit, spendEnded, spendSent } from "../lib/spending.ts";
-import { fromSent, NotesStore } from "../lib/notes.ts";
+import { labelFor, noteSent } from "../lib/sent.ts";
 import { matchName, payableByVoice, VOICE_CAP, VOICE_DECIMALS, VoiceStore, withinVoiceCap, type VoiceCommand } from "../lib/voice.ts";
 import { VoiceButton } from "./Voice.tsx";
 import { balanceNote } from "../lib/connection.ts";
@@ -41,8 +41,6 @@ const OTHER_CURRENCY = DEPLOYMENT === "ausd";
 const SETTLEMENT = { pair: SETTLEMENT_PAIR, whitelister: SETTLEMENT_WHITELISTER, dollar: DOLLAR, other: CTK };
 const PROGRESS = { setup: copy.progressSetup, allow: copy.progressAllow, send: copy.stepSendingPayment } as const;
 
-/** The write's label carries who and how much, so a payment resumed after a reload can still say so. */
-const labelFor = (to: Address, amount: bigint) => `${SEND_LABEL} ${to} ${amount}`;
 function fromLabel(label: string): { to: Address; amount: bigint } | null {
   const [kind, to, amount] = label.split(" ");
   const account = to ? parseAccountId(to) : null;
@@ -56,19 +54,6 @@ const STEP_TEXT: Record<Step | "landing", string> = {
   sending: copy.stepSendingPayment,
   landing: copy.stepSettling,
 };
-
-/**
- * This account's own payment, once final, in its notifications (lib/notes.ts),
- * and counted towards turning voice on (lib/voice.ts). Amounts are in dollars.
- */
-function noteSent(me: Address, tx: string, to: Recipient, amount: bigint): void {
-  new VoiceStore(localStorage, DEPLOYMENT, me).sawWith(to.account, tx);
-  try {
-    new NotesStore(localStorage, DEPLOYMENT, me).update((s) => fromSent(s, { tx, to: to.account, toName: to.name, amount, decimals: 6, symbol: "$" }, Date.now()));
-  } catch {
-    // Storage refused: the payment itself is unaffected.
-  }
-}
 
 /**
  * Sending dollars to another person: by their request link, or by an Account
