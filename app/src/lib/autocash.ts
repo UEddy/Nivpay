@@ -147,6 +147,14 @@ export function cleanSettings(raw: unknown, currencies: readonly string[]): Auto
  */
 export const allowanceToSign = (s: Pick<AutoCashSettings, "cap">): bigint => BigInt(s.cap);
 
+/**
+ * Whether the desk can move anything at all: the allowance left is at least
+ * the smallest move. Unknown (not read yet) counts as yes, so the screen never
+ * says it is stopped on a guess. At 0, never signed or used up, nothing
+ * arrives at the bank until the person signs it again (Allow again).
+ */
+export const deskCanMove = (allowance: bigint | null): boolean => allowance === null || allowance >= MIN_MOVE;
+
 /** Dollars moved in the last 24 hours. */
 export function movedToday(moves: readonly { dollars: string; at: number }[], now: number): bigint {
   return moves.filter((m) => now - m.at < DAY_MS && now >= m.at).reduce((sum, m) => sum + BigInt(m.dollars), 0n);

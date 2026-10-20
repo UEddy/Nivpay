@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { decodeFunctionData, getAddress } from "viem";
-import { allowanceToSign, amountToMove, cancelPending, change, cleanBankName, cleanRequest, cleanSettings, DAY_MS, DEFAULT_CAP, lastFour, movedToday, settle, turnOff, WAIT_MS, type AutoCashRequest } from "./autocash.ts";
+import { allowanceToSign, deskCanMove, amountToMove, cancelPending, change, cleanBankName, cleanRequest, cleanSettings, DAY_MS, DEFAULT_CAP, lastFour, movedToday, settle, turnOff, WAIT_MS, type AutoCashRequest } from "./autocash.ts";
 import { ALLOWANCE_ABI, allowanceFor } from "./autocashLive.ts";
 
 const $ = (n: number) => BigInt(Math.round(n * 100)) * 10_000n;
@@ -132,4 +132,13 @@ test("the allowance signed is exactly the cap in force, a total: never a cap sti
   // A lower cap applies at once, and so does the allowance.
   assert.equal(signed(change(on, ask({ cap: $(100).toString() }), T0 + 2).cap), $(100));
   for (const cap of [$(1), $(37.5), $(1000)]) assert.equal(signed(cap.toString()), cap);
+});
+
+test("the desk can move nothing while the allowance is 0 or under $1, and the screen must say so", () => {
+  assert.equal(deskCanMove(0n), false);
+  assert.equal(deskCanMove($(0.99)), false);
+  assert.equal(deskCanMove($(1)), true);
+  assert.equal(deskCanMove($(480)), true);
+  // Not read yet: never shown as stopped on a guess.
+  assert.equal(deskCanMove(null), true);
 });

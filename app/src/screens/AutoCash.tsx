@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Address } from "viem";
 import { copy, ERROR_CODES } from "../copy.ts";
-import { allowanceToSign, cleanBankName, DEFAULT_CAP, lastFour, MAX_CAP, MIN_MOVE, type AutoCashRequest, type Bank } from "../lib/autocash.ts";
+import { allowanceToSign, cleanBankName, deskCanMove, DEFAULT_CAP, lastFour, MAX_CAP, MIN_MOVE, type AutoCashRequest, type Bank } from "../lib/autocash.ts";
 import { ALLOWANCE_ABI, allowanceData, allowanceFor, allowanceLabel, autoCashOff, AutoCashLocalStore, cancelAutoCashChange, readAutoCash, saveAutoCash, type AutoCashInfo } from "../lib/autocashLive.ts";
 import { liveWriteChain } from "../lib/chain.ts";
 import { DEPLOYMENT, DOLLAR } from "../lib/deployment.ts";
@@ -184,7 +184,8 @@ export function AutoCashSection(props: { account: Address }) {
       )}
       {on && !editing ? (
         <>
-          <p className="lede">{copy.autoCashOnTo(bankText, info.currency ?? "")}</p>
+          {/* On, but with nothing allowed the desk can move nothing: the headline says so, never "On. Dollars that arrive go to". */}
+          <p className="lede">{deskCanMove(allowance) ? copy.autoCashOnTo(bankText, info.currency ?? "") : copy.autoCashNotMoving(bankText)}</p>
           <div className="list">
             <Row label={copy.autoCashWhat} value={info.keep === null || info.keep === undefined ? copy.autoCashEverything : copy.autoCashKeeping(usd(BigInt(info.keep)))} />
             <Row label={copy.autoCashCap} value={usd(cap)} sub={copy.autoCashMovedToday(usd(info.movedToday), usd(cap))} />

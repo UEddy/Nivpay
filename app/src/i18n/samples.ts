@@ -298,6 +298,7 @@ export const SAMPLES: Record<string, unknown[]> = {
   pushChangeApproved: ["Birthday"],
   autoCashDeskCan: ["$500"],
   autoCashOnTo: ["First Bank ending 6789", "NGN"],
+  autoCashNotMoving: ["First Bank ending 6789"],
   bankEnding: ["First Bank", "6789"],
   autoCashMovedToday: ["$50", "$500"],
   autoCashKeeping: ["$100"],

@@ -1154,6 +1154,7 @@ export const en = {
   autoCashTurnOn: "Turn on",
   autoCashSaving: "Saving your choices…",
   autoCashOnTo: (bank: string, currency: string) => `On. Dollars that arrive go to ${bank}, in ${currency}.`,
+  autoCashNotMoving: (bank: string) => `Not working yet: nothing is sent to ${bank} until you tap Allow again below. Money that arrives stays in your account.`,
   bankEnding: (bank: string, last4: string) => `${bank} ending ${last4}`,
   autoCashYourBank: "your bank",
   autoCashMovedToday: (moved: string, cap: string) => `${moved} of ${cap} cashed out today`,

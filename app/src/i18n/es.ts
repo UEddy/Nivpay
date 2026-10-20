@@ -1121,6 +1121,7 @@ export const es: Dictionary = {
   autoCashTurnOn: "Activar",
   autoCashSaving: "Guardando lo que elegiste…",
   autoCashOnTo: (bank: string, currency: string) => `Activado. Los dólares que llegan van a ${bank}, en ${currency}.`,
+  autoCashNotMoving: (bank: string) => `Todavía no funciona: no se envía nada a ${bank} hasta que toques Permitir otra vez más abajo. El dinero que llega se queda en tu cuenta.`,
   bankEnding: (bank: string, last4: string) => `${bank} terminada en ${last4}`,
   autoCashYourBank: "tu banco",
   autoCashMovedToday: (moved: string, cap: string) => `${moved} de ${cap} retirados hoy`,
