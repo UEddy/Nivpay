@@ -2791,6 +2791,13 @@ check identities itself.
   the push says it stayed and why. The bell says the same from
   `GET /api/autocash`, which lists the last 7 days' moves and holds and
   nothing about the bank; History says "Auto cash out" for those cash outs.
+* **Known gap: the sender's app must stay open for its tries.** The trigger
+  is the sender's app telling `/api/notify` once the payment is final. If the
+  server can't read the chain just then, it answers "try again" and that app
+  tries twice more, 5 and 15 seconds apart. If the sender's app closes before
+  those tries, the arrival waits: it is cashed out (and the bell says so)
+  when the person paid next opens their app, which asks the desk to look at
+  its latest arrivals. No push is sent on that path. Not fixed yet.
 * **Turning it off, or changing it.** Off is at once on the server, with no
   fingerprint (off only ever leaves money where it is), and the screen says
   Off from that moment; then one fingerprint sets the allowance back to zero,

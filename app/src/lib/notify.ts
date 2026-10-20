@@ -7,7 +7,12 @@ import type { SentRequest } from "./inboxLive.ts";
  * phone"). The server works out who from the finalized receipt's events, or
  * from the request's own proof, never from what is sent here. Best effort:
  * if this phone closes first, or the call fails, that push is missed, and
- * the bell in the app still shows it.
+ * the bell in the app still shows it. A payment's own call is tried up to
+ * three times (now, then after 5 and 15 seconds) while the server answers 503
+ * "try again" or can't be reached: the server handles each transaction once,
+ * and Auto cash out claims each arrival once, so a retry never pushes or
+ * moves twice. If this phone closes before its tries, an Auto cash out waits
+ * until the person paid opens their app.
  */
 
 /** Whether notifications are set up on this site, asked once per page: if not, nothing is sent. */
@@ -17,10 +22,35 @@ const enabled = () =>
     .then(async (r) => r.ok && ((await r.json()) as { enabled?: boolean }).enabled === true)
     .catch(() => false));
 
+/** The waits before each retry of a transaction's call. */
+export const RETRY_AFTER_MS = [5_000, 15_000];
+
+type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
+
+/**
+ * Sends one call, and for a transaction tries again while the server says 503
+ * or can't be reached. Anything else (done, ignored, refused) is final.
+ * Returns how many calls were made.
+ */
+export async function sendNotify(body: Record<string, unknown>, fetcher: Fetch = fetch, wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))): Promise<number> {
+  const tries = body.kind === "tx" ? 1 + RETRY_AFTER_MS.length : 1;
+  for (let i = 0; ; i++) {
+    let again = false;
+    try {
+      const res = await fetcher("/api/notify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), keepalive: true });
+      again = res.status === 503;
+    } catch {
+      again = true;
+    }
+    if (!again || i + 1 >= tries) return i + 1;
+    await wait(RETRY_AFTER_MS[i]!);
+  }
+}
+
 async function post(body: Record<string, unknown>): Promise<void> {
   try {
     if (!(await enabled())) return;
-    await fetch("/api/notify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), keepalive: true });
+    await sendNotify(body);
   } catch {
     // Missed: the bell still shows it.
   }

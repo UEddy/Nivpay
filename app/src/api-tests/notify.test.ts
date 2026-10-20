@@ -245,3 +245,29 @@ test("auto cash out is asked only on the AUSD build and only for dollars in; if 
   await run({ kind: "tx", deployment: "testusd", tx: TX }, chain([transfer(config.TESTUSD, PAYER, IDARA, 5_000_000n)]), subsFor([{ account: IDARA }]).store, 201, ENV, failing);
   assert.equal(asked, 1);
 });
+
+test("a read of the chain that fails answers 503 try again, marks nothing handled, and the retry is handled in full", async () => {
+  const { store } = subsFor([{ account: IDARA }]);
+  const logs = [transfer(config.AUSD, PAYER, IDARA, 5_000_000n)];
+  for (const broken of ["finalized", "blockTime", "members"] as const) {
+    forgetRecent();
+    const flaky = chain(logs);
+    let fail = true;
+    const once = <T,>(f: () => Promise<T>) => () => (fail ? Promise.reject(new Error("The request took too long to respond.")) : f());
+    const c: NotifyChain = { ...flaky, [broken]: (...args: unknown[]) => once(() => (flaky[broken] as (...a: unknown[]) => Promise<unknown>)(...args))() } as NotifyChain;
+    // Members is read only for pot events: a chip-in makes it count.
+    const body = { kind: "tx", deployment: "ausd", tx: TX };
+    if (broken === "members") (c as { receipt: NotifyChain["receipt"] }).receipt = async () => ({ status: "success", blockNumber: 100n, from: PAYER, logs: [...logs, funded(1n, PAYER, 5_000_000n)] });
+    const first = await run(body, c, store);
+    assert.equal(first.status, 503, broken);
+    assert.deepEqual(first.body, { error: "could not read the chain, try again" });
+    assert.equal(first.sent.length, 0);
+    fail = false;
+    const second = await run(body, c, store);
+    assert.equal(second.status, 200, `${broken}: the retry is handled`);
+    assert.ok(second.sent.length >= 1);
+    // Handled now: a third call pushes nothing new.
+    const third = await run(body, c, store);
+    assert.deepEqual([third.status, third.sent.length], [200, 0]);
+  }
+});

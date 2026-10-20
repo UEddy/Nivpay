@@ -25,6 +25,10 @@
 //   the money, that one push says so ("$50 arrived and was sent to your bank:
 //   ₦76,725.00, First Bank ending 6789. Test mode."), with "received" too if
 //   only part of it moved; if the money stayed, the push says why.
+//   A read of the chain that fails answers 503 "try again", with nothing
+//   marked handled, and the sender's app tries twice more (app/src/lib/notify.ts).
+//   If that app closes before its tries, the push is missed, and an Auto cash
+//   out waits until the person paid opens their app (README, "Auto cash out").
 //   POST { kind: "request", from, to, time, signature, digest } checks the
 //   requester's proof, as /api/inbox does, and tells `to`, unless they muted
 //   `from`. It never carries the amount or the name: those are sealed.
@@ -379,16 +383,30 @@ export async function handleNotify(
     if (handled.has(key)) return json(200, { ok: true, pushed: 0 });
     const receipt = await chain.receipt(tx as Hex).catch(() => null);
     if (!receipt) return json(202, { ignored: "unknown" });
-    const fin = await chain.finalized();
-    if (receipt.blockNumber > fin.number) return json(202, { ignored: "not final" });
-    if (receipt.status !== "success") return json(202, { ignored: "failed" });
-    const when = await chain.blockTime(receipt.blockNumber);
+    // A read that fails (the public RPC timing out, say) answers "try again", and nothing is marked handled,
+    // so the sender's app's retry is handled in full (app/src/lib/notify.ts).
+    let fin: { number: bigint };
+    let when: bigint;
+    try {
+      fin = await chain.finalized();
+      if (receipt.blockNumber > fin.number) return json(202, { ignored: "not final" });
+      if (receipt.status !== "success") return json(202, { ignored: "failed" });
+      when = await chain.blockTime(receipt.blockNumber);
+    } catch {
+      return json(503, { error: "could not read the chain, try again" });
+    }
     if (BigInt(Math.floor(t / 1000)) - when > BigInt(MAX_AGE_S)) return json(202, { ignored: "too old" });
     if (limited(getAddress(receipt.from))) return json(429, { error: "too many, try again in a minute" });
     recent.push({ at: t, account: getAddress(receipt.from) });
     handled.add(key);
     const people = Array.isArray(body.people) ? body.people.filter((a): a is string => typeof a === "string" && isAddress(a)).map((a) => getAddress(a)).slice(0, MAX_PEOPLE) : [];
-    tells = await whoToTell(chain, deployment, receipt.logs, receipt.blockNumber, people, receipt.from);
+    try {
+      tells = await whoToTell(chain, deployment, receipt.logs, receipt.blockNumber, people, receipt.from);
+    } catch {
+      // Not handled after all: the retry reads it again.
+      handled.delete(key);
+      return json(503, { error: "could not read the chain, try again" });
+    }
     // Dollars in, on the build with the cash out desk: Auto cash out has its say first.
     const paid = tells.filter((x) => x.kind === "received" && x.symbol === "$").map((x) => x.account);
     if (autocash && deployment === "ausd" && paid.length) tells = withAutoCash(tells, await autocash(tx as Hex, paid).catch(() => []));
