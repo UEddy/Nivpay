@@ -15,7 +15,8 @@ import { amountIn, formatAmount } from "../lib/money.ts";
 import type { PotState } from "../lib/potview.ts";
 import { rememberReceipt } from "../lib/receipts.ts";
 import { readClient } from "../lib/rpc.ts";
-import { sendWrite, type Step } from "../lib/send.ts";
+import { retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
+import { callOf, recoveryFor } from "../lib/stuckRetry.ts";
 import { fitsText32, toText32 } from "../lib/text32.ts";
 import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { beforePasskey } from "../lib/cancel.ts";
@@ -113,6 +114,11 @@ export function PotChanges(props: {
         );
       })}
       {writes.result && !proposing && <NoticeLine notice={writes.result} />}
+      {writes.stuck && !proposing && (
+        <button type="button" className="btn small" disabled={writes.busy !== null} onClick={() => void writes.retryStuck()}>
+          {copy.tryAgain}
+        </button>
+      )}
       {iDecide && !state.closed && (
         <button type="button" className="pill-btn outline" disabled={writes.busy !== null} onClick={() => (writes.clear(), setProposing(true))}>
           {copy.proposeChange}
@@ -121,6 +127,15 @@ export function PotChanges(props: {
       {proposing && <ProposeChangeSheet state={state} potId={props.potId} contacts={props.contacts} words={props.words} writes={writes} onClose={() => setProposing(false)} />}
     </section>
   );
+}
+
+/** What a change's write says once final, from its label (lib/changes.ts changeLabel). */
+export function doneFor(label: string): string {
+  const what = label.split(" ")[2] ?? "";
+  if (what === "approveChange") return copy.changeYesDone;
+  if (what === "applyChange") return copy.changeMadeDone;
+  if (what === "withdrawChange") return copy.changeWithdrawnDone;
+  return what.startsWith("propose") ? copy.changeProposedDone : copy.changeYesDone;
 }
 
 /**
@@ -132,6 +147,8 @@ function useChangeWrites(me: Address, pots: Address, potId: bigint, onChanged: (
   const [busy, setBusy] = useState<string | null>(null);
   const [step, setStep] = useState<Step | null>(null);
   const [result, setResult] = useState<Notice | null>(null);
+  // A change left stuck blocks every write for this account until it is tried again (lib/stuckRetry.ts).
+  const [stuck, setStuck] = useState<PendingWrite | null>(null);
   const running = useCancellable();
   const alive = useRef(true);
   const changed = useRef(onChanged);
@@ -159,7 +176,10 @@ function useChangeWrites(me: Address, pots: Address, potId: bigint, onChanged: (
       setTimeout(() => alive.current && changed.current(), 8000);
     } else if (outcome.kind === "reverted") setResult({ tone: "bad", text: copy.requestDidNotGoThrough, code: ERROR_CODES.REVERTED });
     else if (outcome.kind === "superseded") setResult({ tone: "bad", text: copy.requestDidNotGoThrough, code: ERROR_CODES.SUPERSEDED });
-    else setResult(outcome.refused ? { tone: "bad", text: copy.requestTurnedDown, code: ERROR_CODES.REFUSED } : { tone: "bad", text: copy.stuck, code: ERROR_CODES.STUCK });
+    else {
+      setResult(outcome.refused ? { tone: "bad", text: copy.requestTurnedDown, code: ERROR_CODES.REFUSED } : { tone: "bad", text: copy.stuck, code: ERROR_CODES.STUCK });
+      setStuck((await idbWriteStore.get(me)) ?? null);
+    }
   };
 
   // A change in flight when the app was closed: followed again to its end.
@@ -168,9 +188,15 @@ function useChangeWrites(me: Address, pots: Address, potId: bigint, onChanged: (
     if (resumed.current) return;
     resumed.current = true;
     void idbWriteStore.get(me).then((w) => {
-      if (!w || !alive.current || !w.label.startsWith(changeLabel(potId, "")) || w.replaceable) return;
+      const what = recoveryFor(w, (label) => label.startsWith(changeLabel(potId, "")));
+      if (!w || !what || !alive.current) return;
+      if (what === "retry") {
+        setStuck(w);
+        setResult({ tone: "bad", text: copy.stuck, code: ERROR_CODES.STUCK });
+        return;
+      }
       setBusy("resumed");
-      void land(w, copy.changeYesDone).finally(() => alive.current && setBusy(null));
+      void land(w, doneFor(w.label)).finally(() => alive.current && setBusy(null));
     });
   }, [me, potId]);
 
@@ -201,6 +227,27 @@ function useChangeWrites(me: Address, pots: Address, potId: bigint, onChanged: (
     }
   };
 
+  /** Try again for a stuck change: the same call, signed again at the same nonce, so it can only replace that one write. */
+  const retryStuck = async () => {
+    const call = stuck ? callOf(stuck) : null;
+    if (!call) return;
+    setResult(null);
+    setBusy("retry");
+    const r = running.start();
+    try {
+      const write = await retryStuckWrite({ ...call, signal: r.signal, onStep: r.track((s: Step) => setStep(s)) });
+      setStuck(null);
+      await land(write, doneFor(call.label));
+    } catch (e) {
+      if (alive.current && !r.signal.aborted) setResult({ tone: "bad", ...describeFailure(e) });
+    } finally {
+      if (alive.current) {
+        setStep(null);
+        setBusy(null);
+      }
+    }
+  };
+
   const stop = () => {
     if (!beforePasskey(step) || !running.cancel()) return false;
     setStep(null);
@@ -210,7 +257,7 @@ function useChangeWrites(me: Address, pots: Address, potId: bigint, onChanged: (
   };
 
   const stepText = step === "confirm" ? copy.stepConfirm : step === "preparing" ? copy.stepPreparing : step === "getting-ready" ? copy.stepGettingReady : copy.asking;
-  return { busy, step, stepText, result, run, stop, clear: () => setResult(null) };
+  return { busy, step, stepText, result, run, stop, clear: () => setResult(null), stuck: stuck !== null, retryStuck };
 }
 
 /** Tells /api/notify about a final change, with who put money in, for it to check on the chain (lib/notify.ts). */
@@ -395,6 +442,11 @@ function ProposeChangeSheet(props: { state: PotState; potId: bigint; contacts: C
       <p className="hint">{widens(kind) ? copy.changeWidensHint(waitText(state.exitWindow, dateLocale())) : copy.changeNarrowsHint}</p>
       {problem && (limitText || name || idText || kind === "later") && <p className="hint">{problem}</p>}
       {writes.result && <NoticeLine notice={writes.result} />}
+      {writes.stuck && (
+        <button type="button" className="btn small" disabled={writes.busy !== null} onClick={() => void writes.retryStuck()}>
+          {copy.tryAgain}
+        </button>
+      )}
       <button
         type="button"
         className="btn primary"

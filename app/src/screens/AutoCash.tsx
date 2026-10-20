@@ -13,8 +13,9 @@ import { amountForField, amountIn, formatAmount } from "../lib/money.ts";
 import { currencyFor, defaultCurrency } from "../lib/ramp.ts";
 import { readClient } from "../lib/rpc.ts";
 import { reloadOnce } from "../lib/reloadOnce.ts";
-import { askForGasEarly, sendWrite, type Step } from "../lib/send.ts";
-import { followToFinality } from "../lib/writes.ts";
+import { askForGasEarly, retryStuckWrite, sendWrite, type Step } from "../lib/send.ts";
+import { callOf, recoveryFor } from "../lib/stuckRetry.ts";
+import { followToFinality, type PendingWrite } from "../lib/writes.ts";
 import { CurrencyPicker, Row, TestModeLine } from "./Money.tsx";
 import { AmountUnderstood, HowThisWorks, NoticeLine, phoneTimeZone, type Notice } from "./ui.tsx";
 
@@ -50,6 +51,8 @@ export function AutoCashSection(props: { account: Address }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [off, setOff] = useState<Off | null>(null);
+  // An allowance write left stuck: it blocks every write for this account until it is tried again (lib/stuckRetry.ts).
+  const [stuck, setStuck] = useState<PendingWrite | null>(null);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -80,6 +83,22 @@ export function AutoCashSection(props: { account: Address }) {
   useEffect(() => {
     void load();
   }, [load]);
+  // An allowance write still on its way when the screen opens is followed; a stuck one is offered Try again.
+  useEffect(() => {
+    void idbWriteStore.get(me).then(async (w) => {
+      const what = recoveryFor(w, (label) => label.startsWith("autocash "));
+      if (!alive.current || !what || !w) return;
+      if (what === "retry") return setStuck(w);
+      setBusy(copy.stepSettling);
+      try {
+        const outcome = await followToFinality(idbWriteStore, liveWriteChain, w);
+        if (outcome.kind === "stuck" && alive.current) setStuck((await idbWriteStore.get(me)) ?? null);
+      } finally {
+        if (alive.current) setBusy(null);
+        void load();
+      }
+    });
+  }, [me, load]);
   // The allowance write is coming: ask for the gas grant now, so it is old enough by then (lib/grantWait.ts).
   useEffect(() => {
     void askForGasEarly(me);
@@ -92,8 +111,31 @@ export function AutoCashSection(props: { account: Address }) {
     const write = await sendWrite({ from: me, to: DOLLAR, data: allowanceData(desk, amount), label: allowanceLabel(desk, amount), onStep: (s: Step) => alive.current && setBusy(STEP_TEXT[s]) });
     if (alive.current) setBusy(copy.stepSettling);
     const outcome = await followToFinality(idbWriteStore, liveWriteChain, write);
-    if (outcome.kind === "stuck") throw new AppError(copy.stuck, ERROR_CODES.STUCK);
+    if (outcome.kind === "stuck") {
+      if (alive.current) setStuck((await idbWriteStore.get(me)) ?? null);
+      throw new AppError(copy.stuck, ERROR_CODES.STUCK);
+    }
     if (outcome.kind !== "final") throw new AppError(copy.sendDidNotGoThrough, outcome.kind === "reverted" ? ERROR_CODES.REVERTED : ERROR_CODES.SUPERSEDED);
+  };
+  /** Try again for a stuck allowance write: the same call, signed again at the same nonce, so it can only replace that one write. */
+  const retryStuck = async () => {
+    const call = stuck ? callOf(stuck) : null;
+    if (!call) return;
+    setNotice(null);
+    try {
+      const write = await retryStuckWrite({ ...call, onStep: (s: Step) => alive.current && setBusy(STEP_TEXT[s]) });
+      if (alive.current) setBusy(copy.stepSettling);
+      const outcome = await followToFinality(idbWriteStore, liveWriteChain, write);
+      if (!alive.current) return;
+      if (outcome.kind === "stuck") setStuck((await idbWriteStore.get(me)) ?? null);
+      else setStuck(null);
+      if (outcome.kind === "reverted" || outcome.kind === "superseded") setNotice({ tone: "bad", text: copy.sendDidNotGoThrough, code: outcome.kind === "reverted" ? ERROR_CODES.REVERTED : ERROR_CODES.SUPERSEDED });
+    } catch (e) {
+      if (alive.current) setNotice(failure(e));
+    } finally {
+      if (alive.current) setBusy(null);
+      void load();
+    }
   };
   const failure = (e: unknown): Notice => ({ tone: "bad", ...(e instanceof AppError ? { text: e.message, code: e.code } : describeFailure(e)) });
 
@@ -183,7 +225,15 @@ export function AutoCashSection(props: { account: Address }) {
           {off === "taking" ? copy.autoCashTakingBack : off === "done" ? copy.autoCashOffDone : copy.autoCashOffNeedsFingerprint}
         </p>
       )}
-      {off === "needs" && (
+      {stuck && (
+        <>
+          <NoticeLine notice={{ tone: "bad", text: copy.stuck, code: ERROR_CODES.STUCK }} />
+          <button type="button" className="btn" disabled={busy !== null} onClick={() => void retryStuck()}>
+            {copy.tryAgain}
+          </button>
+        </>
+      )}
+      {off === "needs" && !stuck && (
         <button type="button" className="btn" disabled={busy !== null} onClick={() => void takeBack()}>
           {copy.autoCashTakeBack}
         </button>
@@ -203,7 +253,7 @@ export function AutoCashSection(props: { account: Address }) {
               {copy.autoCashCancel}
             </button>
           )}
-          {allowance !== null && allowance < capLeft && (
+          {allowance !== null && allowance < capLeft && !stuck && (
             <>
               <p className="hint">{copy.autoCashAllowanceLow(usd(allowance), usd(cap))}</p>
               <button type="button" className="btn" disabled={busy !== null || !info.desk} onClick={() => info.desk && void allow(info.desk, allowanceToSign({ cap: cap.toString() })).then(load, (e) => setNotice(failure(e))).finally(() => setBusy(null))}>
