@@ -792,8 +792,13 @@ encrypted Foundry keystore outside the repository, see
 The app (`app/`) never shows people gas or MON. A Vercel function,
 `POST /api/fund` in `app/api/fund/index.ts`, sends an account a small grant of
 testnet MON from a dedicated funder key before its first transaction, and the
-app waits until that grant is finalized before sending anything of the
-person's own. Sizes come from the gas measured in
+app waits until that grant is finalized, the balance covers the write, and
+the grant is at least 15 seconds old by block time, before asking for the
+fingerprint ("Getting your account ready"): a node was seen refusing a write
+for lack of balance for about ten seconds after the grant was final
+(`app/src/lib/grantWait.ts`). This applies to every write that needed a
+grant. Auto cash out asks for the grant early, as it opens and at Turn on,
+so the wait is usually over by the time the allowance is signed. Sizes come from the gas measured in
 `docs/APP-CONTRACT-MAP.md`, at 102 gwei:
 
 | Rule | Value | Why |

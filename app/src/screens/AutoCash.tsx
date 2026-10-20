@@ -13,7 +13,7 @@ import { amountForField, amountIn, formatAmount } from "../lib/money.ts";
 import { currencyFor, defaultCurrency } from "../lib/ramp.ts";
 import { readClient } from "../lib/rpc.ts";
 import { reloadOnce } from "../lib/reloadOnce.ts";
-import { sendWrite, type Step } from "../lib/send.ts";
+import { askForGasEarly, sendWrite, type Step } from "../lib/send.ts";
 import { followToFinality } from "../lib/writes.ts";
 import { CurrencyPicker, Row, TestModeLine } from "./Money.tsx";
 import { AmountUnderstood, HowThisWorks, NoticeLine, phoneTimeZone, type Notice } from "./ui.tsx";
@@ -80,6 +80,10 @@ export function AutoCashSection(props: { account: Address }) {
   useEffect(() => {
     void load();
   }, [load]);
+  // The allowance write is coming: ask for the gas grant now, so it is old enough by then (lib/grantWait.ts).
+  useEffect(() => {
+    void askForGasEarly(me);
+  }, [me]);
 
   const sign = async (message: string) => (await passkeys()).withSigner(me, (a) => a.signMessage({ message }));
 
@@ -98,6 +102,8 @@ export function AutoCashSection(props: { account: Address }) {
     setNotice(null);
     setOff(null);
     setBusy(copy.autoCashSaving);
+    // Again at Turn on, before the settings fingerprint, in case the first ask didn't get one.
+    void askForGasEarly(me);
     try {
       const { cap, pending } = await saveAutoCash(me, req, sign);
       const before = local.get();

@@ -2,6 +2,7 @@ import type { Address, Hex } from "viem";
 import { waitForFinalized, liveWriteChain } from "./chain.ts";
 import { copy, ERROR_CODES } from "../copy.ts";
 import { NotEnoughGasError, setupFailure } from "./errors.ts";
+import { askGrantEarly, forgetGrant, grantFor, rememberGrant, waitForBalance, waitForGrantAge } from "./grantWait.ts";
 import { idbWriteStore } from "./idb.ts";
 import { withSigner } from "./passkey.ts";
 import { readClient } from "./rpc.ts";
@@ -21,13 +22,53 @@ async function fees(): Promise<Fees> {
 }
 
 /**
+ * Waits, while "Getting your account ready" shows, until this account's grant
+ * is GRANT_MIN_AGE_S old by block time (lib/grantWait.ts): a node can refuse
+ * a write for lack of balance for a few seconds after the grant is final.
+ */
+async function grantSettled(hash: Hex): Promise<void> {
+  await waitForGrantAge({
+    grantTime: async () => {
+      const r = await readClient.getTransactionReceipt({ hash }).catch(() => null);
+      return r ? (await readClient.getBlock({ blockNumber: r.blockNumber })).timestamp : null;
+    },
+    latestTime: async () => (await readClient.getBlock({ blockTag: "latest" })).timestamp,
+  });
+}
+
+/**
+ * Asks for the gas grant early, when a screen knows a write is coming (Auto
+ * cash out, as it opens and at Turn on), so the grant is old enough by the
+ * time the write needs it. Only under the grant threshold; never throws.
+ */
+export const askForGasEarly = (address: Address) => askGrantEarly(address, { balance: () => readClient.getBalance({ address }), fetch: (url, init) => fetch(url, init) });
+
+/**
  * Makes sure the account can pay for `needed` wei of gas. If not, asks
- * /api/fund for a grant and waits until that grant is FINALIZED before
- * returning, so the person's own transaction never races it.
+ * /api/fund for a grant and waits until that grant is FINALIZED, the balance
+ * covers the write, and the grant is GRANT_MIN_AGE_S old, before returning,
+ * so the person's own transaction never races it. A grant asked for early
+ * (askForGasEarly) is waited for by its age too. Every write goes through
+ * here: Send, a payment in another currency, chipping in, a pot's payments
+ * and changes, making and closing a pot, a username, test dollars, Cash out,
+ * Auto cash out and the hands free voice payment.
  */
 export async function ensureGas(address: Address, needed: bigint): Promise<void> {
-  const balance = await readClient.getBalance({ address });
-  if (balance >= needed && needed > 0n) return;
+  let balance = await readClient.getBalance({ address });
+  const early = grantFor(address);
+  // A grant asked for early and still landing: wait for that one, never ask again (/api/fund would refuse a second so soon).
+  if (early && !(balance >= needed && needed > 0n)) {
+    await waitForFinalized(early).catch(() => undefined);
+    if (needed > 0n) await waitForBalance({ balance: () => readClient.getBalance({ address }), needed });
+    balance = await readClient.getBalance({ address });
+  }
+  if (balance >= needed && needed > 0n) {
+    if (early) {
+      await grantSettled(early);
+      forgetGrant(address);
+    }
+    return;
+  }
   let res: Response;
   try {
     res = await fetch("/api/fund", {
@@ -47,6 +88,10 @@ export async function ensureGas(address: Address, needed: bigint): Promise<void>
       throw new NotEnoughGasError(copy.errSetupSlow, ERROR_CODES.SETUP_SLOW);
     }
     if (status !== "success") throw new NotEnoughGasError(copy.errSetupReverted, ERROR_CODES.SETUP_REVERTED);
+    rememberGrant(address, body.hash);
+    if (needed > 0n) await waitForBalance({ balance: () => readClient.getBalance({ address }), needed });
+    await grantSettled(body.hash);
+    forgetGrant(address);
     return;
   }
   if (res.status === 409 && balance >= needed && needed > 0n) return;
