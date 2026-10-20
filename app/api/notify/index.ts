@@ -20,6 +20,11 @@
 //       caller may name `people` to check, those its phone saw put money in;
 //       a name not holding money in the pot is dropped, so a wrong list can
 //       only leave someone out. A pot on V2 goes as "v2:" and its number.
+//   Then, on the AUSD build, each account told "received" for dollars is
+//   passed to /api/autocash: if it turned on Auto cash out and the desk moved
+//   the money, that one push says so ("$50 arrived and was sent to your bank:
+//   ₦76,725.00, First Bank ending 6789. Test mode."), with "received" too if
+//   only part of it moved; if the money stayed, the push says why.
 //   POST { kind: "request", from, to, time, signature, digest } checks the
 //   requester's proof, as /api/inbox does, and tells `to`, unless they muted
 //   `from`. It never carries the amount or the name: those are sealed.
@@ -47,11 +52,11 @@ export interface PushStore {
   list(prefix: string): Promise<string[]>;
   read(path: string): Promise<Uint8Array | null>;
 }
-export const PUSH_KINDS = ["received", "sent", "chippedIn", "askYes", "request", "potNamesYou", "changeApproved"] as const;
+export const PUSH_KINDS = ["received", "sent", "chippedIn", "askYes", "request", "potNamesYou", "changeApproved", "autoCashOut"] as const;
 export type PushKind = (typeof PUSH_KINDS)[number];
 export type PushSettings = { kinds: Record<PushKind, boolean>; amounts: boolean };
 export const DEFAULT_SETTINGS: PushSettings = {
-  kinds: { received: true, sent: false, chippedIn: true, askYes: true, request: true, potNamesYou: false, changeApproved: true },
+  kinds: { received: true, sent: false, chippedIn: true, askYes: true, request: true, potNamesYou: false, changeApproved: true, autoCashOut: true },
   amounts: false,
 };
 export function cleanSettings(raw: unknown): PushSettings {
@@ -145,7 +150,37 @@ export interface NotifyChain {
 export type Sender = (sub: Subscription, payload: string) => Promise<number>;
 
 /** Someone to tell, and what. */
-export type Tell = { account: Address; kind: PushKind; pot?: string; potName?: string; ask?: string; amount?: bigint; decimals?: number; symbol?: string; maker?: Address; from?: Address };
+export type Tell = { account: Address; kind: PushKind; pot?: string; potName?: string; ask?: string; amount?: bigint; decimals?: number; symbol?: string; maker?: Address; from?: Address; cash?: CashTell };
+
+/** Auto cash out: what reached the bank (a move), or why the money stayed (held). */
+export type CashTell = { currency?: string; bankGets?: bigint; bank?: string; last4?: string; tx?: Hex; part?: boolean; held?: "cap" | "allowance" | "desk" };
+
+/** What /api/autocash made of one arrival for one account (its Outcome), as far as a push needs it. */
+export type AutoCashOutcome = { account: string; result: string; move?: { tx: string; dollars: string; bankGets: string; currency: string }; bank?: { name: string; last4: string }; hold?: { why: string; dollars: string } };
+export type AutoCash = (tx: Hex, accounts: Address[]) => Promise<AutoCashOutcome[]>;
+
+/**
+ * Auto cash out's answer folded into who is told what: a whole move replaces
+ * "received" with "autoCashOut"; part of it adds "autoCashOut" after
+ * "received"; money that stayed replaces "received" with "autoCashOut" and why.
+ */
+export function withAutoCash(tells: Tell[], outcomes: AutoCashOutcome[]): Tell[] {
+  return tells.flatMap((t): Tell[] => {
+    if (t.kind !== "received" || t.symbol !== "$") return [t];
+    const o = outcomes.find((x) => isAddress(x.account) && isAddressEqual(x.account as Address, t.account));
+    if (o?.result === "moved" && o.move && o.bank && /^\d+$/.test(o.move.dollars) && /^\d+$/.test(o.move.bankGets) && /^0x[0-9a-fA-F]{64}$/.test(o.move.tx)) {
+      const moved = BigInt(o.move.dollars);
+      const part = t.amount !== undefined && moved < t.amount;
+      const cash: Tell = { account: t.account, kind: "autoCashOut", amount: moved, decimals: 6, symbol: "$", cash: { currency: o.move.currency, bankGets: BigInt(o.move.bankGets), bank: o.bank.name, last4: o.bank.last4, tx: o.move.tx as Hex, part } };
+      return part ? [t, cash] : [cash];
+    }
+    if (o?.result === "held" && o.hold) {
+      const held = o.hold.why === "cap" || o.hold.why === "allowance" ? o.hold.why : "desk";
+      return [{ account: t.account, kind: "autoCashOut", amount: t.amount, decimals: 6, symbol: "$", cash: { held } }];
+    }
+    return [t];
+  });
+}
 
 /**
  * Who a final receipt affects, from its events alone. `people` are only
@@ -244,6 +279,13 @@ export function payloadFor(sub: Subscription, t: Tell): string | null {
   if (t.potName) p.n = t.potName;
   if (t.ask !== undefined) p.r = t.ask;
   if (settings.amounts && t.amount !== undefined) Object.assign(p, { a: t.amount.toString(), d: t.decimals, s: t.symbol });
+  const c = t.cash;
+  if (c?.held) p.w = c.held;
+  if (c && !c.held) {
+    // The bank and the statement's link always; what the bank gets only with amounts on.
+    Object.assign(p, { c: c.currency, b: c.bank, e: c.last4, t: c.tx, ...(c.part ? { v: 1 } : {}) });
+    if (settings.amounts && c.bankGets !== undefined) p.m = c.bankGets.toString();
+  }
   return JSON.stringify(p);
 }
 
@@ -307,6 +349,7 @@ export async function handleNotify(
   send: Sender,
   log: (e: Record<string, string>) => void = (e) => console.log(JSON.stringify(e)),
   now: () => number = Date.now,
+  autocash?: AutoCash,
 ): Promise<Response> {
   if (request.method !== "POST") return json(405, { error: "use POST" });
   if (!pushEnabled(env)) return json(200, { enabled: false });
@@ -343,6 +386,9 @@ export async function handleNotify(
     handled.add(key);
     const people = Array.isArray(body.people) ? body.people.filter((a): a is string => typeof a === "string" && isAddress(a)).map((a) => getAddress(a)).slice(0, MAX_PEOPLE) : [];
     tells = await whoToTell(chain, deployment, receipt.logs, receipt.blockNumber, people, receipt.from);
+    // Dollars in, on the build with the cash out desk: Auto cash out has its say first.
+    const paid = tells.filter((x) => x.kind === "received" && x.symbol === "$").map((x) => x.account);
+    if (autocash && deployment === "ausd" && paid.length) tells = withAutoCash(tells, await autocash(tx as Hex, paid).catch(() => []));
   } else if (body.kind === "request") {
     const { from, to, time, signature, digest } = body;
     if (typeof from !== "string" || !isAddress(from) || typeof to !== "string" || !isAddress(to)) return json(400, { error: "not an account" });
@@ -431,7 +477,22 @@ export function blobStore(env: PushEnv): PushStore {
   };
 }
 
+/** /api/autocash on this same site, asked as this site, for at most 25 seconds. */
+export function autoCashOn(request: Request): AutoCash {
+  return async (tx, accounts) => {
+    const site = new URL(request.url).origin;
+    const res = await fetch(`${site}/api/autocash`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: site },
+      body: JSON.stringify({ kind: "arrived", tx, accounts }),
+      signal: AbortSignal.timeout(25_000),
+    });
+    const body = (await res.json().catch(() => ({}))) as { outcomes?: AutoCashOutcome[] };
+    return res.ok && Array.isArray(body.outcomes) ? body.outcomes : [];
+  };
+}
+
 export function POST(request: Request): Promise<Response> {
   const env = process.env as PushEnv;
-  return handleNotify(request, env, liveChain(), blobStore, webPushSender(env));
+  return handleNotify(request, env, liveChain(), blobStore, webPushSender(env), undefined, undefined, autoCashOn(request));
 }

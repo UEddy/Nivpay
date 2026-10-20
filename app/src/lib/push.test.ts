@@ -69,3 +69,26 @@ test("the build puts the texts into the service worker exactly once", () => {
   assert.ok(built.includes('"received":"You received {amount}."'));
   assert.throws(() => injectTexts("no placeholder", TEXTS));
 });
+
+test("auto cash out: the whole sentence with amounts on, the bank always, and a tap opens the statement", () => {
+  const t = `0x${"ab".repeat(32)}`;
+  const moved = { k: "autoCashOut" as const, l: "en", c: "NGN", b: "First Bank", e: "6789", t };
+  assert.equal(sw.notificationFor(TEXTS, { ...moved, a: "50000000", d: 6, s: "$", m: "7672500" }).body, "$50.00 arrived and was sent to your bank: ₦76,725.00, First Bank ending 6789. Test mode.");
+  assert.equal(sw.notificationFor(TEXTS, moved).body, "Money arrived and was sent to your bank, First Bank ending 6789. Test mode.");
+  assert.equal(sw.notificationFor(TEXTS, { ...moved, v: 1, a: "30000000", d: 6, s: "$", m: "4603500" }).body, "$30.00 of it was sent to your bank: ₦46,035.00, First Bank ending 6789. Test mode.");
+  assert.equal(sw.notificationFor(TEXTS, { k: "autoCashOut", l: "en", w: "cap", a: "50000000", d: 6, s: "$" }).body, "$50.00 arrived and stayed in your account: today's most for auto cash out was reached.");
+  assert.equal(sw.notificationFor(TEXTS, { k: "autoCashOut", l: "en", w: "allowance" }).body, "Money arrived and stayed in your account: auto cash out needs one more fingerprint to carry on.");
+  assert.match(sw.notificationFor(TEXTS, { ...moved, l: "fr", a: "50000000", d: 6, s: "$", m: "7672500" }).body, /^50,00\s\$US sont arrivés et ont été envoyés à votre banque\s: 76\s725,00\s₦, First Bank se terminant par 6789\. Mode test\.$/u);
+  for (const lang of ["en", "es", "fr", "pt"]) {
+    for (const p of [moved, { ...moved, v: 1 as const }, ...(["cap", "allowance", "desk"] as const).map((w) => ({ k: "autoCashOut" as const, l: lang, w }))]) {
+      const body = sw.notificationFor(TEXTS, { ...p, l: lang }).body;
+      assert.ok(body && !body.includes("{") && bannedIn(body).length === 0, `${lang}: ${body}`);
+    }
+  }
+  assert.equal(sw.urlFor(moved), `/?go=statement&tx=${t}&c=NGN`);
+  assert.deepEqual(parseGo(`?go=statement&tx=${t}&c=NGN`), { kind: "statement", tx: t, currency: "NGN" });
+  assert.equal(goUrl(goFor(moved)), sw.urlFor(moved));
+  assert.equal(sw.urlFor({ k: "autoCashOut", l: "en", w: "cap" }), "/?go=notes");
+  assert.equal(parseGo("?go=statement&tx=0x12&c=NGN"), null);
+  assert.equal(parseGo(`?go=statement&tx=${t}&c=ngn`), null);
+});

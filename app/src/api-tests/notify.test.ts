@@ -67,7 +67,7 @@ function subsFor(people: Partial<Subscription>[]) {
   return { m, store };
 }
 
-async function run(body: unknown, c: NotifyChain, store: PushStore, status = 201, env: server.PushEnv = ENV) {
+async function run(body: unknown, c: NotifyChain, store: PushStore, status = 201, env: server.PushEnv = ENV, autocash?: server.AutoCash) {
   const sent: { to: string; payload: Record<string, unknown> }[] = [];
   const res = await handleNotify(
     new Request(`${SITE}/api/notify`, { method: "POST", headers: { origin: SITE, "content-type": "application/json" }, body: JSON.stringify(body) }),
@@ -80,6 +80,7 @@ async function run(body: unknown, c: NotifyChain, store: PushStore, status = 201
     },
     () => {},
     () => NOW,
+    autocash,
   );
   return { status: res.status, body: (await res.json()) as Record<string, unknown>, sent };
 }
@@ -192,4 +193,53 @@ test("a V2 pot's own events go as v2: and its number", async () => {
   assert.ok(tells.length > 0 && tells.every((t) => t.kind === "chippedIn" && t.pot === "v2:7"));
   // And with V2 off, the same log is nothing.
   assert.deepEqual(await server.whoToTellOn(chain([]), { ...d, potsV2: null }, [onV2], 100n), []);
+});
+
+test("auto cash out: money that arrived and was sent to the bank is one push saying so, with the bank and the statement", async () => {
+  const MOVE = `0x${"cd".repeat(32)}`;
+  const asked: { tx: string; accounts: string[] }[] = [];
+  const autocash: server.AutoCash = async (tx, accounts) => {
+    asked.push({ tx, accounts });
+    return [{ account: IDARA, result: "moved", move: { tx: MOVE, dollars: "50000000", bankGets: "7672500", currency: "NGN" }, bank: { name: "First Bank", last4: "6789" } }];
+  };
+  const { store } = subsFor([{ account: IDARA, settings: { ...DEFAULT_SETTINGS, amounts: true } }]);
+  const r = await run({ kind: "tx", deployment: "ausd", tx: TX }, chain([transfer(config.AUSD, PAYER, IDARA, 50_000_000n)]), store, 201, ENV, autocash);
+  assert.deepEqual(asked, [{ tx: TX, accounts: [IDARA] }]);
+  assert.deepEqual(r.sent, [{ to: IDARA, payload: { k: "autoCashOut", l: "en", a: "50000000", d: 6, s: "$", c: "NGN", b: "First Bank", e: "6789", t: MOVE, m: "7672500" } }]);
+});
+
+test("auto cash out: amounts off keep the bank and drop what it got; part of it is told as well as the arrival; money that stayed says why", () => {
+  const MOVE = `0x${"cd".repeat(32)}` as Hex;
+  const rx = { account: IDARA, kind: "received" as const, amount: 50_000_000n, decimals: 6, symbol: "$" };
+  const moved = (dollars: string) => [{ account: IDARA, result: "moved", move: { tx: MOVE, dollars, bankGets: "7672500", currency: "NGN" }, bank: { name: "First Bank", last4: "6789" } }];
+  const sub = { account: IDARA, endpoint: "e", keys: { p256dh: "x", auth: "y" }, lang: "en", settings: DEFAULT_SETTINGS, muted: [], trusted: [], at: 1 };
+  const whole = server.withAutoCash([rx], moved("50000000"));
+  assert.deepEqual(JSON.parse(payloadFor(sub, whole[0]!)!), { k: "autoCashOut", l: "en", c: "NGN", b: "First Bank", e: "6789", t: MOVE });
+  const part = server.withAutoCash([rx], moved("30000000"));
+  assert.deepEqual(part.map((t) => t.kind), ["received", "autoCashOut"]);
+  assert.equal(JSON.parse(payloadFor(sub, part[1]!)!).v, 1);
+  for (const [why, as] of [["cap", "cap"], ["allowance", "allowance"], ["paused", "desk"], ["busy", "desk"], ["desk", "desk"]] as const) {
+    const held = server.withAutoCash([rx], [{ account: IDARA, result: "held", hold: { why, dollars: "50000000" } }]);
+    assert.deepEqual(JSON.parse(payloadFor(sub, held[0]!)!), { k: "autoCashOut", l: "en", w: as });
+  }
+  // Off, kept, nothing to do, or no answer: the arrival is told as always.
+  for (const result of ["off", "kept", "none", "already", "unknown"]) assert.deepEqual(server.withAutoCash([rx], [{ account: IDARA, result }]), [rx]);
+  assert.deepEqual(server.withAutoCash([rx], []), [rx]);
+  // Only dollars: CTK arriving is never cashed out.
+  const ctk = { ...rx, symbol: "CTK", decimals: 18 };
+  assert.deepEqual(server.withAutoCash([ctk], moved("50000000")), [ctk]);
+});
+
+test("auto cash out is asked only on the AUSD build and only for dollars in; if it can't answer, the arrival is told as always", async () => {
+  let asked = 0;
+  const failing: server.AutoCash = async () => {
+    asked++;
+    throw new Error("unreachable");
+  };
+  const { store } = subsFor([{ account: IDARA }]);
+  const r = await run({ kind: "tx", deployment: "ausd", tx: TX }, chain([transfer(config.AUSD, PAYER, IDARA, 5_000_000n)]), store, 201, ENV, failing);
+  assert.deepEqual(r.sent, [{ to: IDARA, payload: { k: "received", l: "en" } }]);
+  forgetRecent();
+  await run({ kind: "tx", deployment: "testusd", tx: TX }, chain([transfer(config.TESTUSD, PAYER, IDARA, 5_000_000n)]), subsFor([{ account: IDARA }]).store, 201, ENV, failing);
+  assert.equal(asked, 1);
 });

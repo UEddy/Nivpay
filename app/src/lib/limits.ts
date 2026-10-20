@@ -3,7 +3,7 @@ import { getAddress, isAddress, type Address } from "viem";
 /**
  * A daily limit on money leaving the account: $1,000 in any 24 hours unless
  * the person sets another. It counts Send, Send in another currency, chipping
- * in and Cash out, from the moment each is sent, so requests still in flight
+ * in, Cash out and Auto cash out, from the moment each is sent, so requests still in flight
  * count too. Taking your share out of a pot and money coming in never count.
  *
  * The public RPC can't read a day of history cheaply, so the limit counts the
@@ -77,6 +77,11 @@ export function changeLimit(s: LimitState, next: bigint, now: number): LimitStat
 /** Counts a payment from the moment it is sent; the same id again replaces it. */
 export function recordSpend(s: LimitState, spend: Spend): LimitState {
   return { ...s, spends: [...s.spends.filter((x) => x.id !== spend.id), spend] };
+}
+
+/** Auto cash out's moves (api/autocash), each once by its transaction, final and counted from when the desk made them. */
+export function recordAutoCash(s: LimitState, moves: readonly { tx: string; dollars: bigint; at: number }[]): LimitState {
+  return moves.reduce((acc, m) => recordSpend(acc, { id: `auto:${m.tx.toLowerCase()}`, kind: "cashout", amount: m.dollars.toString(), at: m.at, final: true }), s);
 }
 
 /** Final: it keeps counting. Failed (reverted or replaced): it never left, so it stops counting. */

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { getAddress } from "viem";
-import { changeLimit, checkSpend, DAY_MS, DEFAULT_LIMIT, finishSpend, FRESH, leftToday, limitNow, LimitStore, recordSpend, settle, usedToday, type Spend } from "./limits.ts";
+import { changeLimit, checkSpend, recordAutoCash, DAY_MS, DEFAULT_LIMIT, finishSpend, FRESH, leftToday, limitNow, LimitStore, recordSpend, settle, usedToday, type Spend } from "./limits.ts";
 
 const usd = (d: number) => BigInt(Math.round(d * 100)) * 10_000n;
 const T = 1_800_000_000_000;
@@ -82,4 +82,15 @@ test("every way money leaves checks the limit before signing, and counts what it
   }
   // Taking a share out never counts.
   assert.doesNotMatch(readFileSync(new URL("../screens/Close.tsx", import.meta.url), "utf8"), /checkDailyLimit|spendSent/);
+});
+
+test("auto cash out's moves count towards the limit, each once, from when the desk made them", () => {
+  const now = Date.UTC(2026, 9, 20, 9, 40);
+  const tx = (n: number) => `0x${n.toString(16).padStart(64, "0")}`;
+  let s = recordAutoCash(FRESH, [{ tx: tx(1), dollars: 50_000_000n, at: now - 1000 }]);
+  s = recordAutoCash(s, [{ tx: tx(1).replace("0x", "0x").toUpperCase().replace("0X", "0x"), dollars: 50_000_000n, at: now - 1000 }, { tx: tx(2), dollars: 20_000_000n, at: now - DAY_MS - 1 }]);
+  assert.equal(usedToday(s, now), 50_000_000n, "once each; one older than a day no longer counts");
+  assert.ok(s.spends.every((x) => x.kind === "cashout" && x.final));
+  assert.equal(checkSpend(s, DEFAULT_LIMIT - 50_000_000n, now).ok, true);
+  assert.equal(checkSpend(s, DEFAULT_LIMIT - 49_999_999n, now).ok, false);
 });

@@ -48,7 +48,7 @@ function startingCurrency(): string {
   return defaultCurrency(phoneTimeZone(), languages);
 }
 
-function CurrencyPicker(props: { value: string; disabled: boolean; onChange: (code: string) => void }) {
+export function CurrencyPicker(props: { value: string; disabled: boolean; onChange: (code: string) => void }) {
   return (
     <label className="field">
       <span>{copy.rampCurrency}</span>
@@ -63,7 +63,7 @@ function CurrencyPicker(props: { value: string; disabled: boolean; onChange: (co
   );
 }
 
-function Row(props: { label: string; value: string; sub?: string }) {
+export function Row(props: { label: string; value: string; sub?: string }) {
   return (
     <div className="list-row">
       <div className="grow">
@@ -75,8 +75,76 @@ function Row(props: { label: string; value: string; sub?: string }) {
   );
 }
 
-function TestModeLine() {
+export function TestModeLine() {
   return <p className="ramp-test">{copy.rampTestMode}</p>;
+}
+
+/**
+ * The statement for a cash out made by Auto cash out (api/autocash), opened
+ * from its notification: the same card Cash out shows, from the desk's
+ * statement for that transaction (api/ramp), and the bank as this phone
+ * knows it.
+ */
+export function StatementScreen(props: { account: StoredAccount; tx: Hex; currency: string; bank: string | null; banner: ReactNode; onClose: () => void }) {
+  const me = props.account.address;
+  const [statement, setStatement] = useState<Statement | null>(null);
+  const [failed, setFailed] = useState<Notice | null>(null);
+  const [tries, setTries] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setFailed(null);
+    askStatement(me, props.currency, props.tx)
+      .then((s) => live && setStatement(s))
+      .catch((e) => live && setFailed({ tone: "bad", ...(e instanceof AppError ? { text: e.message, code: e.code } : describeFailure(e)) }));
+    return () => {
+      live = false;
+    };
+  }, [me, props.currency, props.tx, tries]);
+  const shown = currencyFor(statement?.currency ?? props.currency);
+  return (
+    <div className="screen">
+      <div className="bar">
+        <button type="button" className="icon-btn" aria-label={copy.close} onClick={props.onClose}>
+          <Icon name="close" size={22} />
+        </button>
+        <div className="bar-title">{copy.statementTitle}</div>
+        <div className="bar-spacer" />
+      </div>
+      {props.banner}
+      <div className="screen-body">
+        {statement && shown ? (
+          <div className="card enter sent-card" role="status">
+            <p className="eyebrow">{copy.rampSimulated}</p>
+            <h1>{copy.cashOutOnItsWay(formatLocal(shown, statement.bankGets))}</h1>
+            <div className="list">
+              <Row label={copy.rampReference} value={statement.reference} />
+              <Row label={copy.confirmAmount} value={usd(statement.dollars)} sub={`${copy.rampFee}: ${usd(statement.fee)}`} />
+              <Row label={copy.confirmTo} value={props.bank ?? copy.autoCashYourBank} />
+            </div>
+            <p className="hint">{copy.cashOutStatementNote}</p>
+            <TestModeLine />
+            <a className="receipt-link" href={receiptUrl(props.tx)} target="_blank" rel="noopener noreferrer">
+              {copy.viewReceipt}
+            </a>
+          </div>
+        ) : failed ? (
+          <NoticeLine notice={failed} />
+        ) : (
+          <p className="hint">{copy.stepSettling}</p>
+        )}
+      </div>
+      <div className="screen-foot">
+        {failed && (
+          <button type="button" className="btn" onClick={() => setTries((n) => n + 1)}>
+            {copy.tryAgain}
+          </button>
+        )}
+        <button type="button" className="pill-btn" onClick={props.onClose}>
+          {copy.done}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**

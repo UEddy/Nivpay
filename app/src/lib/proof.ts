@@ -13,7 +13,7 @@ import { getAddress, type Address } from "viem";
  * The servers keep copies of proofMessage (api/photo/index.ts,
  * api/city/index.ts); api-tests fail if any of them differs from this one.
  */
-export type ProofFields = { subject: "photo" | "city" | "request" | "inbox" | "push" | "name"; action: string; account: Address; pot?: string; data: string; time: number; site: string };
+export type ProofFields = { subject: "photo" | "city" | "request" | "inbox" | "push" | "name" | "autocash"; action: string; account: Address; pot?: string; data: string; time: number; site: string };
 
 export function proofMessage(f: ProofFields): string {
   return [

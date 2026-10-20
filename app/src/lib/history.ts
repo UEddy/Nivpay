@@ -8,10 +8,11 @@ import type { PotEvent } from "./feed.ts";
  * dollar's (and CTK's) Transfer events in and out of the account, the same
  * finalized reads the bell uses; nothing here reads the chain. Each entry says
  * what it was by who was on the other side: a pot, the Add money and Cash out
- * desk, Agora's settlement pair, the faucet, or a person.
+ * desk (by hand, or by Auto cash out), Agora's settlement pair, the faucet,
+ * or a person.
  */
 
-export type HistoryKind = "sent" | "received" | "sentOther" | "receivedOther" | "addMoney" | "cashOut" | "testDollars" | "potIn" | "potOut";
+export type HistoryKind = "sent" | "received" | "sentOther" | "receivedOther" | "addMoney" | "cashOut" | "autoCashOut" | "testDollars" | "potIn" | "potOut";
 
 export type HistoryEntry = {
   id: string;
@@ -36,6 +37,8 @@ export type Parties = {
   faucets: Address[];
   /** The Add money and Cash out desk, if there is one. */
   desk: Address | null;
+  /** Cash outs Auto cash out made, by transaction in lower case (lib/autocashLive.ts). */
+  autoCash?: ReadonlySet<string>;
 };
 
 export type TransferFeed = { events: PotEvent[]; decimals: number; symbol: string };
@@ -43,9 +46,9 @@ export type TransferFeed = { events: PotEvent[]; decimals: number; symbol: strin
 const ZERO = "0x0000000000000000000000000000000000000000";
 const is = (a: Address, list: (Address | null)[]) => list.some((b) => b !== null && isAddressEqual(a, b));
 
-function classify(direction: "in" | "out", other: Address, p: Parties, otherCurrency: boolean): HistoryKind {
+function classify(direction: "in" | "out", other: Address, p: Parties, otherCurrency: boolean, tx: string): HistoryKind {
   if (is(other, p.pots)) return direction === "in" ? "potOut" : "potIn";
-  if (p.desk && isAddressEqual(other, p.desk)) return direction === "in" ? "addMoney" : "cashOut";
+  if (p.desk && isAddressEqual(other, p.desk)) return direction === "in" ? "addMoney" : p.autoCash?.has(tx.toLowerCase()) ? "autoCashOut" : "cashOut";
   if (isAddressEqual(other, p.pair)) return direction === "in" ? "receivedOther" : "sentOther";
   if (direction === "in" && (is(other, p.faucets) || isAddressEqual(other, ZERO))) return "testDollars";
   if (otherCurrency) return direction === "in" ? "receivedOther" : "sentOther";
@@ -69,7 +72,7 @@ export function historyFrom(incoming: TransferFeed[], outgoing: TransferFeed[], 
         tx: e.tx,
         block: e.block,
         logIndex: e.logIndex,
-        kind: classify(direction, other, p, feed.symbol !== dollarSymbol),
+        kind: classify(direction, other, p, feed.symbol !== dollarSymbol, e.tx),
         direction,
         amount: e.args.value as bigint,
         decimals: feed.decimals,

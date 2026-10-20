@@ -2933,3 +2933,22 @@ button.avatar {
   gap: 8px;
   align-items: flex-start;
 }
+
+/* Auto cash out, in Profile, Money: the sentence of what the desk may do stands out; Turn off is red, as Log out is. */
+.autocash {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.autocash > p {
+  margin: 0;
+}
+.autocash-desk {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.autocash .btn.ghost.danger {
+  color: var(--danger);
+}

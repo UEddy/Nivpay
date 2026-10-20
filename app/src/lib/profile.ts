@@ -7,7 +7,7 @@ import { LANGS, type Lang } from "./locale.ts";
  * it, doesn't show, and a group with no rows left doesn't either.
  */
 
-export type RowId = "name" | "username" | "photo" | "limit" | "hidden" | "receipt" | "devices" | "language" | "notifications" | "voice" | "help" | "install";
+export type RowId = "name" | "username" | "photo" | "limit" | "autocash" | "hidden" | "receipt" | "devices" | "language" | "notifications" | "voice" | "help" | "install";
 export type GroupId = "account" | "money" | "security" | "preferences" | "help";
 
 export type ProfileFacts = {
@@ -18,6 +18,8 @@ export type ProfileFacts = {
   /** Requests from people, or notifications on the phone, set up on this site. */
   notificationsOn: boolean;
   voiceOffered: boolean;
+  /** Auto cash out: with the AUSD build's cash out desk only. */
+  autoCashOffered: boolean;
   /** The app can still be installed here. */
   canInstall: boolean;
 };
@@ -25,7 +27,7 @@ export type ProfileFacts = {
 export function profileGroups(f: ProfileFacts): { group: GroupId; rows: RowId[] }[] {
   const groups: { group: GroupId; rows: (RowId | false)[] }[] = [
     { group: "account", rows: ["name", f.namesOn && "username", f.photosOn && "photo"] },
-    { group: "money", rows: ["limit", f.hiddenPots > 0 && "hidden", f.hasReceipt && "receipt"] },
+    { group: "money", rows: ["limit", f.autoCashOffered && "autocash", f.hiddenPots > 0 && "hidden", f.hasReceipt && "receipt"] },
     { group: "security", rows: ["devices"] },
     { group: "preferences", rows: ["language", f.notificationsOn && "notifications", f.voiceOffered && "voice"] },
     { group: "help", rows: ["help", f.canInstall && "install"] },

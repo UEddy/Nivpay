@@ -113,10 +113,15 @@ const KIND_TEXT: Record<PushKind, string> = {
   request: copy.pushKindRequest,
   potNamesYou: copy.pushKindPotNamesYou,
   changeApproved: copy.pushKindChangeApproved,
+  autoCashOut: copy.pushKindAutoCashOut,
 };
 
-/** Changes agreed to a pot exist only on NivPayPotsV2: the switch shows once it is set (config.ts POTS_V2). */
-const SHOWN_KINDS = PUSH_KINDS.filter((k) => k !== "changeApproved" || POTS_V2_HERE !== null);
+/**
+ * Changes agreed to a pot exist only on NivPayPotsV2: the switch shows once it
+ * is set (config.ts POTS_V2). Auto cash out runs with the AUSD build's cash
+ * out desk only.
+ */
+const SHOWN_KINDS = PUSH_KINDS.filter((k) => (k !== "changeApproved" || POTS_V2_HERE !== null) && (k !== "autoCashOut" || DEPLOYMENT === "ausd"));
 
 /** On this phone: Turn on or off, what to be told about, and amounts on the lock screen. */
 function PushPart(props: { account: Account }) {

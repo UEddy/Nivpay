@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { getAddress } from "viem";
 import type { FoundPot } from "./discover.ts";
-import { EMPTY_NOTES, fromArrivals, fromPoll, markAllRead, markRead, MAX_NOTES, NotesStore, start, unread, type PollInputs } from "./notes.ts";
+import { EMPTY_NOTES, fromArrivals, fromAutoCash, fromPoll, markAllRead, markRead, MAX_NOTES, NotesStore, start, unread, type PollInputs } from "./notes.ts";
 
 const T = 1_800_000_000_000;
 const usd = (d: number) => (BigInt(Math.round(d * 100)) * 10_000n).toString();
@@ -186,4 +186,27 @@ test("a change agreed on a V2 pot you put money into is said once, with the pot'
   const store = new NotesStore({ getItem: (k) => kv.get(k) ?? null, setItem: (k, v) => void kv.set(k, v) }, "ausd", getAddress("0x00000000000000000000000000000000000000a1"));
   store.set(s);
   assert.deepEqual(store.get().notes, s.notes, "kept as it was");
+});
+
+test("auto cash out: each move and each hold once, only since notifications started, with the bank this phone knows", () => {
+  const started = start(EMPTY_NOTES, T, 500n);
+  const tx = (n: number) => `0x${n.toString(16).padStart(64, "0")}`;
+  const seen = {
+    moves: [
+      { at: T + 1000, dollars: 50_000_000n, currency: "NGN", tx: tx(1) },
+      { at: T - 1000, dollars: 9_000_000n, currency: "NGN", tx: tx(2) },
+    ],
+    held: [{ at: T + 2000, dollars: 20_000_000n, why: "cap", tx: tx(3) }],
+  };
+  assert.deepEqual(fromAutoCash(EMPTY_NOTES, seen), EMPTY_NOTES, "nothing before notifications start");
+  const s = fromAutoCash(started, seen, "First Bank ending 6789");
+  assert.deepEqual(kinds(s), ["autoCashHeld", "autoCashOut"]);
+  assert.deepEqual(s.notes[1]!.cash, { currency: "NGN", tx: tx(1), bank: "First Bank ending 6789" });
+  assert.equal(s.notes[1]!.amount, "50000000");
+  assert.deepEqual(fromAutoCash(s, seen, "First Bank ending 6789").notes.length, 2, "said once");
+  // Kept on the phone and read back.
+  const kv = new Map<string, string>();
+  const store = new NotesStore({ getItem: (k) => kv.get(k) ?? null, setItem: (k, v) => void kv.set(k, v) }, "ausd", getAddress("0x725C9A4Bb4c3dE2F11aC0e7C9b1E8f0D3a2B7bC1"));
+  store.set(s);
+  assert.deepEqual(kinds(store.get()), ["autoCashHeld", "autoCashOut"]);
 });

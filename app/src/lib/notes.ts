@@ -31,7 +31,10 @@ export type NoteKind =
   | "memberChippedIn"
   | "request"
   /** A change agreed on a NivPayPotsV2 pot this account put money into, that widens spending and isn't in force yet. */
-  | "changeAgreed";
+  | "changeAgreed"
+  /** Auto cash out sent money that arrived to the bank (api/autocash), or it stayed in the account, and why. */
+  | "autoCashOut"
+  | "autoCashHeld";
 
 /** What an agreed change does, kept as numbers and names so the note reads in whatever language is in use. */
 export type NoteChange = { kind: ChangeKind; payee: string; label: string; limit: string; endTime: string; appliesAt: string };
@@ -61,6 +64,8 @@ export type Note = {
   fromName?: string;
   /** The change agreed (changeAgreed). */
   change?: NoteChange;
+  /** Auto cash out: the move's currency and transaction, the bank as this phone knows it (autoCashOut), or why it stayed (autoCashHeld). */
+  cash?: { currency?: string; tx?: string; bank?: string; why?: string };
 };
 
 export type NotesState = {
@@ -228,6 +233,20 @@ export function fromArrivals(s: NotesState, arrivals: Arrival[], now: number): N
   );
 }
 
+/** What Auto cash out did lately, as /api/autocash lists it (lib/autocashLive.ts readAutoCash). */
+export type AutoCashSeen = { moves: { at: number; dollars: bigint; currency: string; tx: string }[]; held: { at: number; dollars: bigint; why: string; tx: string }[] };
+
+/** Auto cash out's moves and holds since notifications started on this phone, each once. */
+export function fromAutoCash(s: NotesState, seen: AutoCashSeen, bank?: string): NotesState {
+  if (s.startedAt === null) return s;
+  const since = s.startedAt;
+  const money = { decimals: DOLLAR_DECIMALS, symbol: "$" };
+  return add(s, [
+    ...seen.moves.filter((m) => m.at >= since).map((m): Note => ({ id: `ac:${m.tx.toLowerCase()}`, kind: "autoCashOut", at: m.at, read: false, amount: m.dollars.toString(), ...money, cash: { currency: m.currency, tx: m.tx, ...(bank ? { bank } : {}) } })),
+    ...seen.held.filter((h) => h.at >= since).map((h): Note => ({ id: `ach:${h.tx.toLowerCase()}`, kind: "autoCashHeld", at: h.at, read: false, amount: h.dollars.toString(), ...money, cash: { why: h.why } })),
+  ]);
+}
+
 /** A request sent straight to this account (inbox.ts), already opened and checked. */
 export type Asked = { digest: string; from: Address; name: string; amount: string; at: number };
 
@@ -254,7 +273,7 @@ export const markRead = (s: NotesState, id: string): NotesState => ({ ...s, note
 export const markAllRead = (s: NotesState): NotesState => ({ ...s, notes: s.notes.map((n) => ({ ...n, read: true })) });
 
 type KeyValue = Pick<Storage, "getItem" | "setItem">;
-const KINDS: NoteKind[] = ["received", "chippedIn", "askYes", "askClose", "paidOut", "closingSoon", "closedShare", "limitRaised", "sent", "potNamesYou", "memberChippedIn", "request", "changeAgreed"];
+const KINDS: NoteKind[] = ["received", "chippedIn", "askYes", "askClose", "paidOut", "closingSoon", "closedShare", "limitRaised", "sent", "potNamesYou", "memberChippedIn", "request", "changeAgreed", "autoCashOut", "autoCashHeld"];
 
 export class NotesStore {
   private readonly kv: KeyValue;

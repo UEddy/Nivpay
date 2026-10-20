@@ -1222,8 +1222,8 @@ worker (`app/api/push`, `app/api/notify`, `app/public/sw.js`).
   phone uses it.
 * **What to be told about**, each on or off: money coming in, your own
   payments going through, money put into your pots, payments waiting for your
-  yes, requests from people, and pots made with you in them by people you
-  know. That last one is off at first: to know who you know, the phone gives
+  yes, requests from people, Auto cash out (on the AUSD build), and pots made
+  with you in them by people you know. That last one is off at first: to know who you know, the phone gives
   the notifications service your contacts' Account IDs (never their names)
   while it is on.
 * **Show amounts on the lock screen**, off by default: "You received money."
@@ -1244,11 +1244,13 @@ worker (`app/api/push`, `app/api/notify`, `app/public/sw.js`).
   on iOS 16.4 or later. The Notifications screen says so and shows the
   install steps.
 * **Tapping a notification opens the right screen**: Receive, the pot, the
-  request waiting for your yes, or the bell.
+  request waiting for your yes, an Auto cash out's statement, or the bell.
 * **The words come from the app's dictionaries.** The build puts each
   language's notification texts into `sw.js` (`sw-build.ts`); a push carries
   only the kind, the phone's language, the pot's number and name, and an
-  amount if allowed.
+  amount if allowed. An Auto cash out's also carries the bank's name and last
+  4 digits, the currency and the move's transaction for its statement, and
+  what the bank got only if amounts are allowed.
 * **Hidden until `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` and a
   Blob store are set.** The private key lives only in Vercel's settings.
 
@@ -2675,7 +2677,92 @@ from a test desk account run by `/api/ramp`.
   `docs/ERROR-CODES.md`.
 
 On mainnet the same screens would quote from a licensed partner instead; see
-the next section.
+[Mainnet plan](#mainnet-plan-money-in-and-out-in-any-currency).
+
+## Auto cash out
+
+Profile, Money, Auto cash out (`app/src/screens/AutoCash.tsx`): dollars that
+arrive go to the person's bank in their own currency, with no tap each time.
+On testnet it is the same labelled simulation as Cash out ("Test mode: no
+real money moves"), run by the same test desk: no bank is involved, and the
+desk keeps the test AUSD. The rules are `app/src/lib/autocash.ts`; the
+server is `/api/autocash` (`app/api/autocash/index.ts`), which keeps its own
+copy of them, tested against the phone's.
+
+**On mainnet this needs a licensed partner** that holds the bank details and
+runs ID checks, such as the Ramp or Switch routes in the
+[Mainnet plan](#mainnet-plan-money-in-and-out-in-any-currency). NivPay would
+only send the dollars to that partner; it would not keep bank details or
+check identities itself.
+
+* **Turning it on.** A currency from the same 18, a bank (its name, the
+  account name and the account number), what to cash out (everything that
+  arrives, or everything above a balance to keep, such as "keep $100"), and
+  the most a day, $500 unless chosen, no more than the daily limit. Only the
+  bank's name and the last 4 digits of the account number leave the phone:
+  the account name and the full number are never stored, sent or logged. The
+  choices are kept in the private Blob store under the account, sent with a
+  proof the account's passkey signs (one fingerprint). A second fingerprint
+  signs the dollar's own allowance letting the desk's account move up to the
+  most a day, through `sendWrite` like every write, and the screen says it
+  plainly: "NivPay's cash-out desk can move up to $500 a day from your
+  account to your bank. Turn this off any time."
+* **How it runs.** The same trigger as notifications: when a payment is final,
+  the sender's app calls `/api/notify` with its transaction, and `/api/notify`
+  asks `/api/autocash` about each account it is telling "received" for
+  dollars. The person's own app also asks, when it opens and when its feed of
+  money in sees new dollars, for its 10 latest arrivals. The desk reads the
+  receipt at the finalized block, works out what really arrived for that
+  account from someone else, checks auto cash out is on and was on before
+  that block, the day's cap and the balance to keep, and moves that amount to
+  itself with `transferFrom`. The statement is Cash out's own for that
+  transaction (`/api/ramp`), with the same reference.
+* **What it never does.** Move more than arrived; move money that was there
+  before it was turned on, except what is above the balance to keep; move the
+  account's own transactions, money from the desk (Add money), the faucet, or
+  money minted; take money out of a pot (it only ever moves from the account
+  itself); move a transaction twice for an account (a claim is written to the
+  store before anything moves, on every server instance, and never let go:
+  a move lost after it was sent is never tried again); move past the
+  allowance the person signed.
+* **Telling the person.** One push, in their language: "$50 arrived and was
+  sent to your bank: ₦76,725.00, First Bank ending 6789. Test mode.", whose
+  tap opens the statement. With "Show amounts on the lock screen" off, the
+  amounts are left out and the bank stays. If only part of it moved (the cap,
+  the balance to keep, the allowance), the arrival is told as always and the
+  part that went to the bank too. If the money stayed (the cap reached, the
+  allowance used up, the desk switched off, busy or out of what it runs on),
+  the push says it stayed and why. The bell says the same from
+  `GET /api/autocash`, which lists the last 7 days' moves and holds and
+  nothing about the bank; History says "Auto cash out" for those cash outs.
+* **Turning it off, or changing it.** Off is at once on the server, with no
+  fingerprint (off only ever leaves money where it is), and the screen says
+  Off from that moment; then one fingerprint sets the allowance back to zero,
+  and if that doesn't happen, the screen offers it again. A lower cap, a
+  higher balance to keep, a currency and switching between everything and a
+  balance apply at once. A new bank, or a higher cap, waits 24 hours, like
+  the daily limit, with "Your new bank is used from Tue 20 Oct, 09:40" and
+  Cancel; until then the old ones are used.
+* **The daily limit.** The desk can't see the phone's daily limit, so the
+  cap can be no more than it when chosen, and each move counts towards it
+  on the phone once the phone hears of it (`recordAutoCash`), so later sends
+  that day are limited by it. Payments made on the phone don't lower what
+  the desk may move that day.
+* **The allowance is a total, not a day.** The dollar's allowance counts down
+  as the desk moves money; the cap of what moves in any 24 hours is the
+  server's rule. Once the allowance is used up, money stays in the account,
+  the person is told, and one fingerprint ("Allow again") sets it back to the
+  cap. A contract could make it a true daily allowance on the chain; none was
+  deployed for this.
+* **Limits.** The `RAMP_ENABLED` kill switch (money that arrives is told as
+  staying, nothing is claimed, and the key is never read), same origin only,
+  a 1 KB body cap, a proof under 5 minutes old for every change but off, 10
+  requests a minute and 6 moves an hour for one account, and the desk's 30
+  transactions an hour, shared with Add money. The desk key is read only once
+  a move is due, after every check, and never logged; logs carry the account,
+  amounts and transactions, never the bank. Error codes 63 to 67 cover it, as
+  they cover Cash out (`docs/ERROR-CODES.md`): every two digit code was
+  already taken.
 
 ## Mainnet plan: money in and out in any currency
 

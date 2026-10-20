@@ -38,6 +38,8 @@ function title(e: HistoryEntry, who: string, pot: string | null): string {
       return copy.historyAddMoney;
     case "cashOut":
       return copy.historyCashOut;
+    case "autoCashOut":
+      return copy.historyAutoCashOut;
     case "testDollars":
       return copy.historyTestDollars;
     case "potIn":

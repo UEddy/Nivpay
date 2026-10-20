@@ -2,12 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { LANGUAGE_CHOICES, limitUsedShare, profileGroups, type ProfileFacts } from "./profile.ts";
 
-const ALL: ProfileFacts = { namesOn: true, photosOn: true, hiddenPots: 2, hasReceipt: true, notificationsOn: true, voiceOffered: true, canInstall: true };
+const ALL: ProfileFacts = { namesOn: true, photosOn: true, hiddenPots: 2, hasReceipt: true, notificationsOn: true, voiceOffered: true, autoCashOffered: true, canInstall: true };
 
 test("every row, grouped and in order, when everything is set up", () => {
   assert.deepEqual(profileGroups(ALL), [
     { group: "account", rows: ["name", "username", "photo"] },
-    { group: "money", rows: ["limit", "hidden", "receipt"] },
+    { group: "money", rows: ["limit", "autocash", "hidden", "receipt"] },
     { group: "security", rows: ["devices"] },
     { group: "preferences", rows: ["language", "notifications", "voice"] },
     { group: "help", rows: ["help", "install"] },
@@ -15,7 +15,7 @@ test("every row, grouped and in order, when everything is set up", () => {
 });
 
 test("a feature not set up, or with nothing in it, has no row; a group with no rows goes", () => {
-  const none = profileGroups({ namesOn: false, photosOn: false, hiddenPots: 0, hasReceipt: false, notificationsOn: false, voiceOffered: false, canInstall: false });
+  const none = profileGroups({ namesOn: false, photosOn: false, hiddenPots: 0, hasReceipt: false, notificationsOn: false, voiceOffered: false, autoCashOffered: false, canInstall: false });
   assert.deepEqual(none, [
     { group: "account", rows: ["name"] },
     { group: "money", rows: ["limit"] },
@@ -25,6 +25,7 @@ test("a feature not set up, or with nothing in it, has no row; a group with no r
   ]);
   const flat = profileGroups(ALL).flatMap((g) => g.rows);
   assert.ok(!profileGroups({ ...ALL, hiddenPots: 0 }).flatMap((g) => g.rows).includes("hidden"), "no hidden pots: no row");
+  assert.ok(!profileGroups({ ...ALL, autoCashOffered: false }).flatMap((g) => g.rows).includes("autocash"), "not the AUSD build: no row");
   assert.ok(!profileGroups({ ...ALL, canInstall: false }).flatMap((g) => g.rows).includes("install"), "installed already: no row");
   assert.equal(new Set(flat).size, flat.length, "each row once");
 });

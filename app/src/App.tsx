@@ -40,10 +40,12 @@ import { readDesk } from "./lib/rampDesk.ts";
 import { PotFeed } from "./lib/feed.ts";
 import { idbFeedStore } from "./lib/idb.ts";
 import { LimitStore, settle } from "./lib/limits.ts";
-import { dismiss, fromArrivals, fromPoll, fromRequests, markAllRead, markRead, NotesStore, start as startNotes, unread, withoutRequestsFrom, type Coming, type Funding, type Note, type NotesState, type PollInputs } from "./lib/notes.ts";
+import { dismiss, fromArrivals, fromAutoCash, fromPoll, fromRequests, markAllRead, markRead, NotesStore, start as startNotes, unread, withoutRequestsFrom, type Coming, type Funding, type Note, type NotesState, type PollInputs } from "./lib/notes.ts";
 import { readComing } from "./lib/changesLive.ts";
 import { MutedStore } from "./lib/inbox.ts";
 import { VoiceStore } from "./lib/voice.ts";
+import { spendAutoCash } from "./lib/spending.ts";
+import { AutoCashLocalStore, AutoCashSeenStore, checkArrivals, readAutoCash } from "./lib/autocashLive.ts";
 import { askToListen, asksForVoice, onVoiceSettings, withoutVoiceAsk } from "./lib/voiceAsk.ts";
 import { voiceReady, wakeReady } from "./lib/voiceOn.ts";
 import { readInbox } from "./lib/inboxLive.ts";
@@ -63,6 +65,7 @@ const RequestScreen = lazy(() => reloadOnce(() => import("./screens/Request.tsx"
 const TimelineScreen = lazy(() => reloadOnce(() => import("./screens/Timeline.tsx")).then((m) => ({ default: m.TimelineScreen })));
 const CloseScreen = lazy(() => reloadOnce(() => import("./screens/Close.tsx")).then((m) => ({ default: m.CloseScreen })));
 const MoneyScreen = lazy(() => reloadOnce(() => import("./screens/Money.tsx")).then((m) => ({ default: m.MoneyScreen })));
+const StatementScreen = lazy(() => reloadOnce(() => import("./screens/Money.tsx")).then((m) => ({ default: m.StatementScreen })));
 const HelpSheet = lazy(() => reloadOnce(() => import("./screens/Help.tsx")).then((m) => ({ default: m.HelpSheet })));
 const NotesSheet = lazy(() => reloadOnce(() => import("./screens/Notes.tsx")).then((m) => ({ default: m.NotesSheet })));
 const HistoryCard = lazy(() => reloadOnce(() => import("./screens/History.tsx")).then((m) => ({ default: m.HistoryCard })));
@@ -121,7 +124,8 @@ type Screen =
   | { kind: "close"; pot: StoredPot }
   | { kind: "send"; request: PayLink | null }
   | { kind: "receive" }
-  | { kind: "money"; mode: "add" | "out" };
+  | { kind: "money"; mode: "add" | "out" }
+  | { kind: "statement"; tx: Hex; currency: string };
 
 function storedFromLink(link: PotLink, fragment: string): StoredPot {
   return rememberPotLink(pots, link, fragment, Date.now());
@@ -400,6 +404,7 @@ function Screens() {
     (g: Go) => {
       if (!accounts.active()) return;
       if (g.kind === "receive") return go({ kind: "receive" });
+      if (g.kind === "statement") return go({ kind: "statement", tx: g.tx as Hex, currency: g.currency });
       if (g.kind === "notes") {
         setTab("home");
         go({ kind: "home" });
@@ -598,6 +603,12 @@ function Screens() {
   if (active && !switching && screen.kind === "money") {
     return shell(<MoneyScreen key={active.address + screen.mode} account={active} mode={screen.mode} banner={banner} onClose={() => go({ kind: "home" })} />);
   }
+  if (active && !switching && screen.kind === "statement") {
+    const local = new AutoCashLocalStore(localStorage, DEPLOYMENT, active.address).get();
+    return shell(
+      <StatementScreen key={screen.tx} account={active} tx={screen.tx} currency={screen.currency} bank={local ? copy.bankEnding(local.bank.name, local.bank.last4) : null} banner={banner} onClose={() => go({ kind: "home" })} />,
+    );
+  }
   if (active && !switching && screen.kind === "receive") {
     return shell(<ReceiveScreen key={active.address} account={active} banner={banner} onClose={() => go({ kind: "home" })} />);
   }
@@ -635,6 +646,7 @@ function Screens() {
           onSend={() => go({ kind: "send", request: null })}
           onPay={(request) => go({ kind: "send", request })}
           onReceive={() => go({ kind: "receive" })}
+          onStatement={(tx, currency) => go({ kind: "statement", tx, currency })}
           onMoney={(mode) => go({ kind: "money", mode })}
           onRename={renameActive}
           onRemoved={(removed, name) => {
@@ -832,6 +844,8 @@ function Home(props: {
   /** Pay a request from a person: Send, filled in from it. */
   onPay: (request: PayLink) => void;
   onReceive: () => void;
+  /** A cash out's statement, from an Auto cash out note. */
+  onStatement: (tx: Hex, currency: string) => void;
   onMoney: (mode: "add" | "out") => void;
   onRename: (name: string) => void;
   onRemoved: (account: Address, name: string) => void;
@@ -897,12 +911,28 @@ function Home(props: {
   const [historyIn, setHistoryIn] = useState<Record<string, TransferFeed>>({});
   const [historyOut, setHistoryOut] = useState<TransferFeed | null>(null);
   const [desk, setDesk] = useState<Address | null>(null);
+  // Auto cash out (api/autocash): which cash outs it made, for History, and whether it is on, to ask it about money arriving.
+  const autoSeen = useMemo(() => new AutoCashSeenStore(localStorage, DEPLOYMENT, owner), [owner]);
+  const [autoCash, setAutoCash] = useState<ReadonlySet<string>>(() => autoSeen.all());
+  const autoOn = useRef(false);
+  /** What Auto cash out did lately: in the bell, in History, and towards the daily limit. */
+  const readAutoCashNow = useCallback(async () => {
+    if (DEPLOYMENT !== "ausd") return;
+    const info = await readAutoCash(owner);
+    autoOn.current = info.on;
+    const mine = new AutoCashLocalStore(localStorage, DEPLOYMENT, owner).get();
+    setAutoCash(autoSeen.add(info.moves.map((m) => m.tx)));
+    spendAutoCash(owner, info.moves);
+    setNotes(notesStore.update((st) => fromAutoCash(st, info, mine ? copy.bankEnding(mine.bank.name, mine.bank.last4) : undefined)));
+  }, [owner, autoSeen, notesStore]);
   useEffect(() => {
     let live = true;
-    if (DEPLOYMENT === "ausd")
+    if (DEPLOYMENT === "ausd") {
       void readDesk()
         .then((d) => live && setDesk(d.desk))
         .catch(() => {});
+      void readAutoCashNow().catch(() => {});
+    }
     return () => {
       live = false;
     };
@@ -936,6 +966,12 @@ function Home(props: {
             if (live) setHistoryIn((h) => ({ ...h, [w.asset]: { events: all, decimals: w.decimals, symbol: w.symbol } }));
             const arrivals = incomingFrom(added, owner).map((a) => ({ ...a, decimals: w.decimals, symbol: w.symbol }));
             if (!live || !arrivals.length) return;
+            // Dollars in, with Auto cash out on: the desk is asked to look at them, in case the sender's app didn't tell it.
+            if (w.asset === DOLLAR_FOR_NOTES && autoOn.current) {
+              void checkArrivals(owner, [...new Set(arrivals.map((a) => a.tx))].slice(-10))
+                .then((o) => (o.some((x) => x.result === "moved" || x.result === "held") ? readAutoCashNow() : undefined))
+                .catch(() => {});
+            }
             // Each one counts towards voice paying that person (lib/voice.ts).
             const voice = new VoiceStore(localStorage, DEPLOYMENT, owner);
             for (const a of arrivals) voice.sawWith(a.from, `${a.tx}:${a.logIndex}`);
@@ -998,6 +1034,7 @@ function Home(props: {
     setNotesOpen(false);
     const pot = n.potId === undefined ? null : potToOpen(n.potId);
     if (n.kind === "received") props.onReceive();
+    else if (n.kind === "autoCashOut" && n.cash?.tx && n.cash.currency) props.onStatement(n.cash.tx as Hex, n.cash.currency);
     else if (n.kind === "limitRaised") setDetails(true);
     else if ((n.kind === "askYes" || n.kind === "askClose") && pot && n.proposalId) props.onOpenRequest(pot, BigInt(n.proposalId));
     else if (pot) props.onOpenPot(pot);
@@ -1372,7 +1409,7 @@ function Home(props: {
       {props.tab === "home" && (
         <Suspense fallback={null}>
           <HistoryCard
-            entries={historyFrom(Object.values(historyIn), historyOut ? [historyOut] : [], { me: owner, pots: ALL_POTS, pair: SETTLEMENT_PAIR, faucets: [AUSD_FAUCET], desk })}
+            entries={historyFrom(Object.values(historyIn), historyOut ? [historyOut] : [], { me: owner, pots: ALL_POTS, pair: SETTLEMENT_PAIR, faucets: [AUSD_FAUCET], desk, autoCash })}
             since={notes.startedAt}
             who={(a) => nameOf(a) ?? copy.accountEnding(a)}
             potName={(key) => {

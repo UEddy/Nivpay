@@ -5,6 +5,7 @@ import { shownName, type StoredAccount } from "../lib/accounts.ts";
 import { DEPLOYMENT } from "../lib/deployment.ts";
 import { pickLanguage } from "../i18n/start.ts";
 import { inboxEnabled, requestsOnHere } from "../lib/inboxLive.ts";
+import { readAutoCash } from "../lib/autocashLive.ts";
 import { LimitStore, limitNow, LIMIT_DECIMALS, settle } from "../lib/limits.ts";
 import { language, LANGUAGE_NAMES, readPick, type Lang } from "../lib/locale.ts";
 import { formatAmount } from "../lib/money.ts";
@@ -24,6 +25,7 @@ import { voiceOffered } from "./Voice.tsx";
 
 const PhotoSection = lazy(() => reloadOnce(() => import("./Photo.tsx")).then((m) => ({ default: m.PhotoSection })));
 const UsernameSection = lazy(() => reloadOnce(() => import("./Username.tsx")).then((m) => ({ default: m.UsernameSection })));
+const AutoCashSection = lazy(() => reloadOnce(() => import("./AutoCash.tsx")).then((m) => ({ default: m.AutoCashSection })));
 const DailyLimitSection = lazy(() => reloadOnce(() => import("./Limits.tsx")).then((m) => ({ default: m.DailyLimitSection })));
 const DevicesSection = lazy(() => reloadOnce(() => import("./Devices.tsx")).then((m) => ({ default: m.DevicesSection })));
 const NotificationsSection = lazy(() => reloadOnce(() => import("./Notify.tsx")).then((m) => ({ default: m.NotificationsSection })));
@@ -34,10 +36,15 @@ const VERSION: string = import.meta.env.VITE_APP_VERSION ?? "local";
 /** An account, for what this file shows; named so, since screen text is checked for words people mustn't see. */
 type Account = Address;
 
-type View = "main" | "name" | "photo" | "username" | "choose" | "limit" | "hidden" | "devices" | "language" | "notifications" | "voice" | "install";
+type View = "main" | "name" | "photo" | "username" | "choose" | "limit" | "autocash" | "hidden" | "devices" | "language" | "notifications" | "voice" | "install";
 
 /** The row icons: simple strokes in the text colour. */
 const ROW_ICONS: Record<string, ReactNode> = {
+  autocash: (
+    <>
+      <path d="M4 10h16M6 10v7M10 10v7M14 10v7M18 10v7M3 20h18M12 3l9 5H3z" />
+    </>
+  ),
   name: (
     <>
       <circle cx="12" cy="8" r="3.6" />
@@ -211,6 +218,7 @@ export function ProfilePage(props: {
   const hasPhoto = useAsync(() => (photosOn ? fetch(photoUrl(me), { method: "HEAD" }).then((r) => r.ok) : Promise.resolve(false)), false, [photosOn, me, view]);
   const inboxOn = useAsync(() => inboxEnabled(me), false, [me]);
   const pushOn = useAsync(() => pushInfo().then((i) => i.enabled), false, []);
+  const autoCashOn = useAsync(() => (DEPLOYMENT === "ausd" ? readAutoCash(me).then((i) => i.on) : Promise.resolve(false)), false, [me, view]);
   const requestsHere = useAsync(() => requestsOnHere(me), false, [me, view]);
   const receipt = latestReceipt(me);
   const name = shownName(props.account);
@@ -237,6 +245,7 @@ export function ProfilePage(props: {
     username: <Row icon="username" label={copy.username} value={u.name ? copy.usernameAt(u.name) : u.name === null ? copy.valueNotSet : undefined} onClick={() => setView("username")} />,
     photo: <Row icon="photo" label={copy.photo} value={hasPhoto ? copy.photoAdded : copy.photoNotAdded} onClick={() => setView("photo")} />,
     limit: <Row icon="limit" label={copy.dailyLimit} value={limitValue} onClick={() => setView("limit")} />,
+    autocash: <Row icon="autocash" label={copy.autoCashOut} value={autoCashOn ? copy.valueOn : copy.valueOff} onClick={() => setView("autocash")} />,
     hidden: <Row icon="hidden" label={copy.hiddenPots} value={String(props.hidden.length)} onClick={() => setView("hidden")} />,
     receipt: receipt ? <Row icon="receipt" label={copy.lastReceipt} href={receiptUrl(receipt)} /> : null,
     devices: <Row icon="devices" label={copy.devicesAndSessions} onClick={() => setView("devices")} />,
@@ -272,6 +281,12 @@ export function ProfilePage(props: {
       return (
         <Detail title={copy.username} onBack={back}>
           <UsernameSection me={me} start={view === "choose" ? "choose" : "view"} inScreen />
+        </Detail>
+      );
+    case "autocash":
+      return (
+        <Detail title={copy.autoCashOut} onBack={back}>
+          <AutoCashSection account={me} />
         </Detail>
       );
     case "limit":
@@ -400,6 +415,7 @@ export function ProfilePage(props: {
         hasReceipt: Boolean(receipt),
         notificationsOn: inboxOn || pushOn,
         voiceOffered: voiceOffered(),
+        autoCashOffered: DEPLOYMENT === "ausd",
         canInstall: Boolean(installWay),
       }).map((g) => (
         <Group key={g.group} label={GROUP_TEXT[g.group]}>

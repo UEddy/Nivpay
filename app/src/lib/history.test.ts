@@ -50,3 +50,12 @@ test("the receipt names the pot, or who got a payment in another currency", () =
   assert.deepEqual(detailFrom(other!, [toMum], [POTS], CTK), { recipient: MUM, received: 4_000_000_000_000_000_000n });
   assert.deepEqual(detailFrom(other!, [], [POTS], CTK), {});
 });
+
+test("a cash out Auto cash out made says so; one made by hand stays Cash out", () => {
+  const auto = t(7, ME, DESK, 3n);
+  const byHand = t(8, ME, DESK, 4n);
+  const h = historyFrom([], [{ events: [auto, byHand], decimals: 6, symbol: "$" }], { ...P, autoCash: new Set([auto.tx.toLowerCase()]) });
+  assert.deepEqual(h.map((e) => e.kind), ["cashOut", "autoCashOut"]);
+  // Money in from the desk is still Add money, whatever the list says.
+  assert.equal(historyFrom([{ events: [t(9, DESK, ME, 5n)], decimals: 6, symbol: "$" }], [], { ...P, autoCash: new Set([t(9, DESK, ME, 5n).tx]) })[0]!.kind, "addMoney");
+});

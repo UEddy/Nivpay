@@ -94,12 +94,26 @@ function formatPushAmount(a, d, s, lang) {
   }
 }
 
+// What a bank gets in its own currency, from minor units: "₦76,725.00".
+function formatPushLocal(m, c, lang) {
+  try {
+    const f = new Intl.NumberFormat(lang, { style: "currency", currency: c, currencyDisplay: "narrowSymbol" });
+    return f.format(Number(BigInt(m)) / 10 ** f.resolvedOptions().maximumFractionDigits);
+  } catch {
+    return `${m} ${c}`;
+  }
+}
+
 function notificationFor(texts, p) {
   const t = (texts && (texts[p.l] || texts.en)) || {};
-  const withAmount = p.a !== undefined && t[p.k] !== undefined;
-  const raw = (withAmount ? t[p.k] : t[`${p.k}NoAmount`]) || "";
+  // An auto cash out reads by what happened: all of it sent, part of it, or kept and why.
+  const key = p.k === "autoCashOut" ? (p.w ? `autoCashOutHeld:${p.w}` : p.v ? "autoCashOutPart" : "autoCashOut") : p.k;
+  const withAmount = p.a !== undefined && t[key] !== undefined && (p.k !== "autoCashOut" || p.w !== undefined || p.m !== undefined);
+  const raw = (withAmount ? t[key] : t[`${key}NoAmount`]) || "";
   const amount = withAmount ? formatPushAmount(p.a, p.d === undefined ? 6 : p.d, p.s || "$", p.l) : "";
-  return { title: t.title || "NivPay", body: raw.replace("{amount}", amount).replace("{pot}", p.n || "") };
+  const local = withAmount && p.m !== undefined && p.c ? formatPushLocal(p.m, p.c, p.l) : "";
+  const bank = p.b ? (t.bankEnding || "{name} {last4}").replace("{name}", p.b).replace("{last4}", p.e || "") : "";
+  return { title: t.title || "NivPay", body: raw.replace("{amount}", amount).replace("{pot}", p.n || "").replace("{local}", local).replace("{bank}", bank) };
 }
 
 function urlFor(p) {
@@ -107,6 +121,7 @@ function urlFor(p) {
   // A pot on NivPayPotsV2 comes as "v2:" and its number.
   const pot = (v) => typeof v === "string" && /^(v2:)?\d{1,20}$/.test(v);
   if (p.k === "received") return "/?go=receive";
+  if (p.k === "autoCashOut" && !p.w && typeof p.t === "string" && /^0x[0-9a-fA-F]{64}$/.test(p.t) && typeof p.c === "string" && /^[A-Z]{3}$/.test(p.c)) return `/?go=statement&tx=${p.t}&c=${p.c}`;
   if (p.k === "askYes" && pot(p.p) && num(p.r)) return `/?go=request&pot=${p.p}&ask=${p.r}`;
   if ((p.k === "chippedIn" || p.k === "potNamesYou" || p.k === "changeApproved") && pot(p.p)) return `/?go=pot&pot=${p.p}`;
   return "/?go=notes";

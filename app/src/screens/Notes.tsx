@@ -4,6 +4,7 @@ import { changeWhat } from "../lib/changes.ts";
 import { whenText } from "./Changes.tsx";
 import { dateLocale } from "../lib/locale.ts";
 import { formatAmount, formatCurrency } from "../lib/money.ts";
+import { currencyFor, formatLocal, quoteCashOut } from "../lib/ramp.ts";
 import type { Address } from "viem";
 import type { Note, NotesState } from "../lib/notes.ts";
 import { senderKind } from "../lib/transfer.ts";
@@ -59,6 +60,14 @@ export function noteText(n: Note, nameOf?: NameOf): string {
       const who = (n.from && nameOf?.(n.from)) || n.fromName || whoOf(n.from, nameOf);
       return n.amount && n.amount !== "0" ? copy.noteRequest(who, amountOf(n)) : copy.noteRequestAny(who);
     }
+    case "autoCashOut": {
+      // What the bank got, worked out as the desk does (lib/ramp.ts quoteCashOut).
+      const c = currencyFor(n.cash?.currency ?? "");
+      const local = c ? formatLocal(c, quoteCashOut(c, BigInt(n.amount ?? "0")).bankGets) : "";
+      return copy.noteAutoCashOut(amountOf(n), local, n.cash?.bank ?? copy.autoCashYourBank);
+    }
+    case "autoCashHeld":
+      return copy.noteAutoCashOutHeld(amountOf(n), n.cash?.why === "cap" ? copy.autoCashHeldCap : n.cash?.why === "allowance" ? copy.autoCashHeldAllowance : copy.autoCashHeldDesk);
     case "changeAgreed": {
       const c = n.change;
       if (!c) return pot;
