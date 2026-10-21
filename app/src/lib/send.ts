@@ -1,8 +1,6 @@
 import type { Address, Hex } from "viem";
 import { waitForFinalized, liveWriteChain } from "./chain.ts";
-import { copy, ERROR_CODES } from "../copy.ts";
-import { NotEnoughGasError, setupFailure } from "./errors.ts";
-import { askGrantEarly, forgetGrant, grantFor, rememberGrant, waitForBalance, waitForGrantAge } from "./grantWait.ts";
+import { askGrantEarly, ensureGasWith, waitForGrantAge } from "./grantWait.ts";
 import { idbWriteStore } from "./idb.ts";
 import { withSigner } from "./passkey.ts";
 import { readClient } from "./rpc.ts";
@@ -48,60 +46,19 @@ export const askForGasEarly = (address: Address) => askGrantEarly(address, { bal
  * /api/fund for a grant and waits until that grant is FINALIZED, the balance
  * covers the write, and the grant is GRANT_MIN_AGE_S old, before returning,
  * so the person's own transaction never races it. A grant asked for early
- * (askForGasEarly) is waited for by its age too. Every write goes through
+ * (askForGasEarly) is waited for by its age too, and one still on its way is
+ * waited for, never asked beside (ensureGasWith, lib/grantWait.ts). Every write goes through
  * here: Send, a payment in another currency, chipping in, a pot's payments
  * and changes, making and closing a pot, a username, test dollars, Cash out,
  * Auto cash out and the hands free voice payment.
  */
-export async function ensureGas(address: Address, needed: bigint): Promise<void> {
-  let balance = await readClient.getBalance({ address });
-  const early = grantFor(address);
-  // A grant asked for early and still landing: wait for that one, never ask again (/api/fund would refuse a second so soon).
-  if (early && !(balance >= needed && needed > 0n)) {
-    await waitForFinalized(early).catch(() => undefined);
-    if (needed > 0n) await waitForBalance({ balance: () => readClient.getBalance({ address }), needed });
-    balance = await readClient.getBalance({ address });
-  }
-  if (balance >= needed && needed > 0n) {
-    if (early) {
-      await grantSettled(early);
-      forgetGrant(address);
-    }
-    return;
-  }
-  let res: Response;
-  try {
-    res = await fetch("/api/fund", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ address }),
-    });
-  } catch {
-    throw new NotEnoughGasError(copy.errSetupUnreachable, ERROR_CODES.SETUP_UNREACHABLE);
-  }
-  const body = (await res.json().catch(() => ({}))) as { hash?: Hex; error?: string; code?: string };
-  if (res.ok && body.hash) {
-    let status: "success" | "reverted";
-    try {
-      status = await waitForFinalized(body.hash);
-    } catch {
-      throw new NotEnoughGasError(copy.errSetupSlow, ERROR_CODES.SETUP_SLOW);
-    }
-    if (status !== "success") throw new NotEnoughGasError(copy.errSetupReverted, ERROR_CODES.SETUP_REVERTED);
-    rememberGrant(address, body.hash);
-    if (needed > 0n) await waitForBalance({ balance: () => readClient.getBalance({ address }), needed });
-    await grantSettled(body.hash);
-    forgetGrant(address);
-    return;
-  }
-  if (res.status === 409 && balance >= needed && needed > 0n) return;
-  // Grants go only to accounts holding under the grant threshold. One holding
-  // more than that, but less than this request needs, can't be topped up yet.
-  if (res.status === 409 && body.error === "this account already has enough") {
-    throw new NotEnoughGasError(copy.errNotEnoughForFees, ERROR_CODES.NOT_ENOUGH_FOR_FEES);
-  }
-  throw setupFailure(res.status, body);
-}
+export const ensureGas = (address: Address, needed: bigint): Promise<void> =>
+  ensureGasWith(address, needed, {
+    balance: () => readClient.getBalance({ address }),
+    fund: () => fetch("/api/fund", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address }) }),
+    finalized: (hash) => waitForFinalized(hash),
+    settled: grantSettled,
+  });
 
 async function estimate(from: Address, to: Address, data: Hex): Promise<bigint> {
   try {
