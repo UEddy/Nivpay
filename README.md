@@ -688,7 +688,7 @@ The documents behind the design:
 | Money | AUSD (Agora) by default, TESTUSD as the test fallback; CTK through Agora's Instant Settlement for payments in another currency |
 | Accounts | Mera 0.2.0 passkeys (WebAuthn PRF), `@scure/bip39` and `@scure/bip32` for the key path `m/44'/60'/0'/0/0` |
 | App | React 19, TypeScript 7, Vite 8, viem 2.56, self hosted fonts, a service worker that caches the app shell only (every screen's scripts, so it opens offline and says so) and never `/api` or the RPC |
-| Hosting | Vercel: static app plus two functions, `/api/fund` and `/api/fund/status` |
+| Hosting | Vercel, Hobby plan: the static app plus 12 functions in `app/api` (`autocash`, `city`, `fund`, which also answers `/api/fund/status` through a rewrite, `inbox`, `name` and `name/[account]`, `notify`, `photo` and `photo/[account]`, `push`, `ramp`, `report`). That is the plan's limit for a deployment: Vercel refuses a deploy with a 13th, so the next server feature needs folding into an existing function, as `/api/fund/status` was, or a paid plan. `src/api-tests/functions.test.ts` fails at 13. |
 | Tests | `forge test` (unit, fuzz, invariant, fork), `node --test` for the app |
 
 ## Run it yourself
