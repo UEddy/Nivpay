@@ -66,9 +66,11 @@ came after it
   fingerprint, which is still needed every time.
 * **Auto cash out**, in test mode like Add money and Cash out: dollars that
   arrive go to the bank by the test desk, a simulation in which no bank is
-  paid. Built and unit tested, but switched off on the live site
-  (`AUTOCASH_ENABLED` unset, so it is hidden and nothing moves) until its end
-  to end run on testnet passes in full.
+  paid. On on the live site since its end to end run on testnet passed in
+  full (run 16 of the localhost scenario: turned on, $20 cashed out and told,
+  turned off, then $5 that stayed put, checked again 2 minutes later).
+  `AUTOCASH_ENABLED` is its off switch: unset, or anything but `true`, hides
+  it and nothing moves.
 
 ## The problem, and who it is for
 
