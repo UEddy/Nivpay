@@ -5,6 +5,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/fund/status", "destination": "/api/fund" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [

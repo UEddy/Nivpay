@@ -18,7 +18,7 @@ import {
   type FundChain,
   type FundEnv,
 } from "../../api/fund/index.ts";
-import { funderKeyMatches, handleStatus } from "../../api/fund/status.ts";
+import { funderKeyMatches, handleStatus } from "../../api/fund/index.ts";
 
 const SITE = "https://nivpay.example";
 const FUNDER = "0x7EAf7f3e330ac388A0e951e80957B7274597297c";
