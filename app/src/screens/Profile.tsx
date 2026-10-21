@@ -35,6 +35,7 @@ const VERSION: string = import.meta.env.VITE_APP_VERSION ?? "local";
 
 /** An account, for what this file shows; named so, since screen text is checked for words people mustn't see. */
 type Account = Address;
+const AUTO_CASH_HIDDEN = { available: false, on: false };
 
 type View = "main" | "name" | "photo" | "username" | "choose" | "limit" | "autocash" | "hidden" | "devices" | "language" | "notifications" | "voice" | "install";
 
@@ -218,7 +219,8 @@ export function ProfilePage(props: {
   const hasPhoto = useAsync(() => (photosOn ? fetch(photoUrl(me), { method: "HEAD" }).then((r) => r.ok) : Promise.resolve(false)), false, [photosOn, me, view]);
   const inboxOn = useAsync(() => inboxEnabled(me), false, [me]);
   const pushOn = useAsync(() => pushInfo().then((i) => i.enabled), false, []);
-  const autoCashOn = useAsync(() => (DEPLOYMENT === "ausd" ? readAutoCash(me).then((i) => i.on) : Promise.resolve(false)), false, [me, view]);
+  // Offered only when the server says so (AUTOCASH_ENABLED): until it answers, and if it can't, the option stays hidden.
+  const autoCash = useAsync(() => (DEPLOYMENT === "ausd" ? readAutoCash(me).then((i) => ({ available: i.available, on: i.on })) : Promise.resolve(AUTO_CASH_HIDDEN)), AUTO_CASH_HIDDEN, [me, view]);
   const requestsHere = useAsync(() => requestsOnHere(me), false, [me, view]);
   const receipt = latestReceipt(me);
   const name = shownName(props.account);
@@ -245,7 +247,7 @@ export function ProfilePage(props: {
     username: <Row icon="username" label={copy.username} value={u.name ? copy.usernameAt(u.name) : u.name === null ? copy.valueNotSet : undefined} onClick={() => setView("username")} />,
     photo: <Row icon="photo" label={copy.photo} value={hasPhoto ? copy.photoAdded : copy.photoNotAdded} onClick={() => setView("photo")} />,
     limit: <Row icon="limit" label={copy.dailyLimit} value={limitValue} onClick={() => setView("limit")} />,
-    autocash: <Row icon="autocash" label={copy.autoCashOut} value={autoCashOn ? copy.valueOn : copy.valueOff} onClick={() => setView("autocash")} />,
+    autocash: <Row icon="autocash" label={copy.autoCashOut} value={autoCash.on ? copy.valueOn : copy.valueOff} onClick={() => setView("autocash")} />,
     hidden: <Row icon="hidden" label={copy.hiddenPots} value={String(props.hidden.length)} onClick={() => setView("hidden")} />,
     receipt: receipt ? <Row icon="receipt" label={copy.lastReceipt} href={receiptUrl(receipt)} /> : null,
     devices: <Row icon="devices" label={copy.devicesAndSessions} onClick={() => setView("devices")} />,
@@ -284,6 +286,7 @@ export function ProfilePage(props: {
         </Detail>
       );
     case "autocash":
+      if (!autoCash.available) break;
       return (
         <Detail title={copy.autoCashOut} onBack={back}>
           <AutoCashSection account={me} />
@@ -415,7 +418,7 @@ export function ProfilePage(props: {
         hasReceipt: Boolean(receipt),
         notificationsOn: inboxOn || pushOn,
         voiceOffered: voiceOffered(),
-        autoCashOffered: DEPLOYMENT === "ausd",
+        autoCashOffered: DEPLOYMENT === "ausd" && autoCash.available,
         canInstall: Boolean(installWay),
       }).map((g) => (
         <Group key={g.group} label={GROUP_TEXT[g.group]}>

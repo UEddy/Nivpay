@@ -8,7 +8,8 @@ import { forgetRecent, handleAutoCash, MAX_BODY_BYTES, MAX_MOVES_PER_HOUR, norma
 import * as rules from "../lib/autocash.ts";
 import * as ramp from "../lib/ramp.ts";
 import { proofMessage } from "../lib/proof.ts";
-import { requestText } from "../lib/autocashLive.ts";
+import { readAutoCash, requestText } from "../lib/autocashLive.ts";
+import { profileGroups, type ProfileFacts } from "../lib/profile.ts";
 
 const SITE = "https://nivpay.example";
 const DESK = getAddress("0x7EAf7f3e330ac388A0e951e80957B7274597297c");
@@ -75,7 +76,7 @@ test("the server's quotes, references and proof are the phone's", () => {
 // ---------------------------------------------------------------------------
 
 function env(extra: Partial<AutoCashEnv> = {}): AutoCashEnv {
-  return { RAMP_ENABLED: "true", RAMP_DESK_ADDRESS: DESK, RAMP_DESK_PRIVATE_KEY: KEY_MARKER, BLOB_READ_WRITE_TOKEN: "token", ...extra };
+  return { AUTOCASH_ENABLED: "true", RAMP_ENABLED: "true", RAMP_DESK_ADDRESS: DESK, RAMP_DESK_PRIVATE_KEY: KEY_MARKER, BLOB_READ_WRITE_TOKEN: "token", ...extra };
 }
 
 /** A turn of the event loop, so calls running at once really interleave between a read and its write. */
@@ -324,6 +325,68 @@ test("the kill switch: money stays, the person is told, the key is never read an
   assert.deepEqual([out.result, out.hold.why], ["held", "paused"]);
   assert.equal(chain.pulls.length, 0);
   assert.deepEqual(claimsOf().txs, [], "nothing claimed");
+});
+
+test("AUTOCASH_ENABLED off, unset or anything but \"true\": not offered, every POST refused before the store, the chain or the key, and nothing moves", async () => {
+  // An account that turned it on while it was offered, and money arriving.
+  await turnOn();
+  clock += 60_000;
+  chain.s.balance += usd(20);
+  chain.s.arrivals.set(txOf(70), arrivalOf(20));
+  const before = store.text();
+  const claimsBefore = claimsOf().txs.length;
+  for (const off of [undefined, "false", "TRUE", "1", ""]) {
+    const e = env({ AUTOCASH_ENABLED: off, RAMP_DESK_PRIVATE_KEY: "not a key" });
+    const info = await getInfo(ME, e);
+    assert.equal(info.available, false, `GET with ${off}: not available, so the app hides it`);
+    assert.equal(info.on, false, `GET with ${off}: never shown as on`);
+    let chainAsked = 0;
+    let storeAsked = 0;
+    const time = Math.floor(clock / 1000);
+    for (const body of [
+      { kind: "arrived", tx: txOf(70), accounts: [ME] },
+      { kind: "check", account: ME, txs: [txOf(70)] },
+      { kind: "set", account: ME, settings: settings(), time, signature: "0x" + "11".repeat(65) },
+      { kind: "cancel", account: ME, time, signature: "0x" + "11".repeat(65) },
+      { kind: "off", account: ME },
+    ]) {
+      const request = new Request(`${SITE}/api/autocash`, { method: "POST", headers: { "content-type": "application/json", origin: SITE }, body: JSON.stringify(body) });
+      const res = await handleAutoCash(request, e, () => (chainAsked++, chain), () => (storeAsked++, store), (l) => logs.push(l), () => clock);
+      assert.equal(res.status, 503, `${body.kind} with ${off}`);
+      assert.equal((await res.json()).error, "auto cash out is not available");
+    }
+    assert.equal(chainAsked, 0, "the chain is never asked");
+    assert.equal(storeAsked, 0, "the store is never opened");
+  }
+  assert.equal(chain.pulls.length, 0, "nothing moved");
+  assert.equal(store.text(), before, "the store is unchanged");
+  assert.equal(claimsOf().txs.length, claimsBefore, "nothing claimed");
+});
+
+test("AUTOCASH_ENABLED exactly \"true\": offered, and money that arrives is cashed out", async () => {
+  const info = await getInfo(ME, env({ AUTOCASH_ENABLED: "true" }));
+  assert.equal(info.available, true);
+  await turnOn();
+  assert.equal((await getInfo()).available, true);
+  assert.equal((await arrive(20, 71)).result, "moved");
+  assert.equal(chain.pulls.length, 1);
+});
+
+test("the app follows the switch: with AUTOCASH_ENABLED off the Auto cash out row is hidden, with it on it shows; an answer without the field counts as off", async () => {
+  await turnOn();
+  const facts: ProfileFacts = { namesOn: true, photosOn: true, hiddenPots: 0, hasReceipt: false, notificationsOn: true, voiceOffered: true, autoCashOffered: false, canInstall: false };
+  const rowShown = async (e: AutoCashEnv) => {
+    const fetcher = (url: string) => handleAutoCash(new Request(`${SITE}${url}`), e, () => chain, () => store, () => {}, () => clock);
+    const info = await readAutoCash(ME, fetcher);
+    // As Profile.tsx decides it, on the AUSD build.
+    return { info, shown: profileGroups({ ...facts, autoCashOffered: info.available }).flatMap((g) => g.rows).includes("autocash") };
+  };
+  const off = await rowShown(env({ AUTOCASH_ENABLED: undefined }));
+  assert.deepEqual([off.info.available, off.info.on, off.shown], [false, false, false]);
+  const on = await rowShown(env());
+  assert.deepEqual([on.info.available, on.info.on, on.shown], [true, true, true]);
+  const old = await readAutoCash(ME, async () => new Response(JSON.stringify({ enabled: true, desk: null, on: true }), { status: 200 }));
+  assert.equal(old.available, false);
 });
 
 test("the desk short of what it runs on, or busy: money stays and the person is told", async () => {

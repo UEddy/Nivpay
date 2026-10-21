@@ -25,7 +25,7 @@ test("a feature not set up, or with nothing in it, has no row; a group with no r
   ]);
   const flat = profileGroups(ALL).flatMap((g) => g.rows);
   assert.ok(!profileGroups({ ...ALL, hiddenPots: 0 }).flatMap((g) => g.rows).includes("hidden"), "no hidden pots: no row");
-  assert.ok(!profileGroups({ ...ALL, autoCashOffered: false }).flatMap((g) => g.rows).includes("autocash"), "not the AUSD build: no row");
+  assert.ok(!profileGroups({ ...ALL, autoCashOffered: false }).flatMap((g) => g.rows).includes("autocash"), "not the AUSD build, or AUTOCASH_ENABLED off: no row");
   assert.ok(!profileGroups({ ...ALL, canInstall: false }).flatMap((g) => g.rows).includes("install"), "installed already: no row");
   assert.equal(new Set(flat).size, flat.length, "each row once");
 });

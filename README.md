@@ -66,7 +66,9 @@ came after it
   fingerprint, which is still needed every time.
 * **Auto cash out**, in test mode like Add money and Cash out: dollars that
   arrive go to the bank by the test desk, a simulation in which no bank is
-  paid.
+  paid. Built and unit tested, but switched off on the live site
+  (`AUTOCASH_ENABLED` unset, so it is hidden and nothing moves) until its end
+  to end run on testnet passes in full.
 
 ## The problem, and who it is for
 
@@ -766,6 +768,7 @@ None is needed to run the app locally or the tests.
 | `FUNDER_PRIVATE_KEY` | Vercel, server, Sensitive | only if funding is enabled | The dedicated testnet key that sends gas grants. Read only after every check has passed, never logged. Never the deployer key, never in the repo. |
 | `FUNDER_ADDRESS` | Vercel, server | only if funding is enabled | The address of that key. The function refuses to sign unless the key derives exactly this address. |
 | `RAMP_ENABLED` | Vercel, server | no | The test desk's kill switch (`/api/ramp`). Add money and Cash out work only when it is exactly `true`. Anything else, or unset, pauses the desk without reading its key. |
+| `AUTOCASH_ENABLED` | Vercel, server | no | Auto cash out's switch (`/api/autocash`), off unless set. Only when it is exactly `true` is Auto cash out offered: Profile shows it, and the desk moves what arrives. Anything else, or unset, hides it in the app and refuses every request before the store, the chain or the desk's key is touched, so nothing moves; a payment is told as plain "received". |
 | `RAMP_DESK_PRIVATE_KEY` | Vercel, server, Sensitive | only if the desk is enabled | A dedicated testnet key for the test desk, which sends test AUSD for Add money and receives it on Cash out. Read only after every check has passed, never on a cash out, never logged. Not the funder key, never in the repo. |
 | `RAMP_DESK_ADDRESS` | Vercel, server | only if the desk is enabled | The address of that key; the desk refuses to sign unless the key derives exactly this address. It needs testnet MON for its own gas (it stops under 0.2 MON) and claims test AUSD from Agora's faucet for itself when low. |
 | `ALLOWED_ORIGINS` | Vercel, server | no | Comma separated extra origins allowed to call `/api/fund`, `/api/ramp` and `/api/report`, for example `http://localhost:5173`. The deployment's own origin is always allowed. |

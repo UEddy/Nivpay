@@ -44,6 +44,10 @@
 //  * only from the account itself: never from a pot, whose money stays there.
 //
 // Abuse limits, in the style of /api/ramp:
+//  * AUTOCASH_ENABLED must be exactly "true", or Auto cash out isn't offered
+//    at all: GET says it isn't available (the app hides it), and every POST
+//    is refused (503) before the store, the chain or the desk's key is
+//    touched, so nothing moves. It is off unless set.
 //  * RAMP_ENABLED must be exactly "true", or nothing moves: an arrival is
 //    read and the person told the money stays, and nothing else runs.
 //  * Same origin only, by the Origin header. Bodies over MAX_BODY_BYTES are
@@ -277,6 +281,7 @@ export const requestText = (r: AutoCashRequest) => JSON.stringify({ currency: r.
 // ---------------------------------------------------------------------------
 
 export type AutoCashEnv = {
+  AUTOCASH_ENABLED?: string;
   RAMP_ENABLED?: string;
   RAMP_DESK_ADDRESS?: string;
   RAMP_DESK_PRIVATE_KEY?: string;
@@ -352,6 +357,8 @@ function deskAddress(env: AutoCashEnv): Address | undefined {
 }
 
 const storeOn = (env: AutoCashEnv) => Boolean(env.BLOB_STORE_ID || env.BLOB_READ_WRITE_TOKEN);
+/** The switch: Auto cash out is offered only when AUTOCASH_ENABLED is exactly "true". */
+const offered = (env: AutoCashEnv) => env.AUTOCASH_ENABLED === "true";
 const deskOn = (env: AutoCashEnv) => env.RAMP_ENABLED === "true" && deskAddress(env) !== undefined;
 
 const settingsPath = (a: Address) => `autocash/${a}/settings.json`;
@@ -579,7 +586,7 @@ export async function handleAutoCash(
 ): Promise<Response> {
   const t = now();
   if (request.method === "GET") {
-    if (!storeOn(env)) return json(200, { enabled: false, desk: null, on: false });
+    if (!offered(env) || !storeOn(env)) return json(200, { available: offered(env), enabled: false, desk: null, on: false });
     const raw = new URL(request.url).searchParams.get("account") ?? "";
     if (!isAddress(raw)) return json(400, { error: "not an account" });
     const account = getAddress(raw);
@@ -589,6 +596,7 @@ export async function handleAutoCash(
     const moves = (await named(store, movesPrefix(account))).filter(since);
     const holds = (await named(store, holdsPrefix(account))).filter(since);
     return json(200, {
+      available: true,
       enabled: deskOn(env),
       desk: deskAddress(env) ?? null,
       on: s?.on ?? false,
@@ -599,6 +607,7 @@ export async function handleAutoCash(
     });
   }
   if (request.method !== "POST") return json(405, { error: "use GET or POST" });
+  if (!offered(env)) return json(503, { error: "auto cash out is not available" });
   if (!storeOn(env)) return json(503, { error: "auto cash out is not set up" });
   if (!originAllowed(request, env)) return json(403, { error: "same origin only" });
   if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return json(413, { error: "request too large" });

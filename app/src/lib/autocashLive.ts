@@ -22,6 +22,8 @@ type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 /** As the server says it is: nothing about the bank, which stays in the private store and on this phone. */
 export type AutoCashInfo = {
+  /** Offered at all (AUTOCASH_ENABLED on the server). If not, the option is hidden. */
+  available: boolean;
   /** The desk is on and set up. */
   enabled: boolean;
   desk: Address | null;
@@ -66,6 +68,7 @@ export async function readAutoCash(account: Address, fetcher: Fetch = fetch): Pr
   const list = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
   const p = b.pending as AutoCashInfo["pending"] | undefined;
   return {
+    available: b.available === true,
     enabled: b.enabled === true,
     desk: typeof b.desk === "string" && isAddress(b.desk) ? getAddress(b.desk) : null,
     on: b.on === true,

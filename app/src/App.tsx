@@ -918,7 +918,7 @@ function Home(props: {
   const readAutoCashNow = useCallback(async () => {
     if (DEPLOYMENT !== "ausd") return;
     const info = await readAutoCash(owner);
-    autoOn.current = info.on;
+    autoOn.current = info.available && info.on;
     const mine = new AutoCashLocalStore(localStorage, DEPLOYMENT, owner).get();
     setAutoCash(autoSeen.add(info.moves.map((m) => m.tx)));
     setNotes(notesStore.update((st) => fromAutoCash(st, info, mine ? copy.bankEnding(mine.bank.name, mine.bank.last4) : undefined)));
